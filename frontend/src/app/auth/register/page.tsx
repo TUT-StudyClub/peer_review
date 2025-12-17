@@ -61,7 +61,7 @@ export default function RegisterPage() {
         </form>
       </Card>
 
-      <div className="text-sm text-zinc-600">
+      <div className="text-sm text-black">
         すでにアカウントがある場合は <Link className="underline" href="/auth/login">ログイン</Link>
       </div>
     </div>

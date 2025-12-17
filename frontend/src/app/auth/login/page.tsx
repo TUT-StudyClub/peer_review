@@ -49,7 +49,7 @@ export default function LoginPage() {
         </form>
       </Card>
 
-      <div className="text-sm text-zinc-600">
+      <div className="text-sm text-black">
         まだアカウントが無い場合は <Link className="underline" href="/auth/register">新規登録</Link>
       </div>
     </div>
