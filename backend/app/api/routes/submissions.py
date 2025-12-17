@@ -1,7 +1,8 @@
+from uuid import UUID, uuid4
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from uuid import UUID, uuid4
 
 from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
