@@ -1,0 +1,241 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from uuid import UUID
+
+from app.db.session import get_db
+from app.models.assignment import Assignment, RubricCriterion
+from app.models.review import MetaReview, Review, ReviewAssignment, ReviewAssignmentStatus, ReviewRubricScore
+from app.models.submission import Submission
+from app.models.user import User
+from app.schemas.review import (
+    MetaReviewCreate,
+    MetaReviewPublic,
+    ReviewAssignmentTask,
+    ReviewPublic,
+    ReviewReceived,
+    ReviewSubmit,
+)
+from app.services.ai import analyze_review
+from app.services.anonymize import alias_for_user
+from app.services.auth import get_current_user
+from app.services.matching import get_or_assign_review_assignment
+
+router = APIRouter()
+
+
+@router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask)
+def next_review_task(
+    assignment_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ReviewAssignmentTask:
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
+    review_assignment = get_or_assign_review_assignment(db, assignment, current_user)
+    if review_assignment is None:
+        raise HTTPException(status_code=404, detail="No submissions need review right now")
+
+    submission = db.query(Submission).filter(Submission.id == review_assignment.submission_id).first()
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    rubric = (
+        db.query(RubricCriterion)
+        .filter(RubricCriterion.assignment_id == assignment_id)
+        .order_by(RubricCriterion.order_index.asc())
+        .all()
+    )
+    author_alias = alias_for_user(
+        user_id=submission.author_id,
+        assignment_id=assignment_id,
+        prefix="User",
+    )
+
+    return ReviewAssignmentTask(
+        review_assignment_id=review_assignment.id,
+        submission_id=submission.id,
+        author_alias=author_alias,
+        file_type=submission.file_type,
+        rubric=rubric,
+    )
+
+
+@router.post("/review-assignments/{review_assignment_id}/submit", response_model=ReviewPublic)
+def submit_review(
+    review_assignment_id: UUID,
+    payload: ReviewSubmit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Review:
+    review_assignment = (
+        db.query(ReviewAssignment).filter(ReviewAssignment.id == review_assignment_id).first()
+    )
+    if review_assignment is None:
+        raise HTTPException(status_code=404, detail="Review assignment not found")
+    if review_assignment.reviewer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if review_assignment.status != ReviewAssignmentStatus.assigned:
+        raise HTTPException(status_code=400, detail="This task is not open")
+
+    existing_review = db.query(Review).filter(Review.review_assignment_id == review_assignment_id).first()
+    if existing_review is not None:
+        raise HTTPException(status_code=400, detail="Review already submitted")
+
+    submission = db.query(Submission).filter(Submission.id == review_assignment.submission_id).first()
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    rubric_criteria = (
+        db.query(RubricCriterion)
+        .filter(RubricCriterion.assignment_id == review_assignment.assignment_id)
+        .all()
+    )
+    criteria_by_id = {c.id: c for c in rubric_criteria}
+
+    if len(payload.rubric_scores) != len(criteria_by_id):
+        raise HTTPException(status_code=400, detail="All rubric criteria must be scored")
+
+    for s in payload.rubric_scores:
+        criterion = criteria_by_id.get(s.criterion_id)
+        if criterion is None:
+            raise HTTPException(status_code=400, detail="Invalid criterion_id in rubric_scores")
+        if not (0 <= s.score <= criterion.max_score):
+            raise HTTPException(status_code=400, detail="Rubric score out of range")
+
+    submission_text = submission.markdown_text or ""
+    ai_result = analyze_review(
+        submission_text=submission_text,
+        review_text=payload.comment,
+    )
+    if ai_result.toxic:
+        raise HTTPException(
+            status_code=400,
+            detail={"message": "Toxic language detected", "reason": ai_result.toxic_reason},
+        )
+
+    review = Review(
+        review_assignment_id=review_assignment.id,
+        comment=payload.comment,
+        ai_quality_score=ai_result.quality_score,
+        ai_quality_reason=ai_result.quality_reason,
+        ai_toxic=ai_result.toxic,
+        ai_toxic_reason=ai_result.toxic_reason,
+        ai_logic=ai_result.logic,
+        ai_specificity=ai_result.specificity,
+        ai_empathy=ai_result.empathy,
+        ai_insight=ai_result.insight,
+    )
+    db.add(review)
+    db.flush()
+
+    for s in payload.rubric_scores:
+        db.add(ReviewRubricScore(review_id=review.id, criterion_id=s.criterion_id, score=s.score))
+
+    review_assignment.status = ReviewAssignmentStatus.submitted
+    review_assignment.submitted_at = review.created_at
+
+    current_user.credits += 1
+
+    db.commit()
+    db.refresh(review)
+    return review
+
+
+@router.get("/assignments/{assignment_id}/reviews/received", response_model=list[ReviewReceived])
+def received_reviews(
+    assignment_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[ReviewReceived]:
+    submission = (
+        db.query(Submission)
+        .filter(Submission.assignment_id == assignment_id, Submission.author_id == current_user.id)
+        .first()
+    )
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    review_assignments = (
+        db.query(ReviewAssignment)
+        .filter(ReviewAssignment.submission_id == submission.id)
+        .all()
+    )
+    assignment_by_id = {ra.id: ra for ra in review_assignments}
+    reviews = (
+        db.query(Review)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .filter(ReviewAssignment.submission_id == submission.id)
+        .order_by(Review.created_at.asc())
+        .all()
+    )
+
+    results: list[ReviewReceived] = []
+    for r in reviews:
+        ra = assignment_by_id.get(r.review_assignment_id)
+        if ra is None:
+            continue
+        reviewer_alias = alias_for_user(
+            user_id=ra.reviewer_id, assignment_id=assignment_id, prefix="Reviewer"
+        )
+
+        scores = (
+            db.query(ReviewRubricScore)
+            .filter(ReviewRubricScore.review_id == r.id)
+            .all()
+        )
+        meta = db.query(MetaReview).filter(MetaReview.review_id == r.id).first()
+        results.append(
+            ReviewReceived(
+                id=r.id,
+                reviewer_alias=reviewer_alias,
+                comment=r.comment,
+                created_at=r.created_at,
+                rubric_scores=scores,
+                meta_review=meta,
+                ai_quality_score=r.ai_quality_score,
+                ai_quality_reason=r.ai_quality_reason,
+            )
+        )
+
+    return results
+
+
+@router.post("/reviews/{review_id}/meta", response_model=MetaReviewPublic)
+def create_meta_review(
+    review_id: UUID,
+    payload: MetaReviewCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MetaReview:
+    review = db.query(Review).filter(Review.id == review_id).first()
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+
+    review_assignment = (
+        db.query(ReviewAssignment).filter(ReviewAssignment.id == review.review_assignment_id).first()
+    )
+    if review_assignment is None:
+        raise HTTPException(status_code=404, detail="Review assignment not found")
+
+    submission = db.query(Submission).filter(Submission.id == review_assignment.submission_id).first()
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if submission.author_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the submission author can meta-review")
+
+    existing = db.query(MetaReview).filter(MetaReview.review_id == review_id).first()
+    if existing is not None:
+        raise HTTPException(status_code=400, detail="Meta-review already submitted")
+
+    meta = MetaReview(
+        review_id=review_id,
+        rater_id=current_user.id,
+        helpfulness=payload.helpfulness,
+        comment=payload.comment,
+    )
+    db.add(meta)
+    db.commit()
+    db.refresh(meta)
+    return meta
