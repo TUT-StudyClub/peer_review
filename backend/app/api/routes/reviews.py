@@ -1,10 +1,17 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
-from app.models.review import MetaReview, Review, ReviewAssignment, ReviewAssignmentStatus, ReviewRubricScore
+from app.models.review import (
+    MetaReview,
+    Review,
+    ReviewAssignment,
+    ReviewAssignmentStatus,
+    ReviewRubricScore,
+)
 from app.models.submission import Submission
 from app.models.user import User
 from app.schemas.review import (

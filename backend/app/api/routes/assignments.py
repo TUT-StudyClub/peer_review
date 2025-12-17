@@ -1,11 +1,17 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
 from app.models.submission import Submission
-from app.schemas.assignment import AssignmentCreate, AssignmentPublic, RubricCriterionCreate, RubricCriterionPublic
+from app.schemas.assignment import (
+    AssignmentCreate,
+    AssignmentPublic,
+    RubricCriterionCreate,
+    RubricCriterionPublic,
+)
 from app.schemas.submission import SubmissionTeacherPublic
 from app.services.auth import require_teacher
 

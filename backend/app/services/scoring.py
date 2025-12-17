@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from sqlalchemy.orm import Session
 from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment, RubricCriterion
 from app.models.review import MetaReview, Review, ReviewAssignment, ReviewRubricScore
@@ -31,7 +32,6 @@ def _submission_score_from_peers(db: Session, submission: Submission) -> float |
         .filter(RubricCriterion.assignment_id == submission.assignment_id)
         .all()
     )
-    criteria_by_id = {c.id: c for c in criteria}
     total_max = sum(c.max_score for c in criteria) or 0
     if total_max <= 0:
         return None
@@ -150,4 +150,3 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
         final_score=final_score,
         breakdown=breakdown,
     )
-

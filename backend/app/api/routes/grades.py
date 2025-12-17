@@ -1,6 +1,7 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from uuid import UUID
 
 from app.db.session import get_db
 from app.models.assignment import Assignment
