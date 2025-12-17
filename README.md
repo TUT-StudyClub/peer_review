@@ -389,6 +389,10 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
   - その課題で「レビューが必要な提出物」がありません（全員がレビューし終えた等）
 - `400 All rubric criteria must be scored`
   - ルーブリックは **全項目必須** です（項目数と `rubric_scores` の数を合わせてください）
+- `curl: (26) Failed to open/read local data from file/application`
+  - `-F "file=@./xxx.md"` の **ローカルファイルが存在しない** / **パスが違う** のが原因です
+  - まず `ls -la ./report_s1.md` でファイルがあるか確認し、無ければ `2-1` の手順で作成してください
+  - 複数行のcurlを使う場合、行末の `\` の後ろにスペースがあると壊れます（`\` は行末に置く、または1行で実行）
 
 ---
 
