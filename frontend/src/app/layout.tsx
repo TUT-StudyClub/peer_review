@@ -27,7 +27,8 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-zinc-50 text-zinc-900`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 text-black`}
+        style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
       >
         <AuthProvider>
           <NavBar />

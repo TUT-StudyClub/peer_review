@@ -392,7 +392,7 @@ export default function AssignmentDetailPage() {
   }, [token, user, assignmentId]);
 
   if (loadingBase) {
-    return <div className="text-sm text-zinc-600">読み込み中...</div>;
+    return <div className="text-sm text-black">読み込み中...</div>;
   }
   if (errorBase) {
     return (
@@ -408,18 +408,18 @@ export default function AssignmentDetailPage() {
   return (
     <div className="space-y-6">
       <Card title={assignment ? assignment.title : `課題 ${assignmentId}`}>
-        {assignment?.description ? <div className="text-sm text-zinc-700">{assignment.description}</div> : null}
-        <div className="mt-3 text-xs text-zinc-500">
+        {assignment?.description ? <div className="text-sm text-black">{assignment.description}</div> : null}
+        <div className="mt-3 text-xs text-black">
           reviews/submission: {assignment?.target_reviews_per_submission ?? "-"} / created:{" "}
           {assignment?.created_at ? new Date(assignment.created_at).toLocaleString() : "-"}
         </div>
       </Card>
 
-      {notice ? <div className="rounded-md border bg-white p-3 text-sm text-zinc-700 whitespace-pre-wrap">{notice}</div> : null}
+      {notice ? <div className="rounded-md border bg-white p-3 text-sm text-black whitespace-pre-wrap">{notice}</div> : null}
 
       <Card title="ルーブリック（評価基準）">
         {rubric.length === 0 ? (
-          <div className="text-sm text-zinc-600">まだルーブリックがありません（teacherが追加してください）</div>
+          <div className="text-sm text-black">まだルーブリックがありません（teacherが追加してください）</div>
         ) : (
           <ul className="space-y-2">
             {rubric.map((c) => (
@@ -429,9 +429,9 @@ export default function AssignmentDetailPage() {
                     <div className="font-medium">
                       {c.order_index}. {c.name}
                     </div>
-                    {c.description ? <div className="mt-1 text-sm text-zinc-600">{c.description}</div> : null}
+                    {c.description ? <div className="mt-1 text-sm text-black">{c.description}</div> : null}
                   </div>
-                  <div className="text-xs text-zinc-500">max: {c.max_score}</div>
+                  <div className="text-xs text-black">max: {c.max_score}</div>
                 </div>
               </li>
             ))}
@@ -439,7 +439,7 @@ export default function AssignmentDetailPage() {
         )}
 
         {user?.role === "teacher" ? (
-          <div className="mt-5 rounded-lg border bg-zinc-50 p-4">
+          <div className="mt-5 rounded-lg border bg-slate-50 p-4">
             <div className="text-sm font-semibold">（teacher）ルーブリックを追加</div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="項目名">
@@ -484,9 +484,9 @@ export default function AssignmentDetailPage() {
             </SecondaryButton>
           }
         >
-          {teacherSubmissionsLoading ? <div className="text-sm text-zinc-600">読み込み中...</div> : null}
+          {teacherSubmissionsLoading ? <div className="text-sm text-black">読み込み中...</div> : null}
           {teacherSubmissions.length === 0 ? (
-            <div className="text-sm text-zinc-600">提出がまだありません</div>
+            <div className="text-sm text-black">提出がまだありません</div>
           ) : (
             <div className="space-y-2">
               {teacherSubmissions.map((s) => (
@@ -494,10 +494,10 @@ export default function AssignmentDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm">
                       <div className="font-medium">submission: {shortId(s.id)}</div>
-                      <div className="text-xs text-zinc-500">
+                      <div className="text-xs text-black">
                         author: {shortId(s.author_id)} / {s.file_type} / {new Date(s.created_at).toLocaleString()}
                       </div>
-                      <div className="text-xs text-zinc-500">
+                      <div className="text-xs text-black">
                         teacher_total_score: {s.teacher_total_score ?? "-"}
                       </div>
                     </div>
@@ -512,7 +512,7 @@ export default function AssignmentDetailPage() {
           )}
 
           {gradeTargetId ? (
-            <div className="mt-4 rounded-lg border bg-zinc-50 p-4">
+            <div className="mt-4 rounded-lg border bg-slate-50 p-4">
               <div className="text-sm font-semibold">採点: {shortId(gradeTargetId)}</div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Field label="teacher_total_score（0-100推奨）">
@@ -572,12 +572,12 @@ export default function AssignmentDetailPage() {
       {user?.role === "student" ? (
         <Card title="（student）提出（My Submission）" actions={<SecondaryButton onClick={loadMySubmission}>更新</SecondaryButton>}>
           {!token ? (
-            <div className="text-sm text-zinc-600">ログインすると提出できます</div>
+            <div className="text-sm text-black">ログインすると提出できます</div>
           ) : mySubmissionStatus === "loading" ? (
-            <div className="text-sm text-zinc-600">読み込み中...</div>
+            <div className="text-sm text-black">読み込み中...</div>
           ) : mySubmissionStatus === "missing" ? (
             <div className="space-y-3">
-              <div className="text-sm text-zinc-700">
+              <div className="text-sm text-black">
                 まだ提出していません。Markdown（.md）推奨（AIの「本文＋レビュー」判定が効きやすいです）。
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -605,7 +605,7 @@ export default function AssignmentDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="text-sm text-zinc-600">「更新」を押して状態を取得してください</div>
+            <div className="text-sm text-black">「更新」を押して状態を取得してください</div>
           )}
         </Card>
       ) : null}
@@ -620,14 +620,14 @@ export default function AssignmentDetailPage() {
           }
         >
           {!token ? (
-            <div className="text-sm text-zinc-600">ログインするとレビューできます</div>
+            <div className="text-sm text-black">ログインするとレビューできます</div>
           ) : !reviewTask ? (
-            <div className="text-sm text-zinc-600">
+            <div className="text-sm text-black">
               「次のレビューを取得」を押してください（未提出タスクがある場合は同じタスクが出続けます）
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg border bg-zinc-50 p-3 text-sm">
+              <div className="rounded-lg border bg-slate-50 p-3 text-sm">
                 <div>author_alias: {reviewTask.author_alias}</div>
                 <div>submission_id: {shortId(reviewTask.submission_id)}</div>
                 <div>file_type: {reviewTask.file_type}</div>
@@ -680,11 +680,11 @@ export default function AssignmentDetailPage() {
           }
         >
           {!token ? (
-            <div className="text-sm text-zinc-600">ログインすると確認できます</div>
+            <div className="text-sm text-black">ログインすると確認できます</div>
           ) : receivedLoading ? (
-            <div className="text-sm text-zinc-600">読み込み中...</div>
+            <div className="text-sm text-black">読み込み中...</div>
           ) : received.length === 0 ? (
-            <div className="text-sm text-zinc-600">まだレビューが届いていません</div>
+            <div className="text-sm text-black">まだレビューが届いていません</div>
           ) : (
             <div className="space-y-3">
               {received.map((r) => (
@@ -692,23 +692,23 @@ export default function AssignmentDetailPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{r.reviewer_alias}</div>
-                      <div className="text-xs text-zinc-500">{new Date(r.created_at).toLocaleString()}</div>
+                      <div className="text-xs text-black">{new Date(r.created_at).toLocaleString()}</div>
                     </div>
-                    <div className="text-right text-xs text-zinc-500">
+                    <div className="text-right text-xs text-black">
                       AI品質: {r.ai_quality_score ?? "-"}
                     </div>
                   </div>
                   {r.ai_quality_reason ? (
-                    <div className="mt-2 rounded-md bg-zinc-50 p-3 text-xs text-zinc-700">
+                    <div className="mt-2 rounded-md bg-slate-50 p-3 text-xs text-black">
                       {r.ai_quality_reason}
                     </div>
                   ) : null}
-                  <div className="mt-2 whitespace-pre-wrap text-sm text-zinc-800">{r.comment}</div>
+                  <div className="mt-2 whitespace-pre-wrap text-sm text-black">{r.comment}</div>
 
                   {r.rubric_scores?.length ? (
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {r.rubric_scores.map((s) => (
-                        <div key={s.criterion_id} className="text-xs text-zinc-600">
+                        <div key={s.criterion_id} className="text-xs text-black">
                           {shortId(s.criterion_id)}: {s.score}
                         </div>
                       ))}
@@ -716,7 +716,7 @@ export default function AssignmentDetailPage() {
                   ) : null}
 
                   {r.meta_review ? (
-                    <div className="mt-3 rounded-md border bg-zinc-50 p-3 text-sm text-zinc-700">
+                    <div className="mt-3 rounded-md border bg-slate-50 p-3 text-sm text-black">
                       <div>メタ評価: {r.meta_review.helpfulness}/5</div>
                       {r.meta_review.comment ? <div className="mt-1">{r.meta_review.comment}</div> : null}
                     </div>
@@ -740,21 +740,21 @@ export default function AssignmentDetailPage() {
           }
         >
           {!token ? (
-            <div className="text-sm text-zinc-600">ログインすると確認できます</div>
+            <div className="text-sm text-black">ログインすると確認できます</div>
           ) : gradeLoading ? (
-            <div className="text-sm text-zinc-600">読み込み中...</div>
+            <div className="text-sm text-black">読み込み中...</div>
           ) : grade ? (
             <div className="space-y-2 text-sm">
               <div>assignment_score: {grade.assignment_score ?? "-"}</div>
               <div>review_contribution: {grade.review_contribution.toFixed(2)}</div>
               <div className="font-semibold">final_score: {grade.final_score ?? "-"}</div>
-              <details className="rounded-md border bg-zinc-50 p-3 text-xs">
+              <details className="rounded-md border bg-slate-50 p-3 text-xs">
                 <summary className="cursor-pointer">breakdown</summary>
                 <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(grade.breakdown, null, 2)}</pre>
               </details>
             </div>
           ) : (
-            <div className="text-sm text-zinc-600">「更新」を押して取得してください</div>
+            <div className="text-sm text-black">「更新」を押して取得してください</div>
           )}
         </Card>
       ) : null}
@@ -769,12 +769,12 @@ export default function AssignmentDetailPage() {
           }
         >
           {!token ? (
-            <div className="text-sm text-zinc-600">ログインすると確認できます</div>
+            <div className="text-sm text-black">ログインすると確認できます</div>
           ) : skillLoading ? (
-            <div className="text-sm text-zinc-600">読み込み中...</div>
+            <div className="text-sm text-black">読み込み中...</div>
           ) : skill ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-zinc-700">
+              <div className="space-y-1 text-sm text-black">
                 <div>Logic: {skill.logic.toFixed(2)}</div>
                 <div>Specificity: {skill.specificity.toFixed(2)}</div>
                 <div>Empathy: {skill.empathy.toFixed(2)}</div>
@@ -785,21 +785,21 @@ export default function AssignmentDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="text-sm text-zinc-600">「更新」を押して取得してください</div>
+            <div className="text-sm text-black">「更新」を押して取得してください</div>
           )}
         </Card>
       ) : null}
 
       {user ? null : (
         <Card title="ログインが必要な操作">
-          <div className="text-sm text-zinc-700">
+          <div className="text-sm text-black">
             提出・レビュー・メタ評価・採点などはログイン後に利用できます。
           </div>
           <div className="mt-3 flex gap-2">
-            <Link className="rounded-md bg-zinc-900 px-4 py-2 text-sm text-white hover:bg-zinc-800" href="/auth/login">
+            <Link className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700" href="/auth/login">
               ログイン
             </Link>
-            <Link className="rounded-md border px-4 py-2 text-sm hover:bg-zinc-50" href="/auth/register">
+            <Link className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50" href="/auth/register">
               新規登録
             </Link>
           </div>
@@ -831,7 +831,7 @@ function MetaReviewForm({
   };
 
   return (
-    <div className="mt-3 rounded-md border bg-zinc-50 p-3">
+    <div className="mt-3 rounded-md border bg-slate-50 p-3">
       <div className="text-sm font-medium">メタ評価（このレビューは役に立ちましたか？）</div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <Field label="helpfulness (1-5)">

@@ -13,7 +13,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
       href={href}
       className={[
         "rounded-md px-3 py-2 text-sm transition",
-        active ? "bg-zinc-900 text-white" : "text-zinc-700 hover:bg-zinc-200",
+        active ? "bg-indigo-600 text-white" : "text-black hover:bg-slate-200",
       ].join(" ")}
     >
       {label}
@@ -38,12 +38,12 @@ export function NavBar() {
         <div className="flex items-center gap-3">
           {user ? (
             <>
-              <div className="hidden text-sm text-zinc-600 sm:block">
+              <div className="hidden text-sm text-black sm:block">
                 {user.name}（{user.role} / credits: {user.credits}）
               </div>
               <button
                 onClick={logout}
-                className="rounded-md border px-3 py-2 text-sm hover:bg-zinc-50"
+                className="rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
               >
                 ログアウト
               </button>
