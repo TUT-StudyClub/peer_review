@@ -74,21 +74,21 @@ export default function AssignmentsPage() {
         {error ? (
           <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
         ) : null}
-        {loading ? <div className="text-sm text-zinc-600">読み込み中...</div> : null}
+        {loading ? <div className="text-sm text-black">読み込み中...</div> : null}
         {!loading && assignments.length === 0 ? (
-          <div className="text-sm text-zinc-600">まだ課題がありません（teacherが作成してください）</div>
+          <div className="text-sm text-black">まだ課題がありません（teacherが作成してください）</div>
         ) : null}
 
         <ul className="mt-4 space-y-2">
           {assignments.map((a) => (
-            <li key={a.id} className="rounded-lg border p-4 hover:bg-zinc-50">
+            <li key={a.id} className="rounded-lg border p-4 hover:bg-slate-50">
               <Link href={`/assignments/${a.id}`} className="block">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium">{a.title}</div>
-                    {a.description ? <div className="mt-1 text-sm text-zinc-600">{a.description}</div> : null}
+                    {a.description ? <div className="mt-1 text-sm text-black">{a.description}</div> : null}
                   </div>
-                  <div className="text-right text-xs text-zinc-500">
+                  <div className="text-right text-xs text-black">
                     <div>reviews/submission: {a.target_reviews_per_submission}</div>
                     <div>{new Date(a.created_at).toLocaleString()}</div>
                   </div>
@@ -130,14 +130,14 @@ export default function AssignmentsPage() {
 
       {user ? null : (
         <Card title="ログインについて">
-          <div className="text-sm text-zinc-700">
+          <div className="text-sm text-black">
             課題一覧の閲覧は可能ですが、提出・レビュー・作成はログインが必要です。
           </div>
           <div className="mt-3 flex gap-2">
-            <Link className="rounded-md bg-zinc-900 px-4 py-2 text-sm text-white hover:bg-zinc-800" href="/auth/login">
+            <Link className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700" href="/auth/login">
               ログイン
             </Link>
-            <Link className="rounded-md border px-4 py-2 text-sm hover:bg-zinc-50" href="/auth/register">
+            <Link className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50" href="/auth/register">
               新規登録
             </Link>
           </div>
