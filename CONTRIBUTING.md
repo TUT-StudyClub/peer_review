@@ -9,6 +9,8 @@
 
 ブランチ保護の具体的な設定手順は `docs/branch-protection.md` を参照してください。
 
+Issue運用（タスク管理）の方針は `docs/issue-management.md` を参照してください。
+
 ---
 
 ## ディレクトリ
@@ -60,4 +62,3 @@ npm run build
 - エラー/バリデーション/権限が壊れていない
 - `.env` 等の機密情報をコミットしていない
 - CIが通ること
-
