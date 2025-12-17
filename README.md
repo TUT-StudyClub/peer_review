@@ -1,11 +1,19 @@
-# pure-review（匿名ピアレビューMVP / FastAPI）
+# pure-review（匿名ピアレビューMVP）
 
-学生が **PDF/Markdown** のレポートを提出し、システムが **匿名でランダムにレビューを割り当て**、ルーブリックに基づくピアレビュー → メタ評価 → スコア算出まで行うためのバックエンドMVPです。
+学生が **PDF/Markdown** のレポートを提出し、システムが **匿名でランダムにレビューを割り当て**、ルーブリックに基づくピアレビュー → メタ評価 → スコア算出まで行うMVPです。
 
 - Backend: Python + FastAPI
+- Frontend: Next.js (React) + Tailwind CSS
 - DB: PostgreSQL（推奨）/ SQLite（最短で動かす用）
 - 仮想環境: **uv**
 - AI: OpenAI API（任意）/ 未設定時は簡易ヒューリスティック
+
+---
+
+## ディレクトリ構成
+
+- `backend/` … FastAPI + DB + マッチング/採点ロジック
+- `frontend/` … UI（ブラウザで操作）
 
 ---
 
@@ -13,7 +21,7 @@
 
 ### 1) 課題提出（Submission）
 - `POST /submissions/assignment/{assignment_id}` で PDF/Markdown をアップロード
-- ファイルは `storage/` 配下へ保存（ファイル名は匿名化され、元のファイル名はDBにだけ保持）
+- ファイルは `backend/storage/` 配下へ保存（ファイル名は匿名化され、元のファイル名はDBにだけ保持）
 
 ### 2) 匿名マッチング（Blind Matching）
 - `GET /assignments/{assignment_id}/reviews/next` で「次にレビューすべき提出物」をシステムが返します
@@ -49,8 +57,11 @@
 - Python 3.12 以上
 - `uv` がインストール済み（未インストールなら https://github.com/astral-sh/uv の手順に従ってください）
 
+> 以降、バックエンド作業は `backend/` で行います。
+
 ### 1. 依存関係インストール（uvで仮想環境作成）
 ```bash
+cd backend
 uv sync --python 3.12
 ```
 - `.venv/` が作成され、依存関係がインストールされます
@@ -72,10 +83,33 @@ uv run uvicorn app.main:app --reload
 
 ---
 
+## フロントエンド（UI）を起動する
+
+バックエンド起動（別ターミナル）：
+```bash
+cd backend
+uv run uvicorn app.main:app --reload
+```
+
+フロントエンド起動：
+```bash
+cd frontend
+cp .env.local.example .env.local
+npm run dev
+```
+
+- UI: `http://localhost:3000`
+- API（FastAPI）: `http://127.0.0.1:8000`
+
+> フロントは `NEXT_PUBLIC_API_BASE_URL`（`frontend/.env.local`）でバックエンドURLを参照します。
+
+---
+
 ## PostgreSQL（推奨）で動かす
 
 ### 1. DB起動（Docker）
 ```bash
+cd backend
 docker compose up -d
 ```
 
@@ -87,6 +121,7 @@ DATABASE_URL=postgresql+psycopg://pure_review:pure_review@localhost:5432/pure_re
 
 ### 3. 起動
 ```bash
+cd backend
 uv run uvicorn app.main:app --reload
 ```
 
@@ -98,7 +133,7 @@ Swagger UI（`/docs`）から操作するのが一番簡単です。
 ただし「どのAPIをどの順番で叩けばよいか」が分かりにくい場合が多いので、ここでは **curlで一連の流れをそのまま再現できる手順** を用意します。
 
 > 以降は `BASE_URL=http://127.0.0.1:8000` を前提にしています。
-> すでに起動していない場合は `uv run uvicorn app.main:app --reload` で起動してください。
+> すでに起動していない場合は `cd backend && uv run uvicorn app.main:app --reload` で起動してください。
 
 ### 事前準備（おすすめ）
 

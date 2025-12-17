@@ -15,5 +15,8 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
 
+    # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
+    cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
 
 settings = Settings()
