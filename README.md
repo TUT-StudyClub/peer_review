@@ -14,6 +14,9 @@
 
 - `backend/` … FastAPI + DB + マッチング/採点ロジック
 - `frontend/` … UI（ブラウザで操作）
+- チーム運用ルール: `CONTRIBUTING.md`
+- ブランチ保護: `docs/branch-protection.md`
+- Issue運用（タスク管理）: `docs/issue-management.md`
 
 ---
 
@@ -74,6 +77,7 @@ SQLiteで動かすだけなら `.env` は不要です（デフォルトは `sqli
 
 ### 3. 起動
 ```bash
+cd backend
 uv run uvicorn app.main:app --reload
 ```
 
