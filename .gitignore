@@ -6,9 +6,16 @@ __pycache__/
 .mypy_cache/
 .DS_Store
 
-.env
-dev.db
-storage/
+# Backend (moved to ./backend)
+backend/.env
+backend/dev.db
+backend/storage/
+backend/.venv/
+
+# Frontend (./frontend) - (also has its own .gitignore)
+frontend/.env.local
+frontend/.next/
+frontend/node_modules/
 
 report_*.md
 reviewed_by_*

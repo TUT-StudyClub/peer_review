@@ -27,3 +27,15 @@ class TeacherGradeSubmit(BaseModel):
     teacher_total_score: int
     teacher_feedback: str | None = None
     rubric_scores: list[TeacherRubricScore]
+
+
+class SubmissionTeacherPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    assignment_id: UUID
+    author_id: UUID
+    file_type: SubmissionFileType
+    original_filename: str
+    teacher_total_score: int | None
+    created_at: datetime
