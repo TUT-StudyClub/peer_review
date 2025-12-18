@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useAuth } from "@/app/providers";
 import { Card } from "@/components/legacy-ui/Card";
 import { Field, PrimaryButton, TextInput } from "@/components/legacy-ui/Form";
+import { formatApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/assignments");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ログインに失敗しました");
+      setError(formatApiError(err));
     }
   };
 
