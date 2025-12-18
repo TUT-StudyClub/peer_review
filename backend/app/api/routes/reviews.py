@@ -21,8 +21,10 @@ from app.schemas.review import (
     ReviewPublic,
     ReviewReceived,
     ReviewSubmit,
+    PolishRequest, 
+    PolishResponse,
 )
-from app.services.ai import analyze_review
+from app.services.ai import analyze_review, polish_review, FeatureDisabledError, ModerationError
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
 from app.services.matching import get_or_assign_review_assignment
@@ -67,6 +69,19 @@ def next_review_task(
         file_type=submission.file_type,
         rubric=rubric,
     )
+
+
+@router.post("/reviews/polish", response_model=PolishResponse)
+def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_current_user)):
+    try:
+        polished_text, notes = polish_review(payload.text)
+    except FeatureDisabledError:
+        raise HTTPException(status_code=503, detail="OpenAI not configured")
+    except ModerationError as e:
+        raise HTTPException(status_code=422, detail={"message": "Polish blocked by moderation", "details": e.args[0]})
+    except Exception:
+        raise HTTPException(status_code=500, detail="Polish failed")
+    return PolishResponse(polished_text=polished_text, notes=notes)
 
 
 @router.post("/review-assignments/{review_assignment_id}/submit", response_model=ReviewPublic)
