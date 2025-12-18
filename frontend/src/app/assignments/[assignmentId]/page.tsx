@@ -21,6 +21,7 @@ import {
   apiTeacherGradeSubmission,
   apiTeacherListSubmissions,
   apiCreateMetaReview,
+  formatApiError,
 } from "@/lib/api";
 import type {
   AssignmentPublic,
@@ -55,14 +56,6 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-function formatApiError(err: unknown) {
-  if (err instanceof ApiError) {
-    const detail = err.detail ? `\n${JSON.stringify(err.detail, null, 2)}` : "";
-    return `${err.message}${detail}`;
-  }
-  return err instanceof Error ? err.message : "エラーが発生しました";
 }
 
 function SectionCard({
