@@ -9,6 +9,7 @@ import { useAuth } from "@/app/providers";
 import { Card } from "@/components/legacy-ui/Card";
 import { Field, PrimaryButton, Select, TextInput } from "@/components/legacy-ui/Form";
 import type { UserRole } from "@/lib/types";
+import { formatApiError } from "@/lib/api";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -32,7 +33,7 @@ export default function RegisterPage() {
       await register({ role, name, email, password });
       router.push("/assignments");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "登録に失敗しました");
+      setError(formatApiError(err));
     }
   };
 

@@ -31,6 +31,134 @@ export class ApiError extends Error {
   }
 }
 
+type StringifyOptions = {
+  maxDepth?: number;
+  maxKeys?: number;
+  maxArrayLength?: number;
+  maxStringLength?: number;
+  maxOutputLength?: number;
+};
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n…(truncated ${text.length - max} chars)`;
+}
+
+function normalizeForJson(
+  value: unknown,
+  params: {
+    depth: number;
+    options: Required<Omit<StringifyOptions, "maxOutputLength">>;
+    seen: WeakSet<object>;
+  }
+): unknown {
+  const { depth, options, seen } = params;
+  if (depth >= options.maxDepth) return "[MaxDepth]";
+
+  if (value === null) return null;
+
+  if (typeof value === "string") return truncate(value, options.maxStringLength);
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "undefined") return "[undefined]";
+  if (typeof value === "function") return "[function]";
+  if (typeof value === "symbol") return value.toString();
+
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack ? truncate(value.stack, options.maxStringLength) : undefined,
+    };
+  }
+
+  if (!value || typeof value !== "object") return String(value);
+
+  const obj = value as Record<string, unknown>;
+  if (seen.has(obj)) return "[Circular]";
+  seen.add(obj);
+
+  if (Array.isArray(obj)) {
+    const sliced = obj.slice(0, options.maxArrayLength);
+    const mapped = sliced.map((item) =>
+      normalizeForJson(item, { depth: depth + 1, options, seen })
+    );
+    if (obj.length > sliced.length) {
+      mapped.push(`[+${obj.length - sliced.length} more items]`);
+    }
+    return mapped;
+  }
+
+  if (obj instanceof Map) {
+    const entries = Array.from(obj.entries()).slice(0, options.maxArrayLength);
+    return {
+      "[Map]": entries.map(([k, v]) => [
+        normalizeForJson(k, { depth: depth + 1, options, seen }),
+        normalizeForJson(v, { depth: depth + 1, options, seen }),
+      ]),
+    };
+  }
+
+  if (obj instanceof Set) {
+    const items = Array.from(obj.values()).slice(0, options.maxArrayLength);
+    return {
+      "[Set]": items.map((v) => normalizeForJson(v, { depth: depth + 1, options, seen })),
+    };
+  }
+
+  const keys = Object.keys(obj);
+  const slicedKeys = keys.slice(0, options.maxKeys);
+  const out: Record<string, unknown> = {};
+  for (const key of slicedKeys) {
+    out[key] = normalizeForJson(obj[key], { depth: depth + 1, options, seen });
+  }
+  if (keys.length > slicedKeys.length) {
+    out["…"] = `[+${keys.length - slicedKeys.length} more keys]`;
+  }
+  return out;
+}
+
+export function stringifyForDisplay(value: unknown, options: StringifyOptions = {}): string {
+  if (typeof value === "string") return value;
+
+  const normalized = normalizeForJson(value, {
+    depth: 0,
+    options: {
+      maxDepth: options.maxDepth ?? 6,
+      maxKeys: options.maxKeys ?? 50,
+      maxArrayLength: options.maxArrayLength ?? 50,
+      maxStringLength: options.maxStringLength ?? 2000,
+    },
+    seen: new WeakSet<object>(),
+  });
+
+  let text: string;
+  try {
+    text = JSON.stringify(normalized, null, 2);
+  } catch (err) {
+    text = normalized ? String(normalized) : "Unknown error";
+    if (err instanceof Error) {
+      text = `${text}\n(stringify failed: ${err.message})`;
+    }
+  }
+
+  return truncate(text, options.maxOutputLength ?? 8000);
+}
+
+export function formatApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.detail == null) return err.message;
+
+    const detailText = stringifyForDisplay(err.detail);
+    if (!detailText || detailText === err.message) return err.message;
+
+    return `${err.message}\n${detailText}`;
+  }
+  if (err instanceof Error) return err.message;
+  return stringifyForDisplay(err);
+}
+
 type FastApiValidationErrorItem = {
   loc?: unknown;
   msg?: unknown;
@@ -79,9 +207,9 @@ async function parseErrorDetail(res: Response): Promise<{ message: string; detai
         }
       }
 
-      return { message: "Request failed", detail };
+      return { message: stringifyForDisplay(detail), detail };
     }
-    return { message: "Request failed", detail: data };
+    return { message: stringifyForDisplay(data), detail: data };
   }
   const text = await res.text().catch(() => "");
   return { message: text || "Request failed", detail: text };
