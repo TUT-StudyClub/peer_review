@@ -72,7 +72,9 @@ export default function AssignmentsPage() {
         }
       >
         {error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+          <div className="whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
         ) : null}
         {loading ? <div className="text-sm text-black">読み込み中...</div> : null}
         {!loading && assignments.length === 0 ? (

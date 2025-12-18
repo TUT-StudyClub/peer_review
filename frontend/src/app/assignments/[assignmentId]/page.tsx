@@ -397,7 +397,9 @@ export default function AssignmentDetailPage() {
   if (errorBase) {
     return (
       <div className="space-y-3">
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorBase}</div>
+        <div className="whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {errorBase}
+        </div>
         <Link href="/assignments" className="text-sm underline">
           課題一覧へ戻る
         </Link>

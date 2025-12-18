@@ -42,7 +42,11 @@ export default function LoginPage() {
               autoComplete="current-password"
             />
           </Field>
-          {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+          {error ? (
+            <div className="whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
           <PrimaryButton type="submit" disabled={loading}>
             ログイン
           </PrimaryButton>
