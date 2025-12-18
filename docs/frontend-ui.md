@@ -32,6 +32,9 @@ UIコンポーネントは **shadcn/ui を優先**して追加・拡張します
 - `select.tsx`
 - `card.tsx`
 - `label.tsx`
+- `alert.tsx`
+- `dialog.tsx`
+- `field.tsx`
 
 ---
 
