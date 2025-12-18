@@ -31,6 +31,75 @@ _BANNED_PATTERNS = [
 ]
 
 
+class FeatureDisabledError(Exception):
+    """Raised when a feature requires OpenAI but the config is disabled."""
+
+
+class ModerationError(Exception):
+    """Raised when moderation comparison fails (e.g. output more toxic)."""
+
+
+def detect_toxic_hits(text: str) -> list[str]:
+    hits = [p for p in _BANNED_PATTERNS if re.search(p, text)]
+    return hits
+
+    
+def _openai_polish(text: str) -> dict | None:
+    if not settings.openai_api_key or not settings.enable_openai:
+        return None
+
+    system = "You are an assistant that rewrites reviews to be polite, constructive, and helpful. Return JSON only."
+    user = {
+        "text": text,
+        "instructions": [
+            "Rewrite to be polite and constructive.",
+            "Keep original meaning; do not add new facts.",
+            "Return strict JSON: {\"polished_text\": \"...\", \"notes\": \"...\"}.",
+        ],
+    }
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            res = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 1024,
+                },
+            )
+            res.raise_for_status()
+            content = res.json()["choices"][0]["message"]["content"]
+            return json.loads(content)  # expect dict with polished_text/notes
+    except Exception:
+        return None
+
+def polish_review(text: str) -> tuple[str, str | None]:
+    if not settings.openai_api_key or not settings.enable_openai:
+        raise FeatureDisabledError("OpenAI not configured or disabled")
+
+    result = _openai_polish(text)
+    if result is None:
+        raise FeatureDisabledError("OpenAI polish failed or not available")
+
+    polished = str(result.get("polished_text", "")).strip()
+    notes = result.get("notes")
+
+    input_hits = detect_toxic_hits(text)
+    output_hits = detect_toxic_hits(polished)
+
+    if len(output_hits) > len(input_hits):
+        # Reject if output is *more* toxic than input
+        raise ModerationError({"input_hits": input_hits, "output_hits": output_hits})
+
+    return polished, notes
+
+
 def _clamp_1_5(value: int) -> int:
     return max(1, min(5, int(value)))
 
