@@ -6,8 +6,8 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { Card } from "@/components/ui/Card";
-import { Field, PrimaryButton, Select, TextInput } from "@/components/ui/Form";
+import { Card } from "@/components/legacy-ui/Card";
+import { Field, PrimaryButton, Select, TextInput } from "@/components/legacy-ui/Form";
 import type { UserRole } from "@/lib/types";
 
 export default function RegisterPage() {

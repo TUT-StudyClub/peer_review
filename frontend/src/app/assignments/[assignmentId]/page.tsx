@@ -33,7 +33,7 @@ import type {
   SubmissionTeacherPublic,
 } from "@/lib/types";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
-import { Card } from "@/components/ui/Card";
+import { Card } from "@/components/legacy-ui/Card";
 import {
   Field,
   PrimaryButton,
@@ -41,7 +41,7 @@ import {
   Select,
   TextArea,
   TextInput,
-} from "@/components/ui/Form";
+} from "@/components/legacy-ui/Form";
 
 function shortId(id: string) {
   return id.slice(0, 8);
