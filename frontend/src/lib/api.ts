@@ -249,3 +249,10 @@ export async function apiTeacherGradeSubmission(
     token
   );
 }
+
+export async function apiDebugValidateTitleDeadline(payload: Record<string, unknown>): Promise<{ ok: boolean }> {
+  return apiFetch<{ ok: boolean }>(
+    "/debug/validate",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }
+  );
+}

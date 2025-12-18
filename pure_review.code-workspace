@@ -1,0 +1,23 @@
+{
+	"folders": [
+		{
+			"name": "Frontend",
+			"path": "frontend"
+		},
+		{
+			"name": "Backend",
+			"path": "backend"
+		},
+		{
+			"name": "Root",
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.defaultInterpreterPath": "${workspaceFolder:Backend}/.venv/bin/python",
+		"python.analysis.extraPaths": [
+			"${workspaceFolder:Backend}"
+		],
+		"typescript.tsdk": "frontend/node_modules/typescript/lib"
+	}
+}

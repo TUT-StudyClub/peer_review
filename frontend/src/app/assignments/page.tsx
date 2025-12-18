@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiCreateAssignment, apiListAssignments } from "@/lib/api";
+import { apiCreateAssignment, apiDebugValidateTitleDeadline, apiListAssignments } from "@/lib/api";
 import type { AssignmentPublic } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,11 @@ export default function AssignmentsPage() {
   const [description, setDescription] = useState("");
   const [targetReviews, setTargetReviews] = useState(2);
   const [creating, setCreating] = useState(false);
+
+  const [debugTitle, setDebugTitle] = useState("");
+  const [debugDeadline, setDebugDeadline] = useState("");
+  const [debugResult, setDebugResult] = useState<string | null>(null);
+  const [debugSubmitting, setDebugSubmitting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -62,6 +67,22 @@ export default function AssignmentsPage() {
       setError(err instanceof Error ? err.message : "作成に失敗しました");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const runDebugValidate = async () => {
+    setDebugSubmitting(true);
+    setDebugResult(null);
+    try {
+      const payload: Record<string, unknown> = {};
+      if (debugTitle.trim()) payload.title = debugTitle;
+      if (debugDeadline.trim()) payload.deadline = debugDeadline;
+      await apiDebugValidateTitleDeadline(payload);
+      setDebugResult("OK");
+    } catch (err) {
+      setDebugResult(err instanceof Error ? err.message : "送信に失敗しました");
+    } finally {
+      setDebugSubmitting(false);
     }
   };
 
@@ -162,6 +183,53 @@ export default function AssignmentsPage() {
           </CardContent>
         </Card>
       )}
+
+      {process.env.NODE_ENV !== "production" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>（debug）複数エラー表示（title/期限）</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              title/期限を両方空のまま「送信」すると、FastAPIの422（複数バリデーションエラー）を返します。
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="title">
+                <Input value={debugTitle} onChange={(e) => setDebugTitle(e.target.value)} />
+              </Field>
+              <Field label="期限（deadline）">
+                <Input
+                  type="date"
+                  value={debugDeadline}
+                  onChange={(e) => setDebugDeadline(e.target.value)}
+                />
+              </Field>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={runDebugValidate} disabled={debugSubmitting}>
+                送信
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setDebugTitle("");
+                  setDebugDeadline("");
+                  setDebugResult(null);
+                }}
+                disabled={debugSubmitting}
+              >
+                クリア
+              </Button>
+            </div>
+            {debugResult ? (
+              <Alert variant={debugResult === "OK" ? "default" : "destructive"}>
+                <AlertTitle>{debugResult === "OK" ? "OK" : "エラー"}</AlertTitle>
+                <AlertDescription className="whitespace-pre-wrap">{debugResult}</AlertDescription>
+              </Alert>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
     </div>
   );
 }
