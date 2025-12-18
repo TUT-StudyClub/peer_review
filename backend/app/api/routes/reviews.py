@@ -17,14 +17,14 @@ from app.models.user import User
 from app.schemas.review import (
     MetaReviewCreate,
     MetaReviewPublic,
+    PolishRequest,
+    PolishResponse,
     ReviewAssignmentTask,
     ReviewPublic,
     ReviewReceived,
     ReviewSubmit,
-    PolishRequest, 
-    PolishResponse,
 )
-from app.services.ai import analyze_review, polish_review, FeatureDisabledError, ModerationError
+from app.services.ai import FeatureDisabledError, ModerationError, analyze_review, polish_review
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
 from app.services.matching import get_or_assign_review_assignment
@@ -75,12 +75,18 @@ def next_review_task(
 def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_current_user)):
     try:
         polished_text, notes = polish_review(payload.text)
-    except FeatureDisabledError:
-        raise HTTPException(status_code=503, detail="OpenAI not configured")
+    except FeatureDisabledError as e:
+        raise HTTPException(status_code=503, detail="OpenAI not configured") from e
+    
     except ModerationError as e:
-        raise HTTPException(status_code=422, detail={"message": "Polish blocked by moderation", "details": e.args[0]})
-    except Exception:
-        raise HTTPException(status_code=500, detail="Polish failed")
+        raise HTTPException(
+            status_code=422, 
+            detail={"message": "Polish blocked by moderation", "details": e.args[0]}
+        ) from e
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Polish failed") from e
+
     return PolishResponse(polished_text=polished_text, notes=notes)
 
 
