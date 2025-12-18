@@ -805,6 +805,9 @@ export default function AssignmentDetailPage() {
             <div className="space-y-2 text-sm">
               <div>assignment_score: {grade.assignment_score ?? "-"}</div>
               <div>review_contribution: {grade.review_contribution.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">
+                ※ review_contribution はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+              </p>
               <div className="font-semibold">final_score: {grade.final_score ?? "-"}</div>
               <details className="rounded-md border bg-muted p-3 text-xs">
                 <summary className="cursor-pointer">breakdown</summary>

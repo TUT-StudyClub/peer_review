@@ -47,6 +47,8 @@
 - `GET /assignments/{assignment_id}/grades/me` で自分のスコアを取得
   - `assignment_score`: 先生の点数（設定されていればそれ） / 未設定ならピアの平均点（0〜100換算）
   - `review_contribution`: レビュー貢献点（レビュー1本あたり最大10点の簡易式）
+    - 目安: `helpfulness(メタ評価)=0.5`, `alignment(teacher採点との一致)=0.3`, `quality(AI品質)=0.2`
+    - **未入力（メタ評価/teacher採点など）がある場合は、その項目を除外して残りの重みを再配分**します（内訳は `breakdown` に含まれます）
   - `final_score`: `min(100, assignment_score + review_contribution)`
 
 ### 6) レビュアースキル可視化（レーダーチャート用データ）
