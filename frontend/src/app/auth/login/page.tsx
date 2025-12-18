@@ -6,8 +6,8 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { Card } from "@/components/ui/Card";
-import { Field, PrimaryButton, TextInput } from "@/components/ui/Form";
+import { Card } from "@/components/legacy-ui/Card";
+import { Field, PrimaryButton, TextInput } from "@/components/legacy-ui/Form";
 
 export default function LoginPage() {
   const router = useRouter();

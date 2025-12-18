@@ -6,8 +6,8 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers";
 import { apiCreateAssignment, apiListAssignments } from "@/lib/api";
 import type { AssignmentPublic } from "@/lib/types";
-import { Card } from "@/components/ui/Card";
-import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from "@/components/ui/Form";
+import { Card } from "@/components/legacy-ui/Card";
+import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from "@/components/legacy-ui/Form";
 
 export default function AssignmentsPage() {
   const { user, token } = useAuth();
@@ -146,4 +146,3 @@ export default function AssignmentsPage() {
     </div>
   );
 }
-
