@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiCreateAssignment, apiListAssignments } from "@/lib/api";
+import { apiCreateAssignment, apiListAssignments, formatApiError } from "@/lib/api";
 import type { AssignmentPublic } from "@/lib/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export default function AssignmentsPage() {
       const list = await apiListAssignments();
       setAssignments(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "読み込みに失敗しました");
+      setError(formatApiError(err));
     } finally {
       setLoading(false);
     }
@@ -59,7 +59,7 @@ export default function AssignmentsPage() {
       setTargetReviews(2);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "作成に失敗しました");
+      setError(formatApiError(err));
     } finally {
       setCreating(false);
     }
