@@ -8,21 +8,27 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user import User, UserRole
 
-# テストユーザー定義
-TEST_USERS = [
-    # Teachers (3人)
-    {"name": "Teacher Alpha", "email": "teacher1@example.com", "password": "teacher123", "role": UserRole.teacher},
-    {"name": "Teacher Beta", "email": "teacher2@example.com", "password": "teacher123", "role": UserRole.teacher},
-    {"name": "Teacher Gamma", "email": "teacher3@example.com", "password": "teacher123", "role": UserRole.teacher},
-    # Students (10人)
-    *[
-        {"name": f"Student {i:02d}", "email": f"student{i:02d}@example.com", "password": "student123", "role": UserRole.student}
-        for i in range(1, 11)
+
+def _get_test_users() -> list[dict]:
+    """環境変数から動的にテストユーザーを生成"""
+    teacher_password = settings.test_password_teacher
+    student_password = settings.test_password_student
+
+    return [
+        # Teachers (3人)
+        {"name": "Teacher Alpha", "email": "teacher1@example.com", "password": teacher_password, "role": UserRole.teacher},
+        {"name": "Teacher Beta", "email": "teacher2@example.com", "password": teacher_password, "role": UserRole.teacher},
+        {"name": "Teacher Gamma", "email": "teacher3@example.com", "password": teacher_password, "role": UserRole.teacher},
+        # Students (10人)
+        *[
+            {"name": f"Student {i:02d}", "email": f"student{i:02d}@example.com", "password": student_password, "role": UserRole.student}
+            for i in range(1, 11)
+        ]
     ]
-]
 
 
 def seed_db(db: Session) -> None:
@@ -32,9 +38,11 @@ def seed_db(db: Session) -> None:
     if existing_users:
         return
 
+    # 環境変数から動的に生成
+    test_users = _get_test_users()
     created_users = []
 
-    for user_data in TEST_USERS:
+    for user_data in test_users:
         user = User(
             id=uuid4(),
             email=user_data["email"],
