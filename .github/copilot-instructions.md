@@ -22,4 +22,3 @@ You are an expert Python Engineer and Domain-Driven Design (DDD) .
     - Distinguish between **Entities**, **Value Objects**, and **Domain Services**.
     - Keep the Domain Layer pure and independent of infrastructure or frameworks.
     - Use Repository pattern for data access abstraction.
-    - Encapsulate domain logic within domain objects, avoiding "Anemic Domain Models".
