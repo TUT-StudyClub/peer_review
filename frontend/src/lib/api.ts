@@ -164,6 +164,54 @@ type FastApiValidationErrorItem = {
   msg?: unknown;
 };
 
+function formatLoc(loc: unknown): string | null {
+  if (Array.isArray(loc) && loc.length) return String(loc[loc.length - 1]);
+  if (typeof loc === "string" && loc.trim()) return loc;
+  return null;
+}
+
+function collectErrorMessages(detail: unknown, depth = 0): string[] {
+  if (depth > 5 || detail == null) return [];
+
+  if (typeof detail === "string") {
+    const trimmed = detail.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  if (Array.isArray(detail)) {
+    return detail.flatMap((item) => collectErrorMessages(item, depth + 1));
+  }
+
+  if (typeof detail !== "object") return [];
+
+  const obj = detail as Record<string, unknown>;
+  const messages: string[] = [];
+  const field = formatLoc(obj.loc ?? obj.path ?? obj.field);
+
+  for (const key of ["msg", "message", "reason"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) {
+      messages.push(field ? `${field}: ${value}` : value);
+    }
+  }
+
+  if ("errors" in obj) {
+    messages.push(...collectErrorMessages((obj as { errors: unknown }).errors, depth + 1));
+  }
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (["loc", "path", "field", "msg", "message", "reason", "errors"].includes(key)) continue;
+    if (typeof value === "string" && value.trim()) {
+      messages.push(`${key}: ${value}`);
+    } else if (Array.isArray(value)) {
+      const nested = collectErrorMessages(value, depth + 1);
+      messages.push(...nested.map((msg) => (key ? `${key}: ${msg}` : msg)));
+    }
+  }
+
+  return messages;
+}
+
 function formatFastApiValidationErrors(detail: unknown): string | null {
   if (!Array.isArray(detail)) return null;
 
@@ -171,8 +219,7 @@ function formatFastApiValidationErrors(detail: unknown): string | null {
     .map((item) => {
       if (!item || typeof item !== "object") return null;
       const { loc, msg } = item as FastApiValidationErrorItem;
-      const locParts = Array.isArray(loc) ? loc : [];
-      const field = locParts.length ? String(locParts[locParts.length - 1]) : "body";
+      const field = formatLoc(loc) ?? "body";
       const message = typeof msg === "string" ? msg : "Invalid value";
       return `${field}: ${message}`;
     })
@@ -191,20 +238,22 @@ async function parseErrorDetail(res: Response): Promise<{ message: string; detai
         return { message: detail, detail };
       }
 
+       const messages = new Set<string>();
       const validationMessage = formatFastApiValidationErrors(detail);
       if (validationMessage) {
-        return { message: validationMessage, detail };
+        for (const line of validationMessage.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (trimmed) messages.add(trimmed);
+        }
       }
 
-      if (detail && typeof detail === "object") {
-        const maybeMessage = (detail as Record<string, unknown>).message;
-        const maybeReason = (detail as Record<string, unknown>).reason;
-        if (typeof maybeMessage === "string" && typeof maybeReason === "string") {
-          return { message: `${maybeMessage}\n${maybeReason}`, detail };
-        }
-        if (typeof maybeMessage === "string") {
-          return { message: maybeMessage, detail };
-        }
+      for (const msg of collectErrorMessages(detail)) {
+        const trimmed = msg.trim();
+        if (trimmed) messages.add(trimmed);
+      }
+
+      if (messages.size) {
+        return { message: Array.from(messages).join("\n"), detail };
       }
 
       return { message: stringifyForDisplay(detail), detail };

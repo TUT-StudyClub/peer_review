@@ -33,6 +33,7 @@ import type {
   SubmissionPublic,
   SubmissionTeacherPublic,
 } from "@/lib/types";
+import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -415,7 +416,9 @@ export default function AssignmentDetailPage() {
       <div className="space-y-3">
         <Alert variant="destructive">
           <AlertTitle>エラー</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{errorBase}</AlertDescription>
+          <AlertDescription>
+            <ErrorMessages message={errorBase} />
+          </AlertDescription>
         </Alert>
         <Button variant="link" asChild className="px-0">
           <Link href="/assignments">課題一覧へ戻る</Link>
@@ -437,7 +440,9 @@ export default function AssignmentDetailPage() {
       {notice ? (
         <Alert>
           <AlertTitle>通知</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{notice}</AlertDescription>
+          <AlertDescription>
+            <ErrorMessages message={notice} />
+          </AlertDescription>
         </Alert>
       ) : null}
 
