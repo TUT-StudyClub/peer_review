@@ -84,9 +84,6 @@ def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_c
             detail={"message": "Polish blocked by moderation", "details": e.args[0]}
         ) from e
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Polish failed") from e
-
     return PolishResponse(polished_text=polished_text, notes=notes)
 
 
