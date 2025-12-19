@@ -151,3 +151,12 @@ export type TeacherGradeSubmit = {
   rubric_scores: RubricScore[];
 };
 
+export type PolishRequest = {
+  text: string;
+};
+
+export type PolishResponse = {
+  polished_text: string;
+  notes?: string | null;
+};
+
