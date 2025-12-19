@@ -15,10 +15,6 @@ class Settings(BaseSettings):
 
     openai_api_key: str | None = None
 
-    # Test user credentials for DB seeding
-    test_password_teacher: str = "teacher123"
-    test_password_student: str = "student123"
-
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Optional regex-based origins (useful when Next.js dev port changes, e.g. 3001/3002).

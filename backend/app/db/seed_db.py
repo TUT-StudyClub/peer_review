@@ -2,23 +2,28 @@
 
 import csv
 import json
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models.user import User, UserRole
 
 
-def _get_test_users() -> list[dict]:
-    """環境変数から動的にテストユーザーを生成"""
-    teacher_password = settings.test_password_teacher
-    student_password = settings.test_password_student
+def _get_test_users() -> tuple[list[dict], str, str]:
+    """実行時にランダムパスワードを生成してテストユーザーを作成。
+    
+    Returns:
+        (テストユーザーリスト, 教員パスワード, 学生パスワード)
+    """
+    # 暗号学的に安全なランダムパスワードを生成
+    teacher_password = secrets.token_urlsafe(16)
+    student_password = secrets.token_urlsafe(16)
 
-    return [
+    test_users = [
         # Teachers (3人)
         {"name": "Teacher Alpha", "email": "teacher1@example.com", "password": teacher_password, "role": UserRole.teacher},
         {"name": "Teacher Beta", "email": "teacher2@example.com", "password": teacher_password, "role": UserRole.teacher},
@@ -30,16 +35,19 @@ def _get_test_users() -> list[dict]:
         ]
     ]
 
+    return test_users, teacher_password, student_password
+
 
 def seed_db(db: Session) -> None:
-    """テストユーザーをDBに作成し、CSV に出力"""
+    """テストユーザーをDBに作成し、認証情報ファイルを生成"""
     # すでにユーザーが存在する場合はスキップ
     existing_users = db.query(User).first()
     if existing_users:
+        print("⚠️  Skip seeding: Users already exist in database")
         return
 
-    # 環境変数から動的に生成
-    test_users = _get_test_users()
+    # ランダムパスワードを生成
+    test_users, teacher_pwd, student_pwd = _get_test_users()
     created_users = []
 
     for user_data in test_users:
@@ -65,11 +73,11 @@ def seed_db(db: Session) -> None:
     db.commit()
 
     # ファイルに出力
-    _export_user_credentials(created_users)
+    _export_user_credentials(created_users, teacher_pwd, student_pwd)
 
 
-def _export_user_credentials(users: list[dict]) -> None:
-    """作成したユーザー情報を CSV と JSON で出力"""
+def _export_user_credentials(users: list[dict], teacher_pwd: str, student_pwd: str) -> None:
+    """作成したユーザー情報を CSV と JSON で出力し、パスワード情報を表示"""
     # バックエンド直下の test_users へ絶対パスで出力（起動場所に依存しない）
     backend_root = Path(__file__).resolve().parents[2]
     output_dir = backend_root / "test_users"
@@ -87,4 +95,15 @@ def _export_user_credentials(users: list[dict]) -> None:
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(users, f, indent=2, ensure_ascii=False)
 
-    print(f"✓ Test users exported to {csv_path} and {json_path}")
+    # コンソールに明確に表示
+    print("\n" + "=" * 70)
+    print("✓ Test users created and credentials exported!")
+    print("=" * 70)
+    print("\n📁 Credentials file locations:")
+    print(f"   JSON: {json_path}")
+    print(f"   CSV:  {csv_path}")
+    print("\n🔑 Generated Passwords:")
+    print(f"   Teachers (3人): {teacher_pwd}")
+    print(f"   Students (10人): {student_pwd}")
+    print("\n💡 Usage: Open the JSON/CSV file to find individual user credentials.")
+    print("=" * 70 + "\n")
