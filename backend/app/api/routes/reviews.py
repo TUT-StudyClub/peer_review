@@ -77,7 +77,6 @@ def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_c
         polished_text, notes = polish_review(payload.text)
     except FeatureDisabledError as e:
         raise HTTPException(status_code=503, detail="OpenAI not configured") from e
-    
     except ModerationError as e:
         raise HTTPException(
             status_code=422, 
