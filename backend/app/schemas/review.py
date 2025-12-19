@@ -85,7 +85,7 @@ class ReviewReceived(BaseModel):
     ai_quality_reason: str | None
 
 class PolishRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=20_000)
+    text: str = Field(min_length=1, max_length=2048)
 
 class PolishResponse(BaseModel):
     polished_text: str
