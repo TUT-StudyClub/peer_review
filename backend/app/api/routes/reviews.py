@@ -120,38 +120,10 @@ def submit_review(
         raise HTTPException(
             status_code=400,
             detail={
-                "message": "Toxic language detected",
+                "message": "Toxic language detected in review comment",
                 "reason": ai_result.toxic_reason,
-                "errors": [
-                    {
-                        "path": ["comment"],
-                        "issue": {
-                            "code": "TOXIC_LANGUAGE",
-                            "severity": "high",
-                            "nested": {
-                                "level1": [
-                                    {
-                                        "level2": {
-                                            "level3": [
-                                                {"level4": {"ok": False, "note": "deeply nested example"}},
-                                                {"value": None},
-                                            ]
-                                        }
-                                    }
-                                ]
-                            },
-                        },
-                    }
-                ],
-                "debug": {
-                    "samples": {
-                        "numbers": [0, 1, 2.5],
-                        "booleans": [True, False],
-                        "null": None,
-                        "strings": ["a", "b"],
-                    },
-                    "note": "This nested detail is intentional for frontend robustness testing.",
-                },
+                "field": "comment",
+                "code": "TOXIC_LANGUAGE",
             },
         )
 
