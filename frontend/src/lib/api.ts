@@ -151,6 +151,15 @@ export function formatApiError(err: unknown): string {
     if (typeof err.detail === "string") return err.detail;
     if (err.detail == null) return err.message;
 
+    if (typeof err.detail === "object" && !Array.isArray(err.detail)) {
+      try {
+        const json = JSON.stringify(err.detail, null, 2);
+        if (json) return `${err.message}\n${json}`;
+      } catch {
+        // fall through to generic formatter
+      }
+    }
+
     const detailText = stringifyForDisplay(err.detail);
     if (!detailText || detailText === err.message) return err.message;
 
