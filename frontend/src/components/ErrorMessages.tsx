@@ -8,15 +8,25 @@ export function ErrorMessages({ message, className }: { message: string; classNa
 
   if (lines.length === 0) return null;
 
+  const containerClass = cn("max-h-64 overflow-y-auto break-words", className);
+
   if (lines.length === 1) {
-    return <span className={cn("whitespace-pre-wrap", className)}>{lines[0]}</span>;
+    return (
+      <div className={containerClass}>
+        <span className="whitespace-pre-wrap">{lines[0]}</span>
+      </div>
+    );
   }
 
   return (
-    <ul className={cn("list-disc space-y-1 pl-5", className)}>
-      {lines.map((line, index) => (
-        <li key={`${index}-${line}`}>{line}</li>
-      ))}
-    </ul>
+    <div className={containerClass}>
+      <ul className="list-disc space-y-1 pl-5 whitespace-pre-wrap">
+        {lines.map((line, index) => (
+          <li key={`${index}-${line}`} className="break-words">
+            {line}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
