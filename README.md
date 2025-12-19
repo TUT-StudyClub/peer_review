@@ -433,11 +433,11 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 ---
 
 ## Swagger UI（/docs）で操作する場合のコツ
-503 Service Unavailable`
+- `503 Service Unavailable`
   - OpenAI 連携機能（推敲など）を呼び出しましたが、サーバー側で `ENABLE_OPENAI` が `false` になっているか、APIキーが設定されていません。
 - `422 Unprocessable Entity`
   - レビュー推敲の結果、文章の攻撃性が高まったと判定され、出力がブロックされました。
-- `
+- 
 1. ブラウザで `http://127.0.0.1:8000/docs` を開く
 2. まず `POST /auth/register` でアカウント作成
 3. `POST /auth/token` でログイン（フォーム入力）
