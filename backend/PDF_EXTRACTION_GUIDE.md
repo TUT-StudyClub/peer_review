@@ -114,7 +114,7 @@ except ValueError as e:
 ### 基本テスト
 ```bash
 cd backend
-uv run python test_pdf_extraction.py
+uv run python tests/integration/test_pdf_extraction.py
 ```
 
 出力例:
