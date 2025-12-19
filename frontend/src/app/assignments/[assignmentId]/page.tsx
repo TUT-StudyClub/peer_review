@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/app/providers";
 import {
@@ -43,6 +43,15 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
+  { key: "good", label: "良い点", text: "【良い点】主張が明確で、根拠となるデータ/引用が添えられています。" },
+  { key: "improve", label: "改善点", text: "【改善点】この部分の論拠が弱いので、出典や具体例を1〜2個追加してください。" },
+  { key: "evidence", label: "根拠不足", text: "【根拠不足】結論と根拠の間に飛躍があります。データ/引用/図表などのエビデンスを補ってください。" },
+  { key: "typo", label: "誤字", text: "【誤字】タイポや表記ゆれがあります。最終提出前に再確認してください。" },
+  { key: "structure", label: "構成", text: "【構成】段落ごとに主張→根拠→結論の流れを意識すると読みやすくなります。" },
+  { key: "example", label: "具体例", text: "【具体例】読者がイメージできる具体例を1つ追加すると説得力が増します。" },
+];
 
 function shortId(id: string) {
   return id.slice(0, 8);
@@ -104,6 +113,7 @@ export default function AssignmentDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, number>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const templateClicks = useRef<Record<string, number>>({});
 
   const [received, setReceived] = useState<ReviewReceived[]>([]);
   const [receivedLoading, setReceivedLoading] = useState(false);
@@ -247,6 +257,20 @@ export default function AssignmentDetailPage() {
       }
       setNotice(formatApiError(err));
     }
+  };
+
+  const appendReviewComment = (text: string) => {
+    setReviewComment((prev) => {
+      if (!prev.trim()) return text;
+      return `${prev}\n\n${text}`;
+    });
+  };
+
+  const insertTemplate = (tpl: { key: string; label: string; text: string }) => {
+    appendReviewComment(tpl.text);
+    const nextCount = (templateClicks.current[tpl.key] ?? 0) + 1;
+    templateClicks.current = { ...templateClicks.current, [tpl.key]: nextCount };
+    console.info("review template used", { key: tpl.key, label: tpl.label, count: nextCount });
   };
 
   const submitReview = async () => {
@@ -710,7 +734,19 @@ export default function AssignmentDetailPage() {
               </div>
 
               <Field label="レビューコメント（具体的に）" hint="短すぎるとAI/簡易判定で低評価になります">
-                <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                <div className="space-y-2">
+                  <div className="space-y-2 rounded-md border bg-muted/70 p-3">
+                    <div className="text-xs font-medium text-muted-foreground">定型文を挿入</div>
+                    <div className="flex flex-wrap gap-2">
+                      {REVIEW_TEMPLATES.map((tpl) => (
+                        <Button key={tpl.key} size="sm" variant="outline" onClick={() => insertTemplate(tpl)}>
+                          {tpl.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                </div>
               </Field>
 
               <div className="flex gap-2">
