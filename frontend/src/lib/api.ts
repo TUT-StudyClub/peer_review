@@ -148,6 +148,7 @@ export function stringifyForDisplay(value: unknown, options: StringifyOptions = 
 
 export function formatApiError(err: unknown): string {
   if (err instanceof ApiError) {
+    if (typeof err.detail === "string") return err.detail;
     if (err.detail == null) return err.message;
 
     const detailText = stringifyForDisplay(err.detail);
