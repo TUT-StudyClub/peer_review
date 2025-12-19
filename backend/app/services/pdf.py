@@ -40,7 +40,7 @@ class PDFExtractionService:
                     if text:
                         extracted_text.append(f"--- ページ {page_num} ---\n{text}")
         except Exception as e:
-            raise ValueError(f"PDFの処理に失敗しました: {str(e)}")
+            raise ValueError(f"PDFの処理に失敗しました: {str(e)}") from e
 
         return "\n\n".join(extracted_text)
 
@@ -75,7 +75,7 @@ class PDFExtractionService:
                     text = page.extract_text()
                     pages_text[page_num] = text or ""
         except Exception as e:
-            raise ValueError(f"PDFの処理に失敗しました: {str(e)}")
+            raise ValueError(f"PDFの処理に失敗しました: {str(e)}") from e
 
         return pages_text
 
@@ -109,4 +109,4 @@ class PDFExtractionService:
                     "metadata": pdf.metadata,
                 }
         except Exception as e:
-            raise ValueError(f"PDFの処理に失敗しました: {str(e)}")
+            raise ValueError(f"PDFの処理に失敗しました: {str(e)}") from e
