@@ -17,6 +17,7 @@
 - チーム運用ルール: `CONTRIBUTING.md`
 - ブランチ保護: `docs/branch-protection.md`
 - Issue運用（タスク管理）: `docs/issue-management.md`
+- UI方針（shadcn/ui）: `docs/frontend-ui.md`
 
 ---
 

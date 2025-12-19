@@ -85,6 +85,19 @@ def _rubric_alignment_score(
     return max(0.0, min(1.0, 1.0 - (avg_diff / avg_max_diff)))
 
 
+_REVIEW_POINTS_BASE_WEIGHTS = {
+    "helpfulness": 0.5,
+    "alignment": 0.3,
+    "quality": 0.2,
+}
+
+
+def _norm_1_to_5(score: int | None) -> float | None:
+    if score is None:
+        return None
+    return float(score) / 5.0
+
+
 def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) -> GradeMe:
     submission = (
         db.query(Submission)
@@ -112,7 +125,8 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
         if ra is None:
             continue
         meta = db.query(MetaReview).filter(MetaReview.review_id == r.id).first()
-        helpfulness_norm = (float(meta.helpfulness) / 5.0) if meta else 0.6
+        helpfulness_raw = meta.helpfulness if meta else None
+        helpfulness_norm = _norm_1_to_5(helpfulness_raw)
 
         alignment = _rubric_alignment_score(
             db,
@@ -120,19 +134,62 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
             review_id=r.id,
             assignment_id=assignment.id,
         )
-        alignment_norm = alignment if alignment is not None else 0.6
+        alignment_norm = alignment if alignment is not None else None
 
-        quality_norm = (float(r.ai_quality_score) / 5.0) if r.ai_quality_score else 0.6
+        quality_raw = r.ai_quality_score if r.ai_quality_score is not None else None
+        quality_norm = _norm_1_to_5(quality_raw)
         toxic = bool(r.ai_toxic)
-        points = 0.0 if toxic else 10.0 * (0.5 * helpfulness_norm + 0.3 * alignment_norm + 0.2 * quality_norm)
+
+        available = {
+            "helpfulness": helpfulness_norm is not None,
+            "alignment": alignment_norm is not None,
+            "quality": quality_norm is not None,
+        }
+        available_weight_sum = sum(
+            _REVIEW_POINTS_BASE_WEIGHTS[key] for key, ok in available.items() if ok
+        )
+        weights = {
+            key: (_REVIEW_POINTS_BASE_WEIGHTS[key] / available_weight_sum)
+            if (available_weight_sum > 0 and available[key])
+            else 0.0
+            for key in _REVIEW_POINTS_BASE_WEIGHTS
+        }
+
+        score_norm = None
+        if available_weight_sum > 0:
+            score_norm = (
+                weights["helpfulness"] * (helpfulness_norm or 0.0)
+                + weights["alignment"] * (alignment_norm or 0.0)
+                + weights["quality"] * (quality_norm or 0.0)
+            )
+
+        points = 0.0 if toxic else 10.0 * (score_norm or 0.0)
         per_review_points.append(points)
         per_review_breakdown.append(
             {
                 "review_id": str(r.id),
-                "helpfulness_norm": helpfulness_norm,
-                "alignment_norm": alignment_norm,
-                "quality_norm": quality_norm,
+                "available_weights_sum": available_weight_sum,
                 "toxic": toxic,
+                "metrics": {
+                    "helpfulness": {
+                        "raw": helpfulness_raw,
+                        "norm": helpfulness_norm,
+                        "base_weight": _REVIEW_POINTS_BASE_WEIGHTS["helpfulness"],
+                        "weight": weights["helpfulness"],
+                    },
+                    "alignment": {
+                        "norm": alignment_norm,
+                        "base_weight": _REVIEW_POINTS_BASE_WEIGHTS["alignment"],
+                        "weight": weights["alignment"],
+                    },
+                    "quality": {
+                        "raw": quality_raw,
+                        "norm": quality_norm,
+                        "base_weight": _REVIEW_POINTS_BASE_WEIGHTS["quality"],
+                        "weight": weights["quality"],
+                    },
+                },
+                "score_norm": score_norm,
                 "points": points,
             }
         )
@@ -141,7 +198,8 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
     final_score = None if assignment_score is None else min(100.0, assignment_score + review_contribution)
 
     breakdown = {
-        "reviews_count": len(my_reviews),
+        "reviews_count": len(per_review_breakdown),
+        "review_points_base_weights": _REVIEW_POINTS_BASE_WEIGHTS,
         "per_review": per_review_breakdown,
     }
     return GradeMe(
