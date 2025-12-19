@@ -104,7 +104,7 @@ def test_pdf_extraction():
             text = pages[page_num]
             print(f"\n📄 ページ {page_num}:")
             print(f"   文字数: {len(text):,}")
-            print(f"   改行数: {text.count(chr(10))}")
+            print(f"   改行数: {text.count('\\n')}")
             
             # ページ全文を表示
             if text.strip():

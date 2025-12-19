@@ -22,6 +22,18 @@ class PDFExtractionService:
             return header.startswith(b"%PDF-")
         except OSError:
             return False
+
+    @staticmethod
+    def _validate_pdf_path(pdf_path: str | Path) -> Path:
+        """共通のPDFパス検証: 存在・拡張子・シグネチャを確認してPathを返す。"""
+        p = Path(pdf_path)
+        if not p.exists():
+            raise FileNotFoundError(f"PDFファイルが見つかりません: {p}")
+        if p.suffix.lower() != ".pdf":
+            raise ValueError(f"ファイルはPDF形式である必要があります: {p}")
+        if not PDFExtractionService._has_pdf_signature(p):
+            raise ValueError(f"PDFシグネチャが不正です: {p}")
+        return p
     @staticmethod
     def extract_text(
         pdf_path: str | Path,
@@ -47,16 +59,7 @@ class PDFExtractionService:
             FileNotFoundError: PDFファイルが見つからない場合
             ValueError: PDFファイルが無効/破損している場合や読み取り失敗時
         """
-        pdf_path = Path(pdf_path)
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
-
-        if not pdf_path.suffix.lower() == ".pdf":
-            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
-        # 実体検証（マジックバイト）
-        if not PDFExtractionService._has_pdf_signature(pdf_path):
-            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+        pdf_path = PDFExtractionService._validate_pdf_path(pdf_path)
 
         out = StringIO()
         total_chars = 0
@@ -96,15 +99,7 @@ class PDFExtractionService:
         Yields:
             ページヘッダと本文を含む文字列（空ページはスキップ）
         """
-        pdf_path = Path(pdf_path)
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
-
-        if not pdf_path.suffix.lower() == ".pdf":
-            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
-        if not PDFExtractionService._has_pdf_signature(pdf_path):
-            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+        pdf_path = PDFExtractionService._validate_pdf_path(pdf_path)
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
@@ -125,14 +120,7 @@ class PDFExtractionService:
         Returns:
             {page_num: [{"bbox": (x0, top, x1, bottom), "name": str|None}, ...], ...}
         """
-        pdf_path = Path(pdf_path)
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
-        if not pdf_path.suffix.lower() == ".pdf":
-            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
-        if not PDFExtractionService._has_pdf_signature(pdf_path):
-            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+        pdf_path = PDFExtractionService._validate_pdf_path(pdf_path)
 
         results: dict[int, list[dict]] = {}
         try:
@@ -191,16 +179,7 @@ class PDFExtractionService:
             FileNotFoundError: PDFファイルが見つからない場合
             ValueError: PDFファイルが無効な場合
         """
-        pdf_path = Path(pdf_path)
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
-
-        if not pdf_path.suffix.lower() == ".pdf":
-            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
-        # 実体検証（マジックバイト）
-        if not PDFExtractionService._has_pdf_signature(pdf_path):
-            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+        pdf_path = PDFExtractionService._validate_pdf_path(pdf_path)
 
         pages_text = {}
 
@@ -231,15 +210,7 @@ class PDFExtractionService:
             FileNotFoundError: PDFファイルが見つからない場合
             ValueError: PDFファイルが無効な場合
         """
-        pdf_path = Path(pdf_path)
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
-
-        if not pdf_path.suffix.lower() == ".pdf":
-            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
-        if not PDFExtractionService._has_pdf_signature(pdf_path):
-            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+        pdf_path = PDFExtractionService._validate_pdf_path(pdf_path)
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
