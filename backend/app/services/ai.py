@@ -77,7 +77,6 @@ def _openai_polish(text: str) -> dict | None:
             return json.loads(content)  # expect dict with polished_text/notes
     except Exception:
         return None
-
 def polish_review(text: str) -> tuple[str, str | None]:
     if not settings.openai_api_key or not settings.enable_openai:
         raise FeatureDisabledError("OpenAI not configured or disabled")
