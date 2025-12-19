@@ -16,8 +16,22 @@ from app.models.user import User, UserRole
 def _get_test_users() -> tuple[list[dict], str, str]:
     """実行時にランダムパスワードを生成してテストユーザーを作成。
     
+    このヘルパー関数では、教員ユーザー 3 人と学生ユーザー 10 人分のテストデータを
+    暗号学的に安全な secrets モジュールを使用してランダムパスワードを生成します。
+    
+    生成されるパスワード:
+    - 教員用ランダムパスワード: 全ての教員が同じパスワードを使用
+    - 学生用ランダムパスワード: 全ての学生が同じパスワードを使用
+    
     Returns:
-        (テストユーザーリスト, 教員パスワード, 学生パスワード)
+        tuple[list[dict], str, str]: (
+            テストユーザーリスト (名前、メール、パスワード、ロール を含む),
+            教員用ランダムパスワード,
+            学生用ランダムパスワード
+        )
+    
+    Note:
+        毎回実行するたびに異なるランダムパスワードが生成されます。
     """
     # 暗号学的に安全なランダムパスワードを生成
     teacher_password = secrets.token_urlsafe(16)
@@ -39,7 +53,31 @@ def _get_test_users() -> tuple[list[dict], str, str]:
 
 
 def seed_db(db: Session) -> None:
-    """テストユーザーをDBに作成し、認証情報ファイルを生成"""
+    """テストユーザーを DB に作成し、認証情報をファイルに出力する。
+    
+    挙動:
+    - DB に User レコードが 1 件以上存在している場合は、シーディングは行わず
+      即座に終了します。
+    - ユーザーが 1 件も存在しない場合のみ、_get_test_users() で生成された
+      テストユーザーを DB に作成します。
+    - 作成したテストユーザーの認証情報一覧（ユーザー名、メールアドレス、
+      平文パスワード、ロール）を CSV および JSON ファイルとして出力します。
+    
+    出力先:
+    - このモジュールのファイルパスを基準に、バックエンドプロジェクト直下の
+      ``test_users`` ディレクトリを作成し、そこに ``test_users.csv`` と
+      ``test_users.json`` を出力します。
+    - 出力パスは ``__file__`` から解決されるため、プロセスのカレントディレクトリ
+      には依存しません。
+    
+    パスワード:
+    - 教員と学生のパスワードは実行時にランダムに生成されます。
+    - 生成されたパスワードは ``test_users.json`` ファイルに記載され、
+      ここからログイン用認証情報を取得します。
+    
+    Args:
+        db (Session): SQLAlchemy セッション。
+    """
     # すでにユーザーが存在する場合はスキップ
     existing_users = db.query(User).first()
     if existing_users:
@@ -77,7 +115,26 @@ def seed_db(db: Session) -> None:
 
 
 def _export_user_credentials(users: list[dict], teacher_pwd: str, student_pwd: str) -> None:
-    """作成したユーザー情報を CSV と JSON で出力し、パスワード情報を表示"""
+    """作成したユーザー情報を CSV と JSON で出力し、パスワード情報を表示する。
+    
+    出力機能:
+    - CSV 出力: ユーザー名、メール、パスワード、ロールを CSV フォーマットで出力
+    - JSON 出力: 上記情報を JSON フォーマットで出力
+    - コンソール出力: 記載されたパスワードと出力ファイルパスを表示
+    
+    出力先:
+    - このモジュールのファイルパスを基準に、バックエンドプロジェクト直下の
+      ``test_users`` ディレクトリを作成（存在しない場合）して以下を出力します:
+        - ``test_users.csv``
+        - ``test_users.json``
+    - 出力パスは ``__file__`` から解決されるため、プロセスのカレントディレクトリ
+      には依存しません。
+    
+    Args:
+        users (list[dict]): ユーザーの認証情報リスト。
+        teacher_pwd (str): 教員用ランダムパスワード。
+        student_pwd (str): 学生用ランダムパスワード。
+    """
     # バックエンド直下の test_users へ絶対パスで出力（起動場所に依存しない）
     backend_root = Path(__file__).resolve().parents[2]
     output_dir = backend_root / "test_users"
