@@ -461,16 +461,16 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
   - まず `ls -la ./report_s1.md` でファイルがあるか確認し、無ければ `2-1` の手順で作成してください
   - 複数行のcurlを使う場合、行末の `\` の後ろにスペースがあると壊れます（`\` は行末に置く、または1行で実行）
 
----し、`ENABLE_OPENAI=true` にすると、以下の機能が有効になります。
+---
+## AI機能（任意）
+
+`.env` に `OPENAI_API_KEY` を設定し、`ENABLE_OPENAI=true` にすると、以下の機能が有効になります。
+
 
 1. **レビュー品質スコア**（1〜5）と理由
 2. **攻撃性/不適切表現**の検知（true/false）と理由
 3. **レビューの推敲（Polish）**: 提出前に文章を丁寧・建設的な表現へ変換
 4. **レビュアースキル可視化**: 4軸（`logic/specificity/empathy/insight`）の分析
-
-1. **レビュー品質スコア**（1〜5）と理由
-2. **攻撃性/不適切表現**の検知（true/false）と理由
-3. レーダーチャート用 4軸（`logic/specificity/empathy/insight`）
 
 未設定の場合は、短すぎるレビューや禁止語の簡易チェックを行います（完全な検知ではありません）。
 
