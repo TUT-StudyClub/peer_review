@@ -16,6 +16,8 @@ import type {
   TeacherGradeSubmit,
   UserCreate,
   UserPublic,
+  PolishRequest,
+  PolishResponse,
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -189,6 +191,14 @@ export async function apiTeacherGradeSubmission(
 ): Promise<SubmissionPublic> {
   return apiFetch<SubmissionPublic>(
     `/submissions/${submissionId}/teacher-grade`,
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    token
+  );
+}
+
+export async function apiPolishReview(token: string, payload: PolishRequest): Promise<PolishResponse> {
+  return apiFetch<PolishResponse>(
+    "/reviews/polish",
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
     token
   );
