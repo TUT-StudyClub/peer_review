@@ -32,11 +32,11 @@ _BANNED_PATTERNS = [
 
 
 class FeatureDisabledError(Exception):
-    """Raised when a feature requires OpenAI but the config is disabled."""
+    """OpenAIが設定されていないか無効になっているときに発生"""
 
 
 class ModerationError(Exception):
-    """Raised when moderation comparison fails (e.g. output more toxic)."""
+    """モデレーション比較に失敗した場合に発生（例：出力がより有害な場合）"""
 
 
 def detect_toxic_hits(text: str) -> list[str]:
