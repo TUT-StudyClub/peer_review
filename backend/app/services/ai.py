@@ -43,7 +43,6 @@ def detect_toxic_hits(text: str) -> list[str]:
     hits = [p for p in _BANNED_PATTERNS if re.search(p, text)]
     return hits
 
-    
 def _openai_polish(text: str) -> dict | None:
     if not settings.openai_api_key or not settings.enable_openai:
         return None
