@@ -146,25 +146,26 @@ PDF抽出機能テスト開始
 
 ```python
 from app.services.pdf import PDFExtractionService
-import openai  # または別のLLMライブラリ
+from openai import OpenAI  # 現行のクライアントベースAPI
 
 service = PDFExtractionService()
+client = OpenAI()  # 環境変数 OPENAI_API_KEY を利用
 
 # PDFをページごとに抽出
 pages = service.extract_text_by_page("submission.pdf")
 
-# 各ページをLLMで処理
+# 各ページをLLMで処理（現行API: client.chat.completions.create）
 scores = {}
 for page_num, text in pages.items():
-    # LLMプロンプト
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",  # 利用可能なモデルに置き換えてください
         messages=[
             {
                 "role": "user",
-                "content": f"以下のテキストをスコア化してください:\n\n{text}"
+                "content": f"以下のテキストをスコア化してください:\n\n{text}",
             }
-        ]
+        ],
+        temperature=0.2,
     )
     scores[page_num] = response.choices[0].message.content
 
