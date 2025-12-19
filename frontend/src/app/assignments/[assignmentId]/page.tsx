@@ -21,6 +21,7 @@ import {
   apiTeacherGradeSubmission,
   apiTeacherListSubmissions,
   apiCreateMetaReview,
+  apiPolishReview,
 } from "@/lib/api";
 import type {
   AssignmentPublic,
@@ -87,6 +88,9 @@ export default function AssignmentDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, number>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+
+  const [polishLoading, setPolishLoading] = useState(false);
+  const [polishResult, setPolishResult] = useState<{ text: string; notes?: string | null } | null>(null);
 
   const [received, setReceived] = useState<ReviewReceived[]>([]);
   const [receivedLoading, setReceivedLoading] = useState(false);
@@ -219,6 +223,7 @@ export default function AssignmentDetailPage() {
       const task = await apiNextReviewTask(token, assignmentId);
       setReviewTask(task);
       setReviewComment("");
+      setPolishResult(null);
       const init: Record<string, number> = {};
       for (const c of task.rubric) init[c.id] = 0;
       setReviewScores(init);
@@ -247,12 +252,27 @@ export default function AssignmentDetailPage() {
       await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
       setReviewTask(null);
       setReviewComment("");
+      setPolishResult(null);
       setNotice("レビューを提出しました（credits +1）");
       await refreshMe();
     } catch (err) {
       setNotice(formatApiError(err));
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const polishReview = async () => {
+    if (!token || !reviewComment.trim()) return;
+    setPolishLoading(true);
+    setNotice(null);
+    try {
+      const res = await apiPolishReview(token, { text: reviewComment });
+      setPolishResult({ text: res.polished_text, notes: res.notes });
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setPolishLoading(false);
     }
   };
 
@@ -657,13 +677,48 @@ export default function AssignmentDetailPage() {
 
               <Field label="レビューコメント（具体的に）" hint="短すぎるとAI/簡易判定で低評価になります">
                 <TextArea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                <div className="mt-2">
+                  <SecondaryButton onClick={polishReview} disabled={polishLoading || !reviewComment.trim()}>
+                    {polishLoading ? "言い換え中..." : "AIで言い換え（丁寧にする）"}
+                  </SecondaryButton>
+                </div>
               </Field>
+
+              {polishResult && (
+                <div className="rounded-md border border-indigo-100 bg-indigo-50 p-3 text-sm">
+                  <div className="font-semibold text-indigo-900">言い換えプレビュー:</div>
+                  <div className="mt-1 whitespace-pre-wrap text-black">{polishResult.text}</div>
+                  {polishResult.notes && (
+                    <div className="mt-2 text-xs text-indigo-700">
+                      <span className="font-semibold">AIからのアドバイス:</span> {polishResult.notes}
+                    </div>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <PrimaryButton
+                      onClick={() => {
+                        setReviewComment(polishResult.text);
+                        setPolishResult(null);
+                      }}
+                    >
+                      反映する
+                    </PrimaryButton>
+                    <SecondaryButton onClick={() => setPolishResult(null)}>キャンセル</SecondaryButton>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <PrimaryButton onClick={submitReview} disabled={reviewSubmitting || !reviewComment.trim()}>
                   レビュー提出
                 </PrimaryButton>
-                <SecondaryButton onClick={() => setReviewTask(null)}>キャンセル</SecondaryButton>
+                <SecondaryButton
+                  onClick={() => {
+                    setReviewTask(null);
+                    setPolishResult(null);
+                  }}
+                >
+                  キャンセル
+                </SecondaryButton>
               </div>
             </div>
           )}
