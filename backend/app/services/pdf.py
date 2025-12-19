@@ -1,27 +1,51 @@
 """PDF処理サービス"""
 
+from io import StringIO
 from pathlib import Path
+from typing import Iterator
 
 import pdfplumber
+from pdfminer.pdfparser import PDFSyntaxError
 
 
 class PDFExtractionService:
     """PDFからテキストを抽出するサービス"""
-
     @staticmethod
-    def extract_text(pdf_path: str | Path) -> str:
+    def _has_pdf_signature(pdf_path: Path) -> bool:
+        """ファイル先頭のマジックバイトでPDF実体を確認する。
+
+        %PDF- で始まることを確認。IOエラー時は False を返す。
         """
-        PDFファイルからテキストを抽出する
+        try:
+            with pdf_path.open("rb") as f:
+                header = f.read(5)
+            return header.startswith(b"%PDF-")
+        except OSError:
+            return False
+    @staticmethod
+    def extract_text(
+        pdf_path: str | Path,
+        *,
+        max_pages: int | None = None,
+        max_chars: int | None = None,
+    ) -> str:
+        """
+        PDFファイルからテキストを抽出する（シンプルな一括文字列版）。
+
+        注意: 大きなPDFではメモリ使用量が増えます。大量ページ/長文の場合は
+        `extract_text_iter()` の使用や `max_pages`/`max_chars` の上限指定を検討してください。
 
         Args:
             pdf_path: PDFファイルのパス
+            max_pages: 抽出する最大ページ数（Noneで無制限）
+            max_chars: 抽出する最大文字数（Noneで無制限、超過時は末尾にトランケート注記を付与）
 
         Returns:
-            抽出されたテキスト
+            抽出されたテキスト（ページごとにヘッダ付き、空ページはスキップ）
 
         Raises:
             FileNotFoundError: PDFファイルが見つからない場合
-            ValueError: PDFファイルが無効な場合
+            ValueError: PDFファイルが無効/破損している場合や読み取り失敗時
         """
         pdf_path = Path(pdf_path)
 
@@ -30,19 +54,127 @@ class PDFExtractionService:
 
         if not pdf_path.suffix.lower() == ".pdf":
             raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
+        # 実体検証（マジックバイト）
+        if not PDFExtractionService._has_pdf_signature(pdf_path):
+            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
 
-        extracted_text = []
+        out = StringIO()
+        total_chars = 0
+
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, 1):
+                    if max_pages is not None and page_num > max_pages:
+                        break
+                    text = page.extract_text()
+                    if not text:
+                        continue
+                    chunk = f"--- ページ {page_num} ---\n{text}"
+                    if max_chars is not None and total_chars + len(chunk) > max_chars:
+                        remaining = max(0, max_chars - total_chars)
+                        if remaining > 0:
+                            out.write(chunk[:remaining])
+                        out.write("\n\n…(truncated)\n")
+                        break
+                    out.write(chunk)
+                    out.write("\n\n")
+                    total_chars += len(chunk) + 2
+        except PDFSyntaxError as e:
+            raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
+        except (PermissionError, OSError) as e:
+            raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+
+        return out.getvalue().rstrip()
+
+    @staticmethod
+    def extract_text_iter(pdf_path: str | Path) -> Iterator[str]:
+        """
+        PDFテキストをページ単位でストリーミング抽出するジェネレータ。
+
+        メモリ使用量を抑えたい場合はこちらを利用してください。
+
+        Yields:
+            ページヘッダと本文を含む文字列（空ページはスキップ）
+        """
+        pdf_path = Path(pdf_path)
+
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
+
+        if not pdf_path.suffix.lower() == ".pdf":
+            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
+        if not PDFExtractionService._has_pdf_signature(pdf_path):
+            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
                 for page_num, page in enumerate(pdf.pages, 1):
                     text = page.extract_text()
-                    if text:
-                        extracted_text.append(f"--- ページ {page_num} ---\n{text}")
-        except Exception as e:
-            raise ValueError(f"PDFの処理に失敗しました: {str(e)}") from e
+                    if not text:
+                        continue
+                    yield f"--- ページ {page_num} ---\n{text}"
+        except PDFSyntaxError as e:
+            raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
+        except (PermissionError, OSError) as e:
+            raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
 
-        return "\n\n".join(extracted_text)
+    @staticmethod
+    def extract_images_by_page(pdf_path: str | Path) -> dict[int, list[dict]]:
+        """ページごとの画像情報を抽出する。
+
+        Returns:
+            {page_num: [{"bbox": (x0, top, x1, bottom), "name": str|None}, ...], ...}
+        """
+        pdf_path = Path(pdf_path)
+
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
+        if not pdf_path.suffix.lower() == ".pdf":
+            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
+        if not PDFExtractionService._has_pdf_signature(pdf_path):
+            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+
+        results: dict[int, list[dict]] = {}
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, 1):
+                    imgs = page.images or []
+                    flat = []
+                    for img in imgs:
+                        bbox = (img.get("x0"), img.get("top"), img.get("x1"), img.get("bottom"))
+                        flat.append({"bbox": bbox, "name": img.get("name")})
+                    results[page_num] = flat
+        except PDFSyntaxError as e:
+            raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
+        except (PermissionError, OSError) as e:
+            raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+
+        return results
+
+    @staticmethod
+    def extract_tables_by_page(pdf_path: str | Path) -> dict[int, list[list[list[str | None]]]]:
+        """ページごとのテーブル（セル文字列）を抽出する。"""
+        pdf_path = Path(pdf_path)
+
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
+        if not pdf_path.suffix.lower() == ".pdf":
+            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
+        if not PDFExtractionService._has_pdf_signature(pdf_path):
+            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+
+        results: dict[int, list[list[list[str | None]]]] = {}
+        try:
+            with pdfplumber.open(pdf_path) as pdf:
+                for page_num, page in enumerate(pdf.pages, 1):
+                    tables = page.extract_tables() or []
+                    results[page_num] = tables
+        except PDFSyntaxError as e:
+            raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
+        except (PermissionError, OSError) as e:
+            raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+
+        return results
 
     @staticmethod
     def extract_text_by_page(pdf_path: str | Path) -> dict[int, str]:
@@ -66,6 +198,9 @@ class PDFExtractionService:
 
         if not pdf_path.suffix.lower() == ".pdf":
             raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
+        # 実体検証（マジックバイト）
+        if not PDFExtractionService._has_pdf_signature(pdf_path):
+            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
 
         pages_text = {}
 
@@ -74,8 +209,10 @@ class PDFExtractionService:
                 for page_num, page in enumerate(pdf.pages, 1):
                     text = page.extract_text()
                     pages_text[page_num] = text or ""
-        except Exception as e:
-            raise ValueError(f"PDFの処理に失敗しました: {str(e)}") from e
+        except PDFSyntaxError as e:
+            raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
+        except (PermissionError, OSError) as e:
+            raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
 
         return pages_text
 
@@ -101,6 +238,8 @@ class PDFExtractionService:
 
         if not pdf_path.suffix.lower() == ".pdf":
             raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
+        if not PDFExtractionService._has_pdf_signature(pdf_path):
+            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
 
         try:
             with pdfplumber.open(pdf_path) as pdf:
@@ -108,5 +247,7 @@ class PDFExtractionService:
                     "page_count": len(pdf.pages),
                     "metadata": pdf.metadata,
                 }
-        except Exception as e:
-            raise ValueError(f"PDFの処理に失敗しました: {str(e)}") from e
+        except PDFSyntaxError as e:
+            raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
+        except (PermissionError, OSError) as e:
+            raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
