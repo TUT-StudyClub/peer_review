@@ -1,0 +1,80 @@
+[
+  {
+    "username": "Teacher Alpha",
+    "email": "teacher1@example.com",
+    "password": "teacher123",
+    "role": "teacher"
+  },
+  {
+    "username": "Teacher Beta",
+    "email": "teacher2@example.com",
+    "password": "teacher123",
+    "role": "teacher"
+  },
+  {
+    "username": "Teacher Gamma",
+    "email": "teacher3@example.com",
+    "password": "teacher123",
+    "role": "teacher"
+  },
+  {
+    "username": "Student 01",
+    "email": "student01@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 02",
+    "email": "student02@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 03",
+    "email": "student03@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 04",
+    "email": "student04@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 05",
+    "email": "student05@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 06",
+    "email": "student06@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 07",
+    "email": "student07@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 08",
+    "email": "student08@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 09",
+    "email": "student09@example.com",
+    "password": "student123",
+    "role": "student"
+  },
+  {
+    "username": "Student 10",
+    "email": "student10@example.com",
+    "password": "student123",
+    "role": "student"
+  }
+]
