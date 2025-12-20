@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
 from app.models.review import (
     MetaReview,
     Review,
