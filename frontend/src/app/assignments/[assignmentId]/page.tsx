@@ -17,6 +17,7 @@ import {
   apiListRubric,
   apiNextReviewTask,
   apiCreateTARequest,
+  apiListReviewsForSubmission,
   apiListTARequestsForAssignment,
   apiReceivedReviews,
   apiSubmitReport,
@@ -24,6 +25,7 @@ import {
   apiTeacherGradeSubmission,
   apiTeacherListSubmissions,
   apiCreateMetaReview,
+  apiParaphrase,
   formatApiError,
 } from "@/lib/api";
 import type {
@@ -35,8 +37,10 @@ import type {
   RubricCriterionPublic,
   SubmissionPublic,
   SubmissionTeacherPublic,
+  TeacherReviewPublic,
   TAReviewRequestPublic,
   UserPublic,
+  RephraseResponse,
 } from "@/lib/types";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
@@ -135,6 +139,10 @@ export default function AssignmentDetailPage() {
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
   const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, number>>({});
+  const [teacherReviewList, setTeacherReviewList] = useState<TeacherReviewPublic[]>([]);
+  const [teacherReviewListLoading, setTeacherReviewListLoading] = useState(false);
+  const [teacherReviewListTargetId, setTeacherReviewListTargetId] = useState<string | null>(null);
+  const [teacherReviewListError, setTeacherReviewListError] = useState<string | null>(null);
   const [taCandidates, setTaCandidates] = useState<UserPublic[]>([]);
   const [taCandidatesLoading, setTaCandidatesLoading] = useState(false);
   const [taDialogSubmissionId, setTaDialogSubmissionId] = useState<string | null>(null);
@@ -142,6 +150,10 @@ export default function AssignmentDetailPage() {
   const [taRequesting, setTaRequesting] = useState(false);
   const [taRequests, setTaRequests] = useState<TAReviewRequestPublic[]>([]);
   const [taRequestsLoading, setTaRequestsLoading] = useState(false);
+  const [paraphraseOpen, setParaphraseOpen] = useState(false);
+  const [paraphrasePreview, setParaphrasePreview] = useState<RephraseResponse | null>(null);
+  const [paraphraseLoading, setParaphraseLoading] = useState(false);
+  const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
   const [rubricName, setRubricName] = useState("");
   const [rubricDesc, setRubricDesc] = useState("");
@@ -317,6 +329,31 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const runParaphrase = async () => {
+    if (!token) {
+      setParaphraseError("ログインが必要です");
+      setParaphraseOpen(true);
+      return;
+    }
+    if (!reviewComment.trim()) {
+      setParaphraseError("言い換えるテキストを入力してください");
+      setParaphraseOpen(true);
+      return;
+    }
+    setParaphraseLoading(true);
+    setParaphraseError(null);
+    setParaphrasePreview(null);
+    setParaphraseOpen(true);
+    try {
+      const res = await apiParaphrase(token, reviewComment);
+      setParaphrasePreview(res);
+    } catch (err) {
+      setParaphraseError(formatApiError(err));
+    } finally {
+      setParaphraseLoading(false);
+    }
+  };
+
   const loadReceived = async () => {
     if (!token) return;
     setReceivedLoading(true);
@@ -486,6 +523,25 @@ export default function AssignmentDetailPage() {
       setNotice(formatApiError(err));
     } finally {
       setRubricAdding(false);
+    }
+  };
+
+  const openTeacherReviews = async (submissionId: string) => {
+    if (!token) return;
+    setTeacherReviewListTargetId(submissionId);
+    setTeacherReviewList([]);
+    setTeacherReviewListLoading(true);
+    setTeacherReviewListError(null);
+    setNotice(null);
+    try {
+      const list = await apiListReviewsForSubmission(token, submissionId);
+      setTeacherReviewList(list);
+    } catch (err) {
+      const msg = formatApiError(err);
+      setTeacherReviewListError(msg);
+      setNotice(msg);
+    } finally {
+      setTeacherReviewListLoading(false);
     }
   };
 
@@ -666,6 +722,9 @@ export default function AssignmentDetailPage() {
                         DL
                       </Button>
                       <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
+                      <Button variant="outline" onClick={() => openTeacherReviews(s.id)}>
+                        レビュー一覧
+                      </Button>
                       <Button variant="outline" onClick={() => openTARequest(s.id)}>
                         TA依頼
                       </Button>
@@ -799,6 +858,162 @@ export default function AssignmentDetailPage() {
               </DialogContent>
             ) : null}
           </Dialog>
+
+          <Dialog open={paraphraseOpen} onOpenChange={setParaphraseOpen}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>言い換え</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                {!paraphrasePreview && !paraphraseError ? (
+                  <p className="text-muted-foreground">
+                    レビューコメントを簡易的に言い換えます。必要に応じて手動で調整してください。
+                  </p>
+                ) : null}
+                {paraphraseError ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>エラー</AlertTitle>
+                    <AlertDescription className="whitespace-pre-wrap">{paraphraseError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                {paraphrasePreview ? (
+                  <div className="space-y-2">
+                    <div>
+                      <div className="text-xs text-muted-foreground">変換結果</div>
+                      <div className="rounded-md border bg-muted/50 p-3">{paraphrasePreview.rephrased}</div>
+                    </div>
+                    {paraphrasePreview.notice ? (
+                      <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {paraphraseLoading ? <p className="text-muted-foreground">変換中...</p> : null}
+              </div>
+              <DialogFooter className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => setParaphraseOpen(false)}>
+                  閉じる
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={runParaphrase}
+                  disabled={paraphraseLoading || !reviewComment.trim()}
+                >
+                  再変換
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
+                    setParaphraseOpen(false);
+                  }}
+                  disabled={!paraphrasePreview}
+                >
+                  反映する
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={Boolean(teacherReviewListTargetId)}
+            onOpenChange={(open: boolean) => {
+              if (!open) {
+                setTeacherReviewListTargetId(null);
+                setTeacherReviewList([]);
+              }
+            }}
+          >
+            {teacherReviewListTargetId ? (
+              <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>レビュー一覧: {shortId(teacherReviewListTargetId)}</DialogTitle>
+                </DialogHeader>
+                {teacherReviewListLoading ? (
+                  <p className="text-sm text-muted-foreground">読み込み中...</p>
+                ) : teacherReviewList.length === 0 ? (
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {teacherReviewListError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>取得に失敗しました</AlertTitle>
+                        <AlertDescription className="whitespace-pre-wrap">
+                          {teacherReviewListError}
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <p>まだレビューがありません</p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (teacherReviewListTargetId) void openTeacherReviews(teacherReviewListTargetId);
+                      }}
+                    >
+                      再読み込み
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {["TA", "student"].map((group) => {
+                      const list = teacherReviewList.filter((r) => (group === "TA" ? r.is_ta : !r.is_ta));
+                      return (
+                        <div key={group} className="space-y-2">
+                          <div className="text-sm font-semibold">
+                            {group === "TA" ? "TAレビュー" : "一般レビュー"}（{list.length}件）
+                          </div>
+                          {list.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">なし</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {list.map((r) => (
+                                <div key={r.id} className="rounded-lg border p-3 space-y-2">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                      <div className="font-medium">Reviewer: {r.reviewer_alias}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {new Date(r.created_at).toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      AI品質: {r.ai_quality_score ?? "-"}
+                                    </div>
+                                  </div>
+                                  <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
+                                  <div className="space-y-1 rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
+                                    <div className="font-semibold">Rubric</div>
+                                    {r.rubric_scores.map((s) => (
+                                      <div key={s.criterion_id}>
+                                        {s.criterion_id}: {s.score}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {r.meta_review ? (
+                                    <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                                      メタ評価: {r.meta_review.helpfulness}/5
+                                      {r.meta_review.comment ? ` / ${r.meta_review.comment}` : ""}
+                                    </div>
+                                  ) : null}
+                                  {r.ai_quality_reason ? (
+                                    <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                                      {r.ai_quality_reason}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setTeacherReviewListTargetId(null)}>
+                    閉じる
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            ) : null}
+          </Dialog>
         </SectionCard>
       ) : null}
 
@@ -911,6 +1126,12 @@ export default function AssignmentDetailPage() {
                     </div>
                   </div>
                   <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
+                      言い換え
+                    </Button>
+                    {paraphraseLoading ? <span>変換中...</span> : null}
+                  </div>
                 </div>
               </Field>
 

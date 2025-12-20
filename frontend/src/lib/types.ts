@@ -141,6 +141,24 @@ export type ReviewReceived = {
   ai_quality_reason: string | null;
 };
 
+export type TeacherReviewPublic = {
+  id: string;
+  reviewer_alias: string;
+  is_ta: boolean;
+  comment: string;
+  created_at: string;
+  rubric_scores: ReviewRubricScorePublic[];
+  meta_review: MetaReviewPublic | null;
+  ai_quality_score: number | null;
+  ai_quality_reason: string | null;
+};
+
+export type RephraseResponse = {
+  original: string;
+  rephrased: string;
+  notice?: string | null;
+};
+
 export type MetaReviewCreate = {
   helpfulness: number;
   comment?: string | null;

@@ -13,6 +13,7 @@ class SubmissionPublic(BaseModel):
     assignment_id: UUID
     file_type: SubmissionFileType
     original_filename: str
+    submission_text: str | None
     teacher_total_score: int | None
     teacher_feedback: str | None
     created_at: datetime
@@ -37,5 +38,6 @@ class SubmissionTeacherPublic(BaseModel):
     author_id: UUID
     file_type: SubmissionFileType
     original_filename: str
+    submission_text: str | None
     teacher_total_score: int | None
     created_at: datetime

@@ -100,6 +100,28 @@ class ReviewReceived(BaseModel):
     similarity_penalty_rate: float | None = None
 
 
+class TeacherReviewPublic(BaseModel):
+    id: UUID
+    reviewer_alias: str
+    is_ta: bool
+    comment: str
+    created_at: datetime
+    rubric_scores: list[ReviewRubricScorePublic]
+    meta_review: MetaReviewPublic | None
+    ai_quality_score: int | None
+    ai_quality_reason: str | None
+
+
+class RephraseRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2_000)
+
+
+class RephraseResponse(BaseModel):
+    original: str
+    rephrased: str
+    notice: str | None = None
+
+
 class TAReviewRequestCreate(BaseModel):
     ta_user_id: UUID
 
@@ -116,3 +138,9 @@ class TAReviewRequestPublic(BaseModel):
     review_assignment_id: UUID | None
     created_at: datetime
     responded_at: datetime | None
+class PolishRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2048)
+
+class PolishResponse(BaseModel):
+    polished_text: str
+    notes: str | None = None

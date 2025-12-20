@@ -29,6 +29,7 @@ class Submission(Base):
     original_filename: Mapped[str] = mapped_column(String(255))
     storage_path: Mapped[str] = mapped_column(String(500))
     markdown_text: Mapped[str | None] = mapped_column(Text, default=None)
+    submission_text: Mapped[str | None] = mapped_column(Text, default=None)
 
     teacher_total_score: Mapped[int | None] = mapped_column(Integer, default=None)
     teacher_feedback: Mapped[str | None] = mapped_column(Text, default=None)
