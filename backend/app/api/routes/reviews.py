@@ -256,6 +256,10 @@ def received_reviews(
                 meta_review=meta,
                 ai_quality_score=r.ai_quality_score,
                 ai_quality_reason=r.ai_quality_reason,
+                similarity_score=r.similarity_score,
+                similar_review_id=r.similar_review_id,
+                similarity_warning=r.similarity_warning,
+                similarity_penalty_rate=r.similarity_penalty_rate,
             )
         )
 
