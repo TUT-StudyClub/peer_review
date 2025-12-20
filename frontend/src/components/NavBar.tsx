@@ -13,7 +13,7 @@ function NavLink({ href, label }: { href: string; label: string }) {
       href={href}
       className={[
         "rounded-md px-3 py-2 text-sm transition",
-        active ? "bg-indigo-600 text-white" : "text-black hover:bg-slate-200",
+        active ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-accent hover:text-accent-foreground",
       ].join(" ")}
     >
       {label}
@@ -25,7 +25,7 @@ export function NavBar() {
   const { user, logout } = useAuth();
 
   return (
-    <header className="border-b bg-white">
+    <header className="border-b border-border bg-background">
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-lg font-semibold tracking-tight">
@@ -38,12 +38,12 @@ export function NavBar() {
         <div className="flex items-center gap-3">
           {user ? (
             <>
-              <div className="hidden text-sm text-black sm:block">
+              <div className="hidden text-sm text-muted-foreground sm:block">
                 {user.name}（{user.role} / credits: {user.credits}）
               </div>
               <button
                 onClick={logout}
-                className="rounded-md border px-3 py-2 text-sm hover:bg-slate-50"
+                className="rounded-md border border-input px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
               >
                 ログアウト
               </button>
@@ -59,4 +59,3 @@ export function NavBar() {
     </header>
   );
 }
-

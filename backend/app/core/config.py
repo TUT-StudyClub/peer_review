@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Optional regex-based origins (useful when Next.js dev port changes, e.g. 3001/3002).
+    # Example: ^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$
+    cors_allow_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$"
 
 
 settings = Settings()

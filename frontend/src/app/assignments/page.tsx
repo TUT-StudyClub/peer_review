@@ -4,10 +4,15 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiCreateAssignment, apiListAssignments } from "@/lib/api";
+import { apiCreateAssignment, apiListAssignments, formatApiError } from "@/lib/api";
 import type { AssignmentPublic } from "@/lib/types";
-import { Card } from "@/components/ui/Card";
-import { Field, PrimaryButton, SecondaryButton, TextArea, TextInput } from "@/components/ui/Form";
+import { ErrorMessages } from "@/components/ErrorMessages";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function AssignmentsPage() {
   const { user, token } = useAuth();
@@ -27,7 +32,7 @@ export default function AssignmentsPage() {
       const list = await apiListAssignments();
       setAssignments(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "読み込みに失敗しました");
+      setError(formatApiError(err));
     } finally {
       setLoading(false);
     }
@@ -55,7 +60,7 @@ export default function AssignmentsPage() {
       setTargetReviews(2);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "作成に失敗しました");
+      setError(formatApiError(err));
     } finally {
       setCreating(false);
     }
@@ -63,87 +68,103 @@ export default function AssignmentsPage() {
 
   return (
     <div className="space-y-6">
-      <Card
-        title="課題一覧"
-        actions={
-          <SecondaryButton onClick={load} disabled={loading}>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
+          <CardTitle>課題一覧</CardTitle>
+          <Button variant="outline" onClick={load} disabled={loading}>
             更新
-          </SecondaryButton>
-        }
-      >
-        {error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
-        ) : null}
-        {loading ? <div className="text-sm text-black">読み込み中...</div> : null}
-        {!loading && assignments.length === 0 ? (
-          <div className="text-sm text-black">まだ課題がありません（teacherが作成してください）</div>
-        ) : null}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {error ? (
+            <Alert variant="destructive">
+              <AlertTitle>エラー</AlertTitle>
+              <AlertDescription>
+                <ErrorMessages message={error} />
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-        <ul className="mt-4 space-y-2">
-          {assignments.map((a) => (
-            <li key={a.id} className="rounded-lg border p-4 hover:bg-slate-50">
-              <Link href={`/assignments/${a.id}`} className="block">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium">{a.title}</div>
-                    {a.description ? <div className="mt-1 text-sm text-black">{a.description}</div> : null}
+          {loading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
+          {!loading && assignments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">まだ課題がありません（teacherが作成してください）</p>
+          ) : null}
+
+          <ul className="space-y-2">
+            {assignments.map((a) => (
+              <li key={a.id}>
+                <Link href={`/assignments/${a.id}`} className="block">
+                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{a.title}</div>
+                        {a.description ? <div className="mt-1 text-sm text-muted-foreground">{a.description}</div> : null}
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <div>reviews/submission: {a.target_reviews_per_submission}</div>
+                        <div>{new Date(a.created_at).toLocaleString()}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right text-xs text-black">
-                    <div>reviews/submission: {a.target_reviews_per_submission}</div>
-                    <div>{new Date(a.created_at).toLocaleString()}</div>
-                  </div>
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
       </Card>
 
       {user?.role === "teacher" ? (
-        <Card title="（teacher）課題を作成">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="タイトル">
-              <TextInput value={title} onChange={(e) => setTitle(e.target.value)} />
-            </Field>
-            <Field label="レビュー人数（1〜3）">
-              <TextInput
-                type="number"
-                min={1}
-                max={3}
-                value={targetReviews}
-                onChange={(e) => setTargetReviews(Number(e.target.value))}
-              />
-            </Field>
-          </div>
-          <div className="mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>（teacher）課題を作成</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="タイトル">
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              </Field>
+              <Field label="レビュー人数（1〜3）">
+                <Input
+                  type="number"
+                  min={1}
+                  max={3}
+                  value={targetReviews}
+                  onChange={(e) => setTargetReviews(Number(e.target.value))}
+                />
+              </Field>
+            </div>
             <Field label="説明（任意）">
-              <TextArea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
             </Field>
-          </div>
-          <div className="mt-4">
-            <PrimaryButton onClick={create} disabled={creating || !title.trim()}>
-              作成
-            </PrimaryButton>
-          </div>
+            <div>
+              <Button onClick={create} disabled={creating || !title.trim()}>
+                作成
+              </Button>
+            </div>
+          </CardContent>
         </Card>
       ) : null}
 
       {user ? null : (
-        <Card title="ログインについて">
-          <div className="text-sm text-black">
-            課題一覧の閲覧は可能ですが、提出・レビュー・作成はログインが必要です。
-          </div>
-          <div className="mt-3 flex gap-2">
-            <Link className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700" href="/auth/login">
-              ログイン
-            </Link>
-            <Link className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50" href="/auth/register">
-              新規登録
-            </Link>
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>ログインについて</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              課題一覧の閲覧は可能ですが、提出・レビュー・作成はログインが必要です。
+            </p>
+            <div className="flex gap-2">
+              <Button asChild>
+                <Link href="/auth/login">ログイン</Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/auth/register">新規登録</Link>
+              </Button>
+            </div>
+          </CardContent>
         </Card>
       )}
     </div>
   );
 }
-
