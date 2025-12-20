@@ -376,7 +376,7 @@ except ValueError as e:
 ### 基本テスト
 ```bash
 cd backend
-uv run python tests/integration/test_pdf_extraction.py
+uv run tests/integration/test_pdf_extraction.py
 ```
 
 出力例:
@@ -398,7 +398,11 @@ PDF抽出機能テスト開始
 ✓ すべてのテストが完了しました！
 ```
 
-※ 詳細テスト用スクリプトは用意していません。上記の基本テストのみで確認可能です。
+### 詳細テスト
+```bash
+cd backend
+uv run test_pdf_detailed.py
+```
 
 ---
 
