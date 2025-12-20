@@ -41,12 +41,14 @@
 - ルーブリックスコアは **全項目必須**
 
 ### 4) メタ評価（Meta-Review）
-- 提出者が `POST /reviews/{review_id}/meta` で、受け取ったレビューの有用性（1〜5）を評価
+- （ピアレビュー受領後の段階）提出者が `POST /reviews/{review_id}/meta` で、受け取ったレビューの有用性を5段階評価（レビューへのレビュー）
+- メタ評価できるのは **その提出物の提出者のみ** で、各レビューにつき1回までです
+- このメタ評価は `review_contribution`（レビュー貢献点）の算出に利用されます
 
 ### 5) スコア算出（Grade）
 - `GET /assignments/{assignment_id}/grades/me` で自分のスコアを取得
   - `assignment_score`: 先生の点数（設定されていればそれ） / 未設定ならピアの平均点（0〜100換算）
-  - `review_contribution`: レビュー貢献点（レビュー1本あたり最大10点の簡易式）
+  - `review_contribution`: レビュー貢献点（メタ評価・rubric一致・AI品質を簡易的に合成し、レビュー1本あたり最大10点）
   - `final_score`: `min(100, assignment_score + review_contribution)`
 
 ### 6) レビュアースキル可視化（レーダーチャート用データ）

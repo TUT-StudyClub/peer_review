@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/app/providers";
 import {
@@ -21,6 +21,7 @@ import {
   apiTeacherGradeSubmission,
   apiTeacherListSubmissions,
   apiCreateMetaReview,
+  formatApiError,
 } from "@/lib/api";
 import type {
   AssignmentPublic,
@@ -32,16 +33,25 @@ import type {
   SubmissionPublic,
   SubmissionTeacherPublic,
 } from "@/lib/types";
+import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
-import { Card } from "@/components/ui/Card";
-import {
-  Field,
-  PrimaryButton,
-  SecondaryButton,
-  Select,
-  TextArea,
-  TextInput,
-} from "@/components/ui/Form";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+
+const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
+  { key: "good", label: "良い点", text: "【良い点】主張が明確で、根拠となるデータ/引用が添えられています。" },
+  { key: "improve", label: "改善点", text: "【改善点】この部分の論拠が弱いので、出典や具体例を1〜2個追加してください。" },
+  { key: "evidence", label: "根拠不足", text: "【根拠不足】結論と根拠の間に飛躍があります。データ/引用/図表などのエビデンスを補ってください。" },
+  { key: "typo", label: "誤字", text: "【誤字】タイポや表記ゆれがあります。最終提出前に再確認してください。" },
+  { key: "structure", label: "構成", text: "【構成】段落ごとに主張→根拠→結論の流れを意識すると読みやすくなります。" },
+  { key: "example", label: "具体例", text: "【具体例】読者がイメージできる具体例を1つ追加すると説得力が増します。" },
+];
 
 function shortId(id: string) {
   return id.slice(0, 8);
@@ -58,12 +68,28 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function formatApiError(err: unknown) {
-  if (err instanceof ApiError) {
-    const detail = err.detail ? `\n${JSON.stringify(err.detail, null, 2)}` : "";
-    return `${err.message}${detail}`;
-  }
-  return err instanceof Error ? err.message : "エラーが発生しました";
+function SectionCard({
+  title,
+  actions,
+  children,
+  contentClassName,
+}: {
+  title: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  contentClassName?: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+        <CardTitle className="text-base">{title}</CardTitle>
+        {actions ? <div className="shrink-0">{actions}</div> : null}
+      </CardHeader>
+      <CardContent className={["space-y-4", contentClassName ?? ""].join(" ").trim()}>
+        {children}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function AssignmentDetailPage() {
@@ -87,6 +113,7 @@ export default function AssignmentDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, number>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const templateClicks = useRef<Record<string, number>>({});
 
   const [received, setReceived] = useState<ReviewReceived[]>([]);
   const [receivedLoading, setReceivedLoading] = useState(false);
@@ -230,6 +257,20 @@ export default function AssignmentDetailPage() {
       }
       setNotice(formatApiError(err));
     }
+  };
+
+  const appendReviewComment = (text: string) => {
+    setReviewComment((prev) => {
+      if (!prev.trim()) return text;
+      return `${prev}\n\n${text}`;
+    });
+  };
+
+  const insertTemplate = (tpl: { key: string; label: string; text: string }) => {
+    appendReviewComment(tpl.text);
+    const nextCount = (templateClicks.current[tpl.key] ?? 0) + 1;
+    templateClicks.current = { ...templateClicks.current, [tpl.key]: nextCount };
+    console.info("review template used", { key: tpl.key, label: tpl.label, count: nextCount });
   };
 
   const submitReview = async () => {
@@ -392,34 +433,46 @@ export default function AssignmentDetailPage() {
   }, [token, user, assignmentId]);
 
   if (loadingBase) {
-    return <div className="text-sm text-black">読み込み中...</div>;
+    return <p className="text-sm text-muted-foreground">読み込み中...</p>;
   }
   if (errorBase) {
     return (
       <div className="space-y-3">
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorBase}</div>
-        <Link href="/assignments" className="text-sm underline">
-          課題一覧へ戻る
-        </Link>
+        <Alert variant="destructive">
+          <AlertTitle>エラー</AlertTitle>
+          <AlertDescription>
+            <ErrorMessages message={errorBase} />
+          </AlertDescription>
+        </Alert>
+        <Button variant="link" asChild className="px-0">
+          <Link href="/assignments">課題一覧へ戻る</Link>
+        </Button>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <Card title={assignment ? assignment.title : `課題 ${assignmentId}`}>
-        {assignment?.description ? <div className="text-sm text-black">{assignment.description}</div> : null}
-        <div className="mt-3 text-xs text-black">
+      <SectionCard title={assignment ? assignment.title : `課題 ${assignmentId}`} contentClassName="space-y-2">
+        {assignment?.description ? <p className="text-sm text-muted-foreground">{assignment.description}</p> : null}
+        <div className="text-xs text-muted-foreground">
           reviews/submission: {assignment?.target_reviews_per_submission ?? "-"} / created:{" "}
           {assignment?.created_at ? new Date(assignment.created_at).toLocaleString() : "-"}
         </div>
-      </Card>
+      </SectionCard>
 
-      {notice ? <div className="rounded-md border bg-white p-3 text-sm text-black whitespace-pre-wrap">{notice}</div> : null}
+      {notice ? (
+        <Alert>
+          <AlertTitle>通知</AlertTitle>
+          <AlertDescription>
+            <ErrorMessages message={notice} />
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
-      <Card title="ルーブリック（評価基準）">
+      <SectionCard title="ルーブリック（評価基準）">
         {rubric.length === 0 ? (
-          <div className="text-sm text-black">まだルーブリックがありません（teacherが追加してください）</div>
+          <p className="text-sm text-muted-foreground">まだルーブリックがありません（teacherが追加してください）</p>
         ) : (
           <ul className="space-y-2">
             {rubric.map((c) => (
@@ -429,9 +482,11 @@ export default function AssignmentDetailPage() {
                     <div className="font-medium">
                       {c.order_index}. {c.name}
                     </div>
-                    {c.description ? <div className="mt-1 text-sm text-black">{c.description}</div> : null}
+                    {c.description ? (
+                      <div className="mt-1 text-sm text-muted-foreground">{c.description}</div>
+                    ) : null}
                   </div>
-                  <div className="text-xs text-black">max: {c.max_score}</div>
+                  <div className="text-xs text-muted-foreground">max: {c.max_score}</div>
                 </div>
               </li>
             ))}
@@ -439,14 +494,14 @@ export default function AssignmentDetailPage() {
         )}
 
         {user?.role === "teacher" ? (
-          <div className="mt-5 rounded-lg border bg-slate-50 p-4">
+          <div className="rounded-lg border bg-muted p-4">
             <div className="text-sm font-semibold">（teacher）ルーブリックを追加</div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Field label="項目名">
-                <TextInput value={rubricName} onChange={(e) => setRubricName(e.target.value)} />
+                <Input value={rubricName} onChange={(e) => setRubricName(e.target.value)} />
               </Field>
               <Field label="max score">
-                <TextInput
+                <Input
                   type="number"
                   min={1}
                   max={100}
@@ -455,7 +510,7 @@ export default function AssignmentDetailPage() {
                 />
               </Field>
               <Field label="表示順（order_index）">
-                <TextInput
+                <Input
                   type="number"
                   min={0}
                   value={rubricOrder}
@@ -463,30 +518,30 @@ export default function AssignmentDetailPage() {
                 />
               </Field>
               <Field label="説明（任意）">
-                <TextInput value={rubricDesc} onChange={(e) => setRubricDesc(e.target.value)} />
+                <Input value={rubricDesc} onChange={(e) => setRubricDesc(e.target.value)} />
               </Field>
             </div>
             <div className="mt-3">
-              <PrimaryButton onClick={addRubric} disabled={rubricAdding || !rubricName.trim()}>
+              <Button onClick={addRubric} disabled={rubricAdding || !rubricName.trim()}>
                 追加
-              </PrimaryButton>
+              </Button>
             </div>
           </div>
         ) : null}
-      </Card>
+      </SectionCard>
 
       {user?.role === "teacher" ? (
-        <Card
+        <SectionCard
           title="（teacher）提出一覧 & 採点"
           actions={
-            <SecondaryButton onClick={loadTeacherSubmissions} disabled={teacherSubmissionsLoading}>
+            <Button variant="outline" onClick={loadTeacherSubmissions} disabled={teacherSubmissionsLoading}>
               更新
-            </SecondaryButton>
+            </Button>
           }
         >
-          {teacherSubmissionsLoading ? <div className="text-sm text-black">読み込み中...</div> : null}
+          {teacherSubmissionsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
           {teacherSubmissions.length === 0 ? (
-            <div className="text-sm text-black">提出がまだありません</div>
+            <p className="text-sm text-muted-foreground">提出がまだありません</p>
           ) : (
             <div className="space-y-2">
               {teacherSubmissions.map((s) => (
@@ -494,16 +549,18 @@ export default function AssignmentDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm">
                       <div className="font-medium">submission: {shortId(s.id)}</div>
-                      <div className="text-xs text-black">
+                      <div className="text-xs text-muted-foreground">
                         author: {shortId(s.author_id)} / {s.file_type} / {new Date(s.created_at).toLocaleString()}
                       </div>
-                      <div className="text-xs text-black">
+                      <div className="text-xs text-muted-foreground">
                         teacher_total_score: {s.teacher_total_score ?? "-"}
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <SecondaryButton onClick={() => downloadSubmission(s.id, s.file_type)}>DL</SecondaryButton>
-                      <PrimaryButton onClick={() => openTeacherGrade(s.id)}>採点</PrimaryButton>
+                      <Button variant="outline" onClick={() => downloadSubmission(s.id, s.file_type)}>
+                        DL
+                      </Button>
+                      <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
                     </div>
                   </div>
                 </div>
@@ -511,84 +568,102 @@ export default function AssignmentDetailPage() {
             </div>
           )}
 
-          {gradeTargetId ? (
-            <div className="mt-4 rounded-lg border bg-slate-50 p-4">
-              <div className="text-sm font-semibold">採点: {shortId(gradeTargetId)}</div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Field label="teacher_total_score（0-100推奨）">
-                  <TextInput
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={teacherTotalScore}
-                    onChange={(e) => setTeacherTotalScore(Number(e.target.value))}
-                  />
-                </Field>
-                <Field label="自動計算（ルーブリック合計を0-100へ換算）">
-                  <SecondaryButton
-                    type="button"
-                    onClick={() => {
-                      const total = rubric.reduce((sum, c) => sum + Number(teacherRubricScores[c.id] ?? 0), 0);
-                      const score = totalRubricMax > 0 ? Math.round((total / totalRubricMax) * 100) : 0;
-                      setTeacherTotalScore(score);
-                    }}
-                  >
-                    ルーブリックから計算
-                  </SecondaryButton>
-                </Field>
-              </div>
-              <div className="mt-3">
-                <Field label="teacher_feedback（任意）">
-                  <TextArea value={teacherFeedback} onChange={(e) => setTeacherFeedback(e.target.value)} rows={3} />
-                </Field>
-              </div>
-              <div className="mt-3 space-y-2">
-                {rubric.map((c) => (
-                  <div key={c.id} className="grid gap-2 sm:grid-cols-2">
-                    <div className="text-sm">
-                      {c.name}（max {c.max_score}）
-                    </div>
-                    <TextInput
+          <Dialog
+            open={Boolean(gradeTargetId)}
+            onOpenChange={(open: boolean) => {
+              if (!open) setGradeTargetId(null);
+            }}
+          >
+            {gradeTargetId ? (
+              <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>採点: {shortId(gradeTargetId)}</DialogTitle>
+                </DialogHeader>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="teacher_total_score（0-100推奨）">
+                    <Input
                       type="number"
                       min={0}
-                      max={c.max_score}
-                      value={teacherRubricScores[c.id] ?? 0}
-                      onChange={(e) =>
-                        setTeacherRubricScores((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
-                      }
+                      max={100}
+                      value={teacherTotalScore}
+                      onChange={(e) => setTeacherTotalScore(Number(e.target.value))}
                     />
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4 flex gap-2">
-                <PrimaryButton onClick={submitTeacherGrade}>保存</PrimaryButton>
-                <SecondaryButton onClick={() => setGradeTargetId(null)}>キャンセル</SecondaryButton>
-              </div>
-            </div>
-          ) : null}
-        </Card>
+                  </Field>
+                  <Field label="自動計算（ルーブリック合計を0-100へ換算）">
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => {
+                        const total = rubric.reduce((sum, c) => sum + Number(teacherRubricScores[c.id] ?? 0), 0);
+                        const score = totalRubricMax > 0 ? Math.round((total / totalRubricMax) * 100) : 0;
+                        setTeacherTotalScore(score);
+                      }}
+                    >
+                      ルーブリックから計算
+                    </Button>
+                  </Field>
+                </div>
+
+                <Field label="teacher_feedback（任意）">
+                  <Textarea value={teacherFeedback} onChange={(e) => setTeacherFeedback(e.target.value)} rows={3} />
+                </Field>
+
+                <div className="space-y-3">
+                  {rubric.map((c) => (
+                    <Field key={c.id} label={`${c.name}（max ${c.max_score}）`}>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={c.max_score}
+                        value={teacherRubricScores[c.id] ?? 0}
+                        onChange={(e) =>
+                          setTeacherRubricScores((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
+                        }
+                      />
+                    </Field>
+                  ))}
+                </div>
+
+                <DialogFooter>
+                  <Button onClick={submitTeacherGrade}>保存</Button>
+                  <Button variant="outline" onClick={() => setGradeTargetId(null)}>
+                    キャンセル
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            ) : null}
+          </Dialog>
+        </SectionCard>
       ) : null}
 
       {user?.role === "student" ? (
-        <Card title="（student）提出（My Submission）" actions={<SecondaryButton onClick={loadMySubmission}>更新</SecondaryButton>}>
+        <SectionCard
+          title="（student）提出（My Submission）"
+          actions={
+            <Button variant="outline" onClick={loadMySubmission}>
+              更新
+            </Button>
+          }
+        >
           {!token ? (
-            <div className="text-sm text-black">ログインすると提出できます</div>
+            <p className="text-sm text-muted-foreground">ログインすると提出できます</p>
           ) : mySubmissionStatus === "loading" ? (
-            <div className="text-sm text-black">読み込み中...</div>
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : mySubmissionStatus === "missing" ? (
             <div className="space-y-3">
-              <div className="text-sm text-black">
+              <p className="text-sm text-muted-foreground">
                 まだ提出していません。Markdown（.md）推奨（AIの「本文＋レビュー」判定が効きやすいです）。
-              </div>
+              </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="file"
                   accept=".md,.pdf,text/markdown,application/pdf"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                 />
-                <PrimaryButton onClick={upload} disabled={uploading || !file}>
+                <Button onClick={upload} disabled={uploading || !file}>
                   提出
-                </PrimaryButton>
+                </Button>
               </div>
             </div>
           ) : mySubmission ? (
@@ -599,42 +674,45 @@ export default function AssignmentDetailPage() {
               <div>file_type: {mySubmission.file_type}</div>
               <div>created_at: {new Date(mySubmission.created_at).toLocaleString()}</div>
               <div className="flex gap-2">
-                <SecondaryButton onClick={() => downloadSubmission(mySubmission.id, mySubmission.file_type)}>
+                <Button variant="outline" onClick={() => downloadSubmission(mySubmission.id, mySubmission.file_type)}>
                   ファイルDL
-                </SecondaryButton>
+                </Button>
               </div>
             </div>
           ) : (
-            <div className="text-sm text-black">「更新」を押して状態を取得してください</div>
+            <p className="text-sm text-muted-foreground">「更新」を押して状態を取得してください</p>
           )}
-        </Card>
+        </SectionCard>
       ) : null}
 
       {user?.role === "student" ? (
-        <Card
+        <SectionCard
           title="（student）レビュー（Next Task → Submit）"
           actions={
-            <div className="flex gap-2">
-              <SecondaryButton onClick={getNextTask}>次のレビューを取得</SecondaryButton>
-            </div>
+            <Button variant="outline" onClick={getNextTask} disabled={!token}>
+              次のレビューを取得
+            </Button>
           }
         >
           {!token ? (
-            <div className="text-sm text-black">ログインするとレビューできます</div>
+            <p className="text-sm text-muted-foreground">ログインするとレビューできます</p>
           ) : !reviewTask ? (
-            <div className="text-sm text-black">
+            <p className="text-sm text-muted-foreground">
               「次のレビューを取得」を押してください（未提出タスクがある場合は同じタスクが出続けます）
-            </div>
+            </p>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-lg border bg-slate-50 p-3 text-sm">
+              <div className="rounded-lg border bg-muted p-3 text-sm">
                 <div>author_alias: {reviewTask.author_alias}</div>
                 <div>submission_id: {shortId(reviewTask.submission_id)}</div>
                 <div>file_type: {reviewTask.file_type}</div>
                 <div className="mt-2">
-                  <SecondaryButton onClick={() => downloadSubmission(reviewTask.submission_id, reviewTask.file_type)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => downloadSubmission(reviewTask.submission_id, reviewTask.file_type)}
+                  >
                     提出物をDL
-                  </SecondaryButton>
+                  </Button>
                 </div>
               </div>
 
@@ -644,7 +722,7 @@ export default function AssignmentDetailPage() {
                     <div className="text-sm">
                       {c.name}（max {c.max_score}）
                     </div>
-                    <TextInput
+                    <Input
                       type="number"
                       min={0}
                       max={c.max_score}
@@ -656,35 +734,49 @@ export default function AssignmentDetailPage() {
               </div>
 
               <Field label="レビューコメント（具体的に）" hint="短すぎるとAI/簡易判定で低評価になります">
-                <TextArea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                <div className="space-y-2">
+                  <div className="space-y-2 rounded-md border bg-muted/70 p-3">
+                    <div className="text-xs font-medium text-muted-foreground">定型文を挿入</div>
+                    <div className="flex flex-wrap gap-2">
+                      {REVIEW_TEMPLATES.map((tpl) => (
+                        <Button key={tpl.key} size="sm" variant="outline" onClick={() => insertTemplate(tpl)}>
+                          {tpl.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                </div>
               </Field>
 
               <div className="flex gap-2">
-                <PrimaryButton onClick={submitReview} disabled={reviewSubmitting || !reviewComment.trim()}>
+                <Button onClick={submitReview} disabled={reviewSubmitting || !reviewComment.trim()}>
                   レビュー提出
-                </PrimaryButton>
-                <SecondaryButton onClick={() => setReviewTask(null)}>キャンセル</SecondaryButton>
+                </Button>
+                <Button variant="outline" onClick={() => setReviewTask(null)}>
+                  キャンセル
+                </Button>
               </div>
             </div>
           )}
-        </Card>
+        </SectionCard>
       ) : null}
 
       {user?.role === "student" ? (
-        <Card
+        <SectionCard
           title="（student）受け取ったレビュー（Received Reviews）"
           actions={
-            <SecondaryButton onClick={loadReceived} disabled={receivedLoading}>
+            <Button variant="outline" onClick={loadReceived} disabled={!token || receivedLoading}>
               更新
-            </SecondaryButton>
+            </Button>
           }
         >
           {!token ? (
-            <div className="text-sm text-black">ログインすると確認できます</div>
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
           ) : receivedLoading ? (
-            <div className="text-sm text-black">読み込み中...</div>
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : received.length === 0 ? (
-            <div className="text-sm text-black">まだレビューが届いていません</div>
+            <p className="text-sm text-muted-foreground">まだレビューが届いていません</p>
           ) : (
             <div className="space-y-3">
               {received.map((r) => (
@@ -692,23 +784,23 @@ export default function AssignmentDetailPage() {
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="font-medium">{r.reviewer_alias}</div>
-                      <div className="text-xs text-black">{new Date(r.created_at).toLocaleString()}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
                     </div>
-                    <div className="text-right text-xs text-black">
+                    <div className="text-right text-xs text-muted-foreground">
                       AI品質: {r.ai_quality_score ?? "-"}
                     </div>
                   </div>
                   {r.ai_quality_reason ? (
-                    <div className="mt-2 rounded-md bg-slate-50 p-3 text-xs text-black">
+                    <div className="mt-2 rounded-md bg-muted p-3 text-xs text-muted-foreground">
                       {r.ai_quality_reason}
                     </div>
                   ) : null}
-                  <div className="mt-2 whitespace-pre-wrap text-sm text-black">{r.comment}</div>
+                  <div className="mt-2 whitespace-pre-wrap text-sm">{r.comment}</div>
 
                   {r.rubric_scores?.length ? (
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {r.rubric_scores.map((s) => (
-                        <div key={s.criterion_id} className="text-xs text-black">
+                        <div key={s.criterion_id} className="text-xs text-muted-foreground">
                           {shortId(s.criterion_id)}: {s.score}
                         </div>
                       ))}
@@ -716,7 +808,7 @@ export default function AssignmentDetailPage() {
                   ) : null}
 
                   {r.meta_review ? (
-                    <div className="mt-3 rounded-md border bg-slate-50 p-3 text-sm text-black">
+                    <div className="mt-3 rounded-md border bg-muted p-3 text-sm">
                       <div>メタ評価: {r.meta_review.helpfulness}/5</div>
                       {r.meta_review.comment ? <div className="mt-1">{r.meta_review.comment}</div> : null}
                     </div>
@@ -727,83 +819,86 @@ export default function AssignmentDetailPage() {
               ))}
             </div>
           )}
-        </Card>
+        </SectionCard>
       ) : null}
 
       {user?.role === "student" ? (
-        <Card
+        <SectionCard
           title="（student）成績（Grade）"
           actions={
-            <SecondaryButton onClick={loadGrade} disabled={gradeLoading}>
+            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading}>
               更新
-            </SecondaryButton>
+            </Button>
           }
         >
           {!token ? (
-            <div className="text-sm text-black">ログインすると確認できます</div>
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
           ) : gradeLoading ? (
-            <div className="text-sm text-black">読み込み中...</div>
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : grade ? (
             <div className="space-y-2 text-sm">
               <div>assignment_score: {grade.assignment_score ?? "-"}</div>
               <div>review_contribution: {grade.review_contribution.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">
+                ※ review_contribution はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+              </p>
               <div className="font-semibold">final_score: {grade.final_score ?? "-"}</div>
-              <details className="rounded-md border bg-slate-50 p-3 text-xs">
+              <details className="rounded-md border bg-muted p-3 text-xs">
                 <summary className="cursor-pointer">breakdown</summary>
                 <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(grade.breakdown, null, 2)}</pre>
               </details>
             </div>
           ) : (
-            <div className="text-sm text-black">「更新」を押して取得してください</div>
+            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
           )}
-        </Card>
+        </SectionCard>
       ) : null}
 
       {user?.role === "student" ? (
-        <Card
+        <SectionCard
           title="（student）レビュアースキル（Radar）"
           actions={
-            <SecondaryButton onClick={loadSkill} disabled={skillLoading}>
+            <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
               更新
-            </SecondaryButton>
+            </Button>
           }
         >
           {!token ? (
-            <div className="text-sm text-black">ログインすると確認できます</div>
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
           ) : skillLoading ? (
-            <div className="text-sm text-black">読み込み中...</div>
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-black">
+              <div className="space-y-1 text-sm text-muted-foreground">
                 <div>Logic: {skill.logic.toFixed(2)}</div>
                 <div>Specificity: {skill.specificity.toFixed(2)}</div>
                 <div>Empathy: {skill.empathy.toFixed(2)}</div>
                 <div>Insight: {skill.insight.toFixed(2)}</div>
               </div>
-              <div className="rounded-lg border bg-white p-3">
+              <div className="rounded-lg border bg-background p-3">
                 <RadarSkillChart skill={skill} />
               </div>
             </div>
           ) : (
-            <div className="text-sm text-black">「更新」を押して取得してください</div>
+            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
           )}
-        </Card>
+        </SectionCard>
       ) : null}
 
       {user ? null : (
-        <Card title="ログインが必要な操作">
-          <div className="text-sm text-black">
+        <SectionCard title="ログインが必要な操作">
+          <p className="text-sm text-muted-foreground">
             提出・レビュー・メタ評価・採点などはログイン後に利用できます。
-          </div>
+          </p>
           <div className="mt-3 flex gap-2">
-            <Link className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700" href="/auth/login">
-              ログイン
-            </Link>
-            <Link className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50" href="/auth/register">
-              新規登録
-            </Link>
+            <Button asChild>
+              <Link href="/auth/login">ログイン</Link>
+            </Button>
+            <Button variant="outline" asChild>
+              <Link href="/auth/register">新規登録</Link>
+            </Button>
           </div>
-        </Card>
+        </SectionCard>
       )}
     </div>
   );
@@ -831,26 +926,31 @@ function MetaReviewForm({
   };
 
   return (
-    <div className="mt-3 rounded-md border bg-slate-50 p-3">
+    <div className="mt-3 rounded-md border bg-muted p-3">
       <div className="text-sm font-medium">メタ評価（このレビューは役に立ちましたか？）</div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <Field label="helpfulness (1-5)">
-          <Select value={helpfulness} onChange={(e) => setHelpfulness(Number(e.target.value))}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
+          <Select value={String(helpfulness)} onValueChange={(v: string) => setHelpfulness(Number(v))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <SelectItem key={n} value={String(n)}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </Field>
         <Field label="コメント（任意）">
-          <TextInput value={comment} onChange={(e) => setComment(e.target.value)} />
+          <Input value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
       </div>
       <div className="mt-2">
-        <PrimaryButton onClick={submit} disabled={submitting}>
+        <Button onClick={submit} disabled={submitting}>
           送信
-        </PrimaryButton>
+        </Button>
       </div>
     </div>
   );
