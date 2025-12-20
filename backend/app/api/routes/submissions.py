@@ -14,7 +14,7 @@ from app.models.user import User, UserRole
 from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
 from app.services.auth import get_current_user, require_teacher
 from app.services.pdf import PDFExtractionService
-from app.services.sanitize import redact_personal_info, sanitize_pdf_file
+from app.services.sanitize import redact_personal_info, sanitize_pdf_to_redacted_copy
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ def submit_report(
     markdown_text: str | None = None
 
     if file_type == SubmissionFileType.pdf:
-        # PDF: 先に抽出して submission_text をセット
+        # PDF: 抽出してマスクしたテキストを保存（ファイル自体は上書きしない）
         try:
             stored_path_obj = Path(stored_path)
             extracted_text = PDFExtractionService.extract_text(
@@ -67,16 +67,22 @@ def submit_report(
                 max_pages=50,
                 max_chars=50000,
             )
-            submission_text = extracted_text if extracted_text.strip() else None
+            redacted = redact_personal_info(extracted_text) if extracted_text else ""
+            submission_text = redacted if redacted.strip() else None
+            markdown_text = submission_text
         except Exception as e:
             logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
             submission_text = None
+            markdown_text = None
 
-        # その後サニタイズ（個人情報マスク）。レイアウトは保持しない簡易版。
-        redacted_text, modified = sanitize_pdf_file(Path(stored_path))
-        if redacted_text:
-            markdown_text = redacted_text
-            submission_text = redacted_text  # 同期しておく
+        # redacted版PDFを生成（レイアウトはテキスト化された簡易版）
+        try:
+            redacted_path, redacted_text = sanitize_pdf_to_redacted_copy(Path(stored_path))
+            if redacted_text and submission_text is None:
+                submission_text = redacted_text
+                markdown_text = redacted_text
+        except Exception as e:
+            logger.warning(f"PDF redaction failed for submission {submission_id}: {e}")
 
     elif file_type == SubmissionFileType.markdown:
         raw_text = Path(stored_path).read_text(encoding="utf-8", errors="replace")
@@ -156,9 +162,16 @@ def download_submission_file(
     if not allowed:
         raise HTTPException(status_code=403, detail="Not allowed")
 
+    path_to_serve = submission.storage_path
+    if submission.file_type == SubmissionFileType.pdf:
+        redacted_path = Path(submission.storage_path).with_name(
+            f"{Path(submission.storage_path).stem}-redacted{Path(submission.storage_path).suffix}"
+        )
+        if redacted_path.exists():
+            path_to_serve = str(redacted_path)
     filename = "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
     media_type = "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
-    return FileResponse(submission.storage_path, filename=filename, media_type=media_type)
+    return FileResponse(path_to_serve, filename=filename, media_type=media_type)
 
 
 @router.post("/{submission_id}/teacher-grade", response_model=SubmissionPublic)

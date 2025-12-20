@@ -37,31 +37,30 @@ def redact_personal_info(text: str) -> str:
     return _apply_patterns(text, patterns)
 
 
-def sanitize_pdf_file(path: Path) -> tuple[str | None, bool]:
+def sanitize_pdf_to_redacted_copy(path: Path) -> tuple[Path | None, str | None]:
     """
-    Extract text from PDF, redact personal info, and overwrite with a sanitized PDF.
+    Extract text, redact PII, and write a text-only redacted PDF alongside the original.
 
-    Returns (sanitized_text or None, modified_flag).
+    Returns (redacted_pdf_path, redacted_text). If no changes were needed, returns (None, None).
     """
     try:
         with pdfplumber.open(path) as pdf:
             text = "\n".join(page.extract_text() or "" for page in pdf.pages)
     except Exception:
-        return None, False
+        return None, None
 
     if not text.strip():
-        return None, False
+        return None, None
 
     redacted = redact_personal_info(text)
     if redacted == text:
-        return redacted, False
+        return None, redacted
 
-    # Write a simple text-only PDF with redacted content
-    buf_path = path
-    c = canvas.Canvas(str(buf_path), pagesize=A4)
-    width, height = A4
+    redacted_path = path.with_name(f"{path.stem}-redacted{path.suffix}")
+    c = canvas.Canvas(str(redacted_path), pagesize=A4)
+    _, height = A4
     margin = 40
-    max_width_chars = 100  # approximate for default font
+    max_width_chars = 100
     y = height - margin
     lines = []
     for paragraph in redacted.splitlines():
@@ -77,4 +76,4 @@ def sanitize_pdf_file(path: Path) -> tuple[str | None, bool]:
         c.drawString(margin, y, line)
         y -= 14
     c.save()
-    return redacted, True
+    return redacted_path, redacted
