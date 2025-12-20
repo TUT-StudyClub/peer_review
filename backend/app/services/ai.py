@@ -88,7 +88,9 @@ def _openai_polish(text: str) -> dict:
         with httpx.Client(timeout=15.0) as client:
             res = client.post(
                 "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                headers={
+                    "Authorization": f"Bearer {settings.openai_api_key}"
+                },
                 json={
                     "model": "gpt-4o-mini",
                     "messages": [
