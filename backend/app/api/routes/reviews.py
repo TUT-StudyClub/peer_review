@@ -297,8 +297,26 @@ def paraphrase(
     payload: RephraseRequest,
     _current_user: User = Depends(get_current_user),
 ) -> RephraseResponse:
-    # AI未設定でも使えるように簡易変換のみ。
-    return _simple_rephrase(payload.text)
+    # OpenAIが利用可能なら polish_review を使用、そうでなければ簡易変換にフォールバック
+    try:
+        polished_text, notes = polish_review(payload.text)
+        return RephraseResponse(
+            original=payload.text,
+            rephrased=polished_text,
+            notice=notes,
+        )
+    except (
+        FeatureDisabledError,
+        OpenAIUnavailableError,
+        OpenAIRequestError,
+        OpenAIResponseParseError,
+        OpenAIEmptyChoiceError,
+    ):
+        # OpenAI が使えない場合は簡易変換にフォールバック
+        return _simple_rephrase(payload.text)
+    except ModerationError:
+        # モデレーションエラーは簡易変換を返す（エラーにしない）
+        return _simple_rephrase(payload.text)
 
 
 @router.get("/assignments/{assignment_id}/reviews/received", response_model=list[ReviewReceived])
