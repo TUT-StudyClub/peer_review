@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "pure-review",
-  description: "匿名ピアレビュー（pure-review）",
+  title: "Peer Review",
+  description: "匿名ピアレビュー（Peer Review）",
 };
 
 export default function RootLayout({

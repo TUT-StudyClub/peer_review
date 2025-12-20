@@ -40,7 +40,7 @@ export function NavBar() {
       <div className="mx-auto flex w-full max-w-5xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <Link href="/" className="text-lg font-semibold tracking-tight">
-            pure-review
+            Peer Review
           </Link>
           <nav className="flex items-center gap-1">
             <NavLink href="/assignments" label="課題" />
