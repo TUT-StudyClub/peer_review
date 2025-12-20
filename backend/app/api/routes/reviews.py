@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
 from app.models.review import (
     MetaReview,
     Review,
@@ -45,6 +45,7 @@ from app.services.auth import get_current_user, require_teacher
 from app.services.credits import calculate_review_credit_gain, score_1_to_5_from_norm
 from app.services.duplicate import detect_duplicate_review, hash_comment
 from app.services.matching import get_or_assign_review_assignment
+from app.services.rubric import ensure_fixed_rubric
 from app.services.similarity import check_similarity
 
 router = APIRouter()
@@ -82,12 +83,7 @@ def next_review_task(
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    rubric = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == assignment_id)
-        .order_by(RubricCriterion.order_index.asc())
-        .all()
-    )
+    rubric = ensure_fixed_rubric(db, assignment_id)
     author_alias = alias_for_user(
         user_id=submission.author_id,
         assignment_id=assignment_id,
@@ -158,11 +154,7 @@ def submit_review(
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    rubric_criteria = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == review_assignment.assignment_id)
-        .all()
-    )
+    rubric_criteria = ensure_fixed_rubric(db, review_assignment.assignment_id)
     criteria_by_id = {c.id: c for c in rubric_criteria}
 
     if len(payload.rubric_scores) != len(criteria_by_id):

@@ -55,6 +55,43 @@ USER_RANK_DEFINITIONS = [
     {"key": "diamond", "min_credits": 80, "title": "ダイヤモンドレビュアー"},
 ]
 
+REVIEWER_SKILL_TEMPLATE = [
+    {
+        "key": "logic",
+        "label": "論理性",
+        "name": "論理性",
+        "description": "主張と根拠のつながりが明確か",
+        "max_score": 5,
+        "order_index": 0,
+    },
+    {
+        "key": "specificity",
+        "label": "具体性",
+        "name": "具体性",
+        "description": "具体例や数値が示されているか",
+        "max_score": 5,
+        "order_index": 1,
+    },
+    {
+        "key": "structure",
+        "label": "構成",
+        "name": "構成",
+        "description": "構成や流れが分かりやすいか",
+        "max_score": 5,
+        "order_index": 2,
+    },
+    {
+        "key": "evidence",
+        "label": "根拠",
+        "name": "根拠",
+        "description": "根拠や引用が妥当か",
+        "max_score": 5,
+        "order_index": 3,
+    },
+]
+
+REVIEWER_SKILL_AXES = [{"key": item["key"], "label": item["label"]} for item in REVIEWER_SKILL_TEMPLATE]
+
 COURSE_TITLE_CANDIDATES = [
     "プログラミング基礎",
     "データ構造とアルゴリズム",

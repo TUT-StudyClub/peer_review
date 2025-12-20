@@ -228,8 +228,9 @@ export type GradeMe = {
 export type ReviewerSkill = {
   logic: number;
   specificity: number;
-  empathy: number;
-  insight: number;
+  structure: number;
+  evidence: number;
+  overall: number;
 };
 
 export type TeacherGradeSubmit = {
