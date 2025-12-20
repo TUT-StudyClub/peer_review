@@ -10,6 +10,7 @@ type RankingState = {
     data: UserRankingEntry[];
     loading: boolean;
     error: string | null;
+    loaded: boolean;
 };
 
 type RankingConfig = {
@@ -55,9 +56,9 @@ const rankingPeriods: RankingPeriod[] = ["total", "monthly", "weekly"];
 export default function StartPage() {
     const [activePeriod, setActivePeriod] = useState<RankingPeriod>("total");
     const [rankings, setRankings] = useState<Record<RankingPeriod, RankingState>>({
-        total: { data: [], loading: false, error: null },
-        monthly: { data: [], loading: false, error: null },
-        weekly: { data: [], loading: false, error: null },
+        total: { data: [], loading: false, error: null, loaded: false },
+        monthly: { data: [], loading: false, error: null, loaded: false },
+        weekly: { data: [], loading: false, error: null, loaded: false },
     });
 
     const loadRanking = useCallback(async (period: RankingPeriod) => {
@@ -69,19 +70,24 @@ export default function StartPage() {
             const list = await apiGetRanking(5, period);
             setRankings((prev) => ({
                 ...prev,
-                [period]: { data: list, loading: false, error: null },
+                [period]: { data: list, loading: false, error: null, loaded: true },
             }));
         } catch (err) {
             setRankings((prev) => ({
                 ...prev,
-                [period]: { ...prev[period], loading: false, error: formatApiError(err) },
+                [period]: {
+                    ...prev[period],
+                    loading: false,
+                    error: formatApiError(err),
+                    loaded: true,
+                },
             }));
         }
     }, []);
 
     useEffect(() => {
         const state = rankings[activePeriod];
-        if (state.loading || state.data.length > 0 || state.error) return;
+        if (state.loading || state.loaded) return;
         void loadRanking(activePeriod);
     }, [activePeriod, rankings, loadRanking]);
 
