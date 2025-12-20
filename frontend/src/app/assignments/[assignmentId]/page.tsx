@@ -170,6 +170,7 @@ export default function AssignmentDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
+  const rubricNameById = useMemo(() => new Map(rubric.map((c) => [c.id, c.name])), [rubric]);
   const taRequestsBySubmission = useMemo(() => {
     const map: Record<string, TAReviewRequestPublic[]> = {};
     for (const r of taRequests) {
@@ -879,7 +880,7 @@ export default function AssignmentDetailPage() {
                                     <div className="font-semibold">Rubric</div>
                                     {r.rubric_scores.map((s) => (
                                       <div key={s.criterion_id}>
-                                        {s.criterion_id}: {s.score}
+                                        {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
                                       </div>
                                     ))}
                                   </div>
@@ -1180,7 +1181,7 @@ export default function AssignmentDetailPage() {
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {r.rubric_scores.map((s) => (
                         <div key={s.criterion_id} className="text-xs text-muted-foreground">
-                          {shortId(s.criterion_id)}: {s.score}
+                          {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
                         </div>
                       ))}
                     </div>
