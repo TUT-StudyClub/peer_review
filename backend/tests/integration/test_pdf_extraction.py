@@ -14,11 +14,7 @@ def test_pdf_extraction():
     service = PDFExtractionService()
 
     # テストPDFのパス（tests/samples 配下）
-    tests_dir = Path(__file__).resolve().parents[1]  # backend/tests
-    test_pdf = tests_dir / "samples" / "test_pdf_broken_style.pdf"
-
-    print(f"探しているファイル: {test_pdf}")
-    print(f"ファイル存在確認: {test_pdf.exists()}")
+    test_pdf = Path(__file__).resolve().parent / "samples" / "test_pdf_broken_style.pdf"
 
     if not test_pdf.exists():
         print(f"\n✗ テストPDFが見つかりません: {test_pdf}")
