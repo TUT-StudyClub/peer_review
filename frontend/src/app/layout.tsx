@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./providers";
 import { NavBar } from "@/components/NavBar";
+import { PageTransition } from "@/components/PageTransition";
 
 const geistSans = Geist({
   variable: "--font-sans",
@@ -31,7 +32,9 @@ export default function RootLayout({
       >
         <AuthProvider>
           <NavBar />
-          <main className="mx-auto w-full max-w-5xl px-4 py-8">{children}</main>
+          <main className="mx-auto w-full max-w-5xl px-4 py-8">
+            <PageTransition>{children}</PageTransition>
+          </main>
         </AuthProvider>
       </body>
     </html>
