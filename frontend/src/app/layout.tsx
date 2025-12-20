@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./providers";
@@ -33,7 +34,9 @@ export default function RootLayout({
         <AuthProvider>
           <NavBar />
           <main className="mx-auto w-full max-w-5xl px-4 py-8">
-            <PageTransition>{children}</PageTransition>
+            <Suspense fallback={<div className="page-transition">{children}</div>}>
+              <PageTransition>{children}</PageTransition>
+            </Suspense>
           </main>
         </AuthProvider>
       </body>
