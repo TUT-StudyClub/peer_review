@@ -5,15 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import { apiGetReviewerSkill } from "@/lib/api";
 import { ReviewerSkill } from "@/lib/types";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
+import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-
-const REVIEWER_SKILL_AXES = [
-    { key: "logic", label: "論理性（Logic）" },
-    { key: "specificity", label: "具体性（Specificity）" },
-    { key: "empathy", label: "共感性（Empathy）" },
-    { key: "insight", label: "洞察性（Insight）" },
-];
 
 export default function MyPage() {
     const { user, token } = useAuth();
@@ -146,7 +140,7 @@ export default function MyPage() {
                                                 {axis.label}
                                             </span>
                                             <span className="font-semibold">
-                                                {formatSkill(skill[axis.key as keyof ReviewerSkill])}
+                                                {formatSkill(skill[axis.key])}
                                             </span>
                                         </div>
                                     ))}
