@@ -30,10 +30,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
       return;
     }
-    setToken(stored);
 
     apiGetMe(stored)
       .then((me) => {
+        setToken(stored);
         setUser(me);
       })
       .catch((err) => {
