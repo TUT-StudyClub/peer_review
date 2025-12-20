@@ -24,6 +24,7 @@ import {
   apiTeacherGradeSubmission,
   apiTeacherListSubmissions,
   apiCreateMetaReview,
+  apiParaphrase,
   formatApiError,
 } from "@/lib/api";
 import type {
@@ -37,6 +38,7 @@ import type {
   SubmissionTeacherPublic,
   TAReviewRequestPublic,
   UserPublic,
+  RephraseResponse,
 } from "@/lib/types";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
@@ -142,6 +144,10 @@ export default function AssignmentDetailPage() {
   const [taRequesting, setTaRequesting] = useState(false);
   const [taRequests, setTaRequests] = useState<TAReviewRequestPublic[]>([]);
   const [taRequestsLoading, setTaRequestsLoading] = useState(false);
+  const [paraphraseOpen, setParaphraseOpen] = useState(false);
+  const [paraphrasePreview, setParaphrasePreview] = useState<RephraseResponse | null>(null);
+  const [paraphraseLoading, setParaphraseLoading] = useState(false);
+  const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
   const [rubricName, setRubricName] = useState("");
   const [rubricDesc, setRubricDesc] = useState("");
@@ -314,6 +320,31 @@ export default function AssignmentDetailPage() {
       setNotice(formatApiError(err));
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const runParaphrase = async () => {
+    if (!token) {
+      setParaphraseError("ログインが必要です");
+      setParaphraseOpen(true);
+      return;
+    }
+    if (!reviewComment.trim()) {
+      setParaphraseError("言い換えるテキストを入力してください");
+      setParaphraseOpen(true);
+      return;
+    }
+    setParaphraseLoading(true);
+    setParaphraseError(null);
+    setParaphrasePreview(null);
+    setParaphraseOpen(true);
+    try {
+      const res = await apiParaphrase(token, reviewComment);
+      setParaphrasePreview(res);
+    } catch (err) {
+      setParaphraseError(formatApiError(err));
+    } finally {
+      setParaphraseLoading(false);
     }
   };
 
@@ -799,6 +830,60 @@ export default function AssignmentDetailPage() {
               </DialogContent>
             ) : null}
           </Dialog>
+
+          <Dialog open={paraphraseOpen} onOpenChange={setParaphraseOpen}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>言い換え</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                {!paraphrasePreview && !paraphraseError ? (
+                  <p className="text-muted-foreground">
+                    レビューコメントを簡易的に言い換えます。必要に応じて手動で調整してください。
+                  </p>
+                ) : null}
+                {paraphraseError ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>エラー</AlertTitle>
+                    <AlertDescription className="whitespace-pre-wrap">{paraphraseError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                {paraphrasePreview ? (
+                  <div className="space-y-2">
+                    <div>
+                      <div className="text-xs text-muted-foreground">変換結果</div>
+                      <div className="rounded-md border bg-muted/50 p-3">{paraphrasePreview.rephrased}</div>
+                    </div>
+                    {paraphrasePreview.notice ? (
+                      <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {paraphraseLoading ? <p className="text-muted-foreground">変換中...</p> : null}
+              </div>
+              <DialogFooter className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => setParaphraseOpen(false)}>
+                  閉じる
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={runParaphrase}
+                  disabled={paraphraseLoading || !reviewComment.trim()}
+                >
+                  再変換
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
+                    setParaphraseOpen(false);
+                  }}
+                  disabled={!paraphrasePreview}
+                >
+                  反映する
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </SectionCard>
       ) : null}
 
@@ -911,6 +996,12 @@ export default function AssignmentDetailPage() {
                     </div>
                   </div>
                   <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
+                      言い換え
+                    </Button>
+                    {paraphraseLoading ? <span>変換中...</span> : null}
+                  </div>
                 </div>
               </Field>
 
