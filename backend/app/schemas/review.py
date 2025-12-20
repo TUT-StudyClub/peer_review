@@ -32,6 +32,9 @@ class ReviewPublic(BaseModel):
     ai_specificity: int | None
     ai_empathy: int | None
     ai_insight: int | None
+    duplicate_of_review_id: UUID | None = None
+    duplicate_warning: str | None = None
+    duplicate_penalty_rate: float | None = None
 
     # 類似度フィールド
     similarity_score: float | None = None
@@ -93,6 +96,10 @@ class ReviewReceived(BaseModel):
     ai_quality_score: int | None
     ai_quality_reason: str | None
 
+    duplicate_of_review_id: UUID | None = None
+    duplicate_warning: str | None = None
+    duplicate_penalty_rate: float | None = None
+
     # 類似度フィールド（オプション）
     similarity_score: float | None = None
     similar_review_id: UUID | None = None
@@ -110,6 +117,9 @@ class TeacherReviewPublic(BaseModel):
     meta_review: MetaReviewPublic | None
     ai_quality_score: int | None
     ai_quality_reason: str | None
+    duplicate_of_review_id: UUID | None = None
+    duplicate_warning: str | None = None
+    duplicate_penalty_rate: float | None = None
 
 
 class RephraseRequest(BaseModel):

@@ -446,6 +446,12 @@ curl -sS -X POST "$BASE_URL/submissions/$SUBMISSION_S1_ID/teacher-grade" \
   }' | jq
 ```
 
+## レビュー重複検知（新機能）
+
+- 同一ユーザーが同一課題で本文をコピペすると、正規化ハッシュの一致で重複を検知します。
+- `duplicate_warning` や `duplicate_of_review_id` をレスポンス/DBに保存し、AI品質スコアを1pt減点、レビュー貢献点を `DUPLICATE_PENALTY_RATE` で減算します。
+- 判定基準・正規化手順の詳細: `docs/Issue/review-duplicate-detection.md`
+
 ### 7)（任意）レビュアースキル（レーダーチャート用）
 ```bash
 curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
