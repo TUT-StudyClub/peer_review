@@ -34,6 +34,7 @@ class UserRankingEntry(BaseModel):
     rank: str
     title: str
     is_ta: bool
+    period_credits: int | None = None
 
 
 class ReviewerSkill(BaseModel):

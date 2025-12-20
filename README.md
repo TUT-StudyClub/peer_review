@@ -530,6 +530,8 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 
 ### ランキング（TOP5）
 - `GET /users/ranking?limit=5` で取得できます。
+- `period=weekly|monthly` を指定すると週間/月間ランキングを取得できます（省略時は `total`）。
+- 週間/月間は直近7日/30日（UTC）を集計し、`period_credits` に獲得creditsを返します。
 - 対象は **TA要件（`TA_QUALIFICATION_THRESHOLD`）を満たすユーザーのみ** です。
 - フロントの `/start` にランキング表を表示しています。
 
