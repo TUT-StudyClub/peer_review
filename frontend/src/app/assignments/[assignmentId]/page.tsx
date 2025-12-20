@@ -78,6 +78,16 @@ function formatSkill(value: number) {
   return value > 0 ? value.toFixed(2) : "-";
 }
 
+function formatScore(value: number | null, digits = 1, fallback = "-") {
+  if (value === null) return fallback;
+  return value.toFixed(digits);
+}
+
+function extractReviewCount(breakdown: Record<string, unknown>) {
+  const count = breakdown.reviews_count;
+  return typeof count === "number" ? count : null;
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -171,7 +181,12 @@ export default function AssignmentDetailPage() {
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
   const rubricNameById = useMemo(() => new Map(rubric.map((c) => [c.id, c.name])), [rubric]);
-  const backHref = assignment?.course_id ? `/assignments?course_id=${assignment.course_id}` : "/assignments";
+  const backHref =
+    user?.role === "student"
+      ? "/mypage"
+      : assignment?.course_id
+        ? `/assignments?course_id=${assignment.course_id}`
+        : "/assignments";
   const taRequestsBySubmission = useMemo(() => {
     const map: Record<string, TAReviewRequestPublic[]> = {};
     for (const r of taRequests) {
@@ -553,7 +568,7 @@ export default function AssignmentDetailPage() {
           </AlertDescription>
         </Alert>
         <Button variant="link" asChild className="px-0">
-          <Link href={backHref}>課題一覧へ戻る</Link>
+          <Link href={backHref}>{user?.role === "student" ? "マイページへ戻る" : "課題一覧へ戻る"}</Link>
         </Button>
       </div>
     );
@@ -1217,16 +1232,43 @@ export default function AssignmentDetailPage() {
           ) : gradeLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : grade ? (
-            <div className="space-y-2 text-sm">
-              <div>assignment_score: {grade.assignment_score ?? "-"}</div>
-              <div>review_contribution: {grade.review_contribution.toFixed(2)}</div>
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">課題スコア</div>
+                  <div className="text-lg font-semibold">
+                    {formatScore(grade.assignment_score, 1, "採点待ち")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">/100</div>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">レビュー貢献</div>
+                  <div className="text-lg font-semibold">
+                    +{formatScore(grade.review_contribution, 2)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">加点</div>
+                </div>
+                <div className="rounded-lg border bg-primary/10 p-3">
+                  <div className="text-xs text-muted-foreground">最終スコア</div>
+                  <div className="text-2xl font-semibold text-primary">
+                    {formatScore(grade.final_score, 1, "未確定")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">max 100</div>
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground">
-                ※ review_contribution はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+                ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
               </p>
-              <div className="font-semibold">final_score: {grade.final_score ?? "-"}</div>
-              <details className="rounded-md border bg-muted p-3 text-xs">
-                <summary className="cursor-pointer">breakdown</summary>
-                <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(grade.breakdown, null, 2)}</pre>
+              <details className="rounded-md border bg-muted/60 p-3 text-xs">
+                <summary className="cursor-pointer font-medium">内訳（breakdown）</summary>
+                {extractReviewCount(grade.breakdown) !== null ? (
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    レビュー数: {extractReviewCount(grade.breakdown)}
+                  </div>
+                ) : null}
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap">
+                  {JSON.stringify(grade.breakdown, null, 2)}
+                </pre>
               </details>
             </div>
           ) : (
