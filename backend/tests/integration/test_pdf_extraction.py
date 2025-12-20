@@ -24,10 +24,6 @@ def test_pdf_extraction():
     print(f"\n📁 テストファイル: {test_pdf.name}")
     print(f"📍 パス: {test_pdf}\n")
 
-    # ファイル情報
-    file_size = test_pdf.stat().st_size
-    print(f"📦 ファイルサイズ: {file_size:,} bytes\n")
-
     try:
         # テスト1: PDFメタデータ情報
         print("=" * 70)
