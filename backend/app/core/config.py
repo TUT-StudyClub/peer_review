@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     ta_qualification_threshold: int = 20
     review_credit_base: float = 1.0
     review_credit_alignment_bonus_max: float = 1.0
+    review_credit_rubric_weight: float = 0.5
+    review_credit_comment_weight: float = 0.5
     ta_credit_multiplier: float = 2.0
 
     openai_api_key: str | None = None

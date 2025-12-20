@@ -37,16 +37,31 @@ from app.services.ai import (
     OpenAIResponseParseError,
     OpenAIUnavailableError,
     analyze_review,
+    analyze_review_alignment,
     polish_review,
 )
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user, require_teacher
-from app.services.credits import calculate_review_credit_gain
+from app.services.credits import calculate_review_credit_gain, score_1_to_5_from_norm
 from app.services.duplicate import detect_duplicate_review, hash_comment
 from app.services.matching import get_or_assign_review_assignment
 from app.services.similarity import check_similarity
 
 router = APIRouter()
+
+
+def _evaluation_fields(credit: object | None) -> dict:
+    if credit is None:
+        return {
+            "rubric_alignment_score": None,
+            "total_alignment_score": None,
+            "credit_awarded": None,
+        }
+    return {
+        "rubric_alignment_score": score_1_to_5_from_norm(getattr(credit, "alignment", None)),
+        "total_alignment_score": score_1_to_5_from_norm(getattr(credit, "trust_score", None)),
+        "credit_awarded": getattr(credit, "added", None),
+    }
 
 
 @router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask)
@@ -205,6 +220,11 @@ def submit_review(
             },
         )
 
+    alignment_result = analyze_review_alignment(
+        teacher_review_text=submission.teacher_feedback,
+        student_review_text=payload.comment,
+    )
+
     normalized_comment_hash = hash_comment(payload.comment)
     duplicate_result = detect_duplicate_review(
         db,
@@ -238,6 +258,8 @@ def submit_review(
         ai_specificity=ai_result.specificity,
         ai_empathy=ai_result.empathy,
         ai_insight=ai_result.insight,
+        ai_comment_alignment_score=alignment_result.alignment_score if alignment_result else None,
+        ai_comment_alignment_reason=alignment_result.alignment_reason if alignment_result else None,
         normalized_comment_hash=normalized_comment_hash,
         duplicate_of_review_id=duplicate_result.duplicate_review_id,
         duplicate_warning=duplicate_result.warning_message,
@@ -267,7 +289,8 @@ def submit_review(
 
     db.commit()
     db.refresh(review)
-    return review
+    review_public = ReviewPublic.model_validate(review)
+    return review_public.model_copy(update=_evaluation_fields(credit))
 
 
 def _simple_rephrase(text: str) -> RephraseResponse:
@@ -339,6 +362,9 @@ def received_reviews(
         .all()
     )
     assignment_by_id = {ra.id: ra for ra in review_assignments}
+    reviewer_ids = {ra.reviewer_id for ra in review_assignments}
+    reviewers = db.query(User).filter(User.id.in_(list(reviewer_ids))).all() if reviewer_ids else []
+    reviewer_map = {u.id: u for u in reviewers}
     reviews = (
         db.query(Review)
         .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
@@ -352,6 +378,17 @@ def received_reviews(
         ra = assignment_by_id.get(r.review_assignment_id)
         if ra is None:
             continue
+        reviewer_user = reviewer_map.get(ra.reviewer_id)
+        credit = (
+            calculate_review_credit_gain(
+                db,
+                review_assignment=ra,
+                review=r,
+                reviewer=reviewer_user,
+            )
+            if reviewer_user
+            else None
+        )
         reviewer_alias = alias_for_user(
             user_id=ra.reviewer_id, assignment_id=assignment_id, prefix="Reviewer"
         )
@@ -372,6 +409,9 @@ def received_reviews(
                 meta_review=meta,
                 ai_quality_score=r.ai_quality_score,
                 ai_quality_reason=r.ai_quality_reason,
+                ai_comment_alignment_score=r.ai_comment_alignment_score,
+                ai_comment_alignment_reason=r.ai_comment_alignment_reason,
+                **_evaluation_fields(credit),
                 duplicate_of_review_id=r.duplicate_of_review_id,
                 duplicate_warning=r.duplicate_warning,
                 duplicate_penalty_rate=r.duplicate_penalty_rate,
@@ -469,6 +509,16 @@ def list_reviews_for_submission(
         if ra is None:
             continue
         reviewer_user = reviewer_map.get(ra.reviewer_id)
+        credit = (
+            calculate_review_credit_gain(
+                db,
+                review_assignment=ra,
+                review=r,
+                reviewer=reviewer_user,
+            )
+            if reviewer_user
+            else None
+        )
         reviewer_alias = alias_for_user(
             user_id=ra.reviewer_id, assignment_id=submission.assignment_id, prefix="Reviewer"
         )
@@ -489,6 +539,9 @@ def list_reviews_for_submission(
                 meta_review=meta,
                 ai_quality_score=r.ai_quality_score,
                 ai_quality_reason=r.ai_quality_reason,
+                ai_comment_alignment_score=r.ai_comment_alignment_score,
+                ai_comment_alignment_reason=r.ai_comment_alignment_reason,
+                **_evaluation_fields(credit),
                 duplicate_of_review_id=r.duplicate_of_review_id,
                 duplicate_warning=r.duplicate_warning,
                 duplicate_penalty_rate=r.duplicate_penalty_rate,

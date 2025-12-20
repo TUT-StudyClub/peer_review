@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
-from app.models.review import ReviewAssignment
+from app.models.review import Review, ReviewAssignment
 from app.models.submission import Submission, SubmissionFileType, SubmissionRubricScore
 from app.models.user import User, UserRole
 from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
+from app.services.ai import analyze_review_alignment
 from app.services.auth import get_current_user, require_teacher
 from app.services.pdf import PDFExtractionService
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
@@ -191,6 +192,25 @@ def set_teacher_grade(
                 score=s.score,
             )
         )
+
+    if payload.teacher_feedback and payload.teacher_feedback.strip():
+        reviews = (
+            db.query(Review)
+            .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+            .filter(ReviewAssignment.submission_id == submission.id)
+            .all()
+        )
+        for review in reviews:
+            alignment = analyze_review_alignment(
+                teacher_review_text=payload.teacher_feedback,
+                student_review_text=review.comment,
+            )
+            if alignment is None:
+                review.ai_comment_alignment_score = None
+                review.ai_comment_alignment_reason = None
+            else:
+                review.ai_comment_alignment_score = alignment.alignment_score
+                review.ai_comment_alignment_reason = alignment.alignment_reason
 
     db.commit()
     db.refresh(submission)
