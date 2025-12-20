@@ -444,6 +444,68 @@ print(scores)
 
 ---
 
+## 提出・レビューシステムへの統合
+
+### 提出時のテキスト抽出フロー
+
+提出エンドポイント (`POST /submissions/assignment/{assignment_id}`) では以下の処理を実行：
+
+1. **ファイルアップロード受け取り**
+   - ファイル形式の検出（PDF / Markdown）
+   - ファイルのストレージへの保存
+
+2. **テキスト抽出**
+   - **PDF形式**: `PDFExtractionService.extract_text()` で抽出
+     - 上限設定: 最大50ページ、50,000文字
+     - 抽出失敗時もログ記録して提出は続行（エラーハンドリング）
+   - **Markdown形式**: ファイル内容を直接読み込み
+
+3. **DB保存**
+   - `Submission.submission_text` に抽出/読込結果を格納
+   - `Submission.markdown_text` に Markdown 内容を保持（後方互換性）
+
+**実装例 (routes/submissions.py):**
+```python
+if file_type == SubmissionFileType.pdf:
+    try:
+        extracted_text = PDFExtractionService.extract_text(
+            Path(stored_path),
+            max_pages=50,
+            max_chars=50000,
+        )
+        submission_text = extracted_text if extracted_text.strip() else None
+    except Exception as e:
+        logger.warning(f"PDF extraction failed: {e}")
+        submission_text = None
+elif file_type == SubmissionFileType.markdown:
+    markdown_text = stored_path.read_text(encoding="utf-8", errors="replace")
+    submission_text = markdown_text
+```
+
+### レビュー投稿時のテキスト利用フロー
+
+レビュー投稿エンドポイント (`POST /review-assignments/{review_assignment_id}/submit`) では：
+
+1. **テキスト優先度**
+   ```python
+   # submission_text を優先、なければ markdown_text、それもなければ空文字列
+   submission_text = submission.submission_text or submission.markdown_text or ""
+   ```
+
+2. **AI分析への入力**
+   - `analyze_review(submission_text=submission_text, review_text=payload.comment)`
+   - 抽出されたテキストに基づいて AI が以下を評価:
+     - レビューの質（quality_score）
+     - 有害性チェック（toxic）
+     - 論理性、具体性、共感性、洞察力など
+
+3. **フォールバック仕様**
+   - PDF 抽出失敗時や Markdown のみ提出時も、従来通り処理が続行
+   - submission_text が NULL の場合は markdown_text にフォールバック
+   - 両方ない場合は空文字列でも AI 分析は実行
+
+---
+
 ## トラブルシューティング
 
 ### `ModuleNotFoundError: No module named 'pdfplumber'`
