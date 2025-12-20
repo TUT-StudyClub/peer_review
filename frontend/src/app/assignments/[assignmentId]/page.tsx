@@ -570,7 +570,7 @@ export default function AssignmentDetailPage() {
 
           <Dialog
             open={Boolean(gradeTargetId)}
-            onOpenChange={(open) => {
+            onOpenChange={(open: boolean) => {
               if (!open) setGradeTargetId(null);
             }}
           >
@@ -930,7 +930,7 @@ function MetaReviewForm({
       <div className="text-sm font-medium">メタ評価（このレビューは役に立ちましたか？）</div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <Field label="helpfulness (1-5)">
-          <Select value={String(helpfulness)} onValueChange={(v) => setHelpfulness(Number(v))}>
+          <Select value={String(helpfulness)} onValueChange={(v: string) => setHelpfulness(Number(v))}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
