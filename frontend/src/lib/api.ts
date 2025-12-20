@@ -459,8 +459,9 @@ export async function apiGetMyGrade(token: string, assignmentId: string): Promis
   return apiFetch<GradeMe>(`/assignments/${assignmentId}/grades/me`, {}, token);
 }
 
-export async function apiGetReviewerSkill(token: string): Promise<ReviewerSkill> {
-  return apiFetch<ReviewerSkill>(`/users/me/reviewer-skill`, {}, token);
+export async function apiGetReviewerSkill(token: string, assignmentId?: string): Promise<ReviewerSkill> {
+  const query = assignmentId ? `?assignment_id=${assignmentId}` : "";
+  return apiFetch<ReviewerSkill>(`/users/me/reviewer-skill${query}`, {}, token);
 }
 
 export async function apiTeacherListSubmissions(

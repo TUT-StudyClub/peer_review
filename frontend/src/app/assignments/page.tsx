@@ -8,13 +8,16 @@ import {
   apiCreateAssignment,
   apiCreateCourse,
   apiEnrollCourse,
+  apiGetReviewerSkill,
   apiListAssignments,
   apiListCourseStudents,
   apiListCourses,
   formatApiError,
 } from "@/lib/api";
-import type { AssignmentPublic, CoursePublic, UserPublic } from "@/lib/types";
+import type { AssignmentPublic, CoursePublic, ReviewerSkill, UserPublic } from "@/lib/types";
+import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { ErrorMessages } from "@/components/ErrorMessages";
+import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -62,6 +65,10 @@ export default function AssignmentsPage() {
   const [courseStudents, setCourseStudents] = useState<UserPublic[]>([]);
   const [courseStudentsLoading, setCourseStudentsLoading] = useState(false);
   const [courseStudentsError, setCourseStudentsError] = useState<string | null>(null);
+
+  const [overallSkill, setOverallSkill] = useState<ReviewerSkill | null>(null);
+  const [overallSkillLoading, setOverallSkillLoading] = useState(false);
+  const [overallSkillError, setOverallSkillError] = useState<string | null>(null);
 
   const activeCourse = useMemo(
     () => courses.find((course) => course.id === activeCourseId) ?? null,
@@ -150,6 +157,30 @@ export default function AssignmentsPage() {
     void loadCourseStudents(activeCourseId);
   }, [activeCourseId, loadCourseStudents, user?.role]);
 
+  const loadOverallSkill = useCallback(async () => {
+    if (!token) return;
+    setOverallSkillLoading(true);
+    setOverallSkillError(null);
+    try {
+      const skill = await apiGetReviewerSkill(token);
+      setOverallSkill(skill);
+    } catch (err) {
+      setOverallSkillError(formatApiError(err));
+    } finally {
+      setOverallSkillLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (user?.role !== "student") {
+      setOverallSkill(null);
+      return;
+    }
+    void loadOverallSkill();
+  }, [loadOverallSkill, user?.role]);
+
+  const formatSkill = (value: number) => (value > 0 ? value.toFixed(2) : "-");
+
   const createCourse = async () => {
     if (!token) {
       setCoursesError("授業作成にはログインが必要です");
@@ -226,6 +257,46 @@ export default function AssignmentsPage() {
 
   return (
     <div className="space-y-6">
+      {user?.role === "student" ? (
+        <Card>
+          <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
+            <CardTitle className="text-base">レビュアースキル（総合 / teacher比較）</CardTitle>
+            <div className="shrink-0">
+              <Button variant="outline" onClick={loadOverallSkill} disabled={!token || overallSkillLoading}>
+                更新
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {!token ? (
+              <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
+            ) : overallSkillLoading ? (
+              <p className="text-sm text-muted-foreground">読み込み中...</p>
+            ) : overallSkillError ? (
+              <Alert variant="destructive">
+                <AlertTitle>取得に失敗しました</AlertTitle>
+                <AlertDescription>{overallSkillError}</AlertDescription>
+              </Alert>
+            ) : overallSkill ? (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  {REVIEWER_SKILL_AXES.map((axis) => (
+                    <div key={axis.key}>
+                      {axis.label}: {formatSkill(overallSkill[axis.key])}
+                    </div>
+                  ))}
+                  <div>総合: {formatSkill(overallSkill.overall)}</div>
+                </div>
+                <div className="rounded-lg border bg-background p-3">
+                  <RadarSkillChart skill={overallSkill} />
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>授業一覧</CardTitle>

@@ -40,5 +40,6 @@ class UserRankingEntry(BaseModel):
 class ReviewerSkill(BaseModel):
     logic: float
     specificity: float
-    empathy: float
-    insight: float
+    structure: float
+    evidence: float
+    overall: float

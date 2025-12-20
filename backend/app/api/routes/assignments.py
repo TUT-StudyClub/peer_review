@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import REVIEWER_SKILL_TEMPLATE
 from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
 from app.models.course import Course
@@ -15,6 +16,7 @@ from app.schemas.assignment import (
 )
 from app.schemas.submission import SubmissionTeacherPublic
 from app.services.auth import require_teacher
+from app.services.rubric import ensure_fixed_rubric
 
 router = APIRouter()
 
@@ -38,6 +40,8 @@ def create_assignment(
         target_reviews_per_submission=payload.target_reviews_per_submission,
     )
     db.add(assignment)
+    db.flush()
+    ensure_fixed_rubric(db, assignment.id)
     db.commit()
     db.refresh(assignment)
     return assignment
@@ -65,12 +69,21 @@ def add_rubric_criterion(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
+    template_by_name = {item["name"]: item for item in REVIEWER_SKILL_TEMPLATE}
+    template = template_by_name.get(payload.name)
+    if template is None:
+        allowed = ", ".join(template_by_name.keys())
+        raise HTTPException(
+            status_code=400,
+            detail=f"Rubric name must be one of: {allowed}",
+        )
+
     criterion = RubricCriterion(
         assignment_id=assignment_id,
-        name=payload.name,
-        description=payload.description,
-        max_score=payload.max_score,
-        order_index=payload.order_index,
+        name=template["name"],
+        description=payload.description if payload.description is not None else template["description"],
+        max_score=template["max_score"],
+        order_index=template["order_index"],
     )
     db.add(criterion)
     db.commit()
@@ -84,12 +97,7 @@ def list_rubric_criteria(assignment_id: UUID, db: Session = Depends(get_db)) -> 
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    return (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == assignment_id)
-        .order_by(RubricCriterion.order_index.asc())
-        .all()
-    )
+    return ensure_fixed_rubric(db, assignment_id)
 
 
 @router.get("/{assignment_id}/submissions", response_model=list[SubmissionTeacherPublic])
