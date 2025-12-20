@@ -4,6 +4,7 @@ import type {
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
+  RephraseResponse,
   ReviewerSkill,
   ReviewAssignmentTask,
   ReviewPublic,
@@ -14,6 +15,8 @@ import type {
   SubmissionPublic,
   SubmissionTeacherPublic,
   TeacherGradeSubmit,
+  TAReviewRequestPublic,
+  TAReviewRequestStatus,
   UserCreate,
   UserPublic,
 } from "@/lib/types";
@@ -433,6 +436,57 @@ export async function apiTeacherGradeSubmission(
   return apiFetch<SubmissionPublic>(
     `/submissions/${submissionId}/teacher-grade`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    token
+  );
+}
+
+export async function apiListMyTARequests(
+  token: string,
+  status?: TAReviewRequestStatus
+): Promise<TAReviewRequestPublic[]> {
+  const query = status ? `?status=${status}` : "";
+  return apiFetch<TAReviewRequestPublic[]>(`/ta-requests/me${query}`, {}, token);
+}
+
+export async function apiAcceptTARequest(token: string, requestId: string): Promise<TAReviewRequestPublic> {
+  return apiFetch<TAReviewRequestPublic>(`/ta-requests/${requestId}/accept`, { method: "POST" }, token);
+}
+
+export async function apiDeclineTARequest(token: string, requestId: string): Promise<TAReviewRequestPublic> {
+  return apiFetch<TAReviewRequestPublic>(`/ta-requests/${requestId}/decline`, { method: "POST" }, token);
+}
+
+export async function apiListEligibleTAs(token: string): Promise<UserPublic[]> {
+  return apiFetch<UserPublic[]>(`/ta/eligible`, {}, token);
+}
+
+export async function apiCreateTARequest(
+  token: string,
+  submissionId: string,
+  taUserId: string
+): Promise<TAReviewRequestPublic> {
+  return apiFetch<TAReviewRequestPublic>(
+    `/submissions/${submissionId}/ta-requests`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ta_user_id: taUserId }),
+    },
+    token
+  );
+}
+
+export async function apiListTARequestsForAssignment(
+  token: string,
+  assignmentId: string
+): Promise<TAReviewRequestPublic[]> {
+  return apiFetch<TAReviewRequestPublic[]>(`/assignments/${assignmentId}/ta-requests`, {}, token);
+}
+
+export async function apiParaphrase(token: string, text: string): Promise<RephraseResponse> {
+  return apiFetch<RephraseResponse>(
+    "/reviews/paraphrase",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) },
     token
   );
 }

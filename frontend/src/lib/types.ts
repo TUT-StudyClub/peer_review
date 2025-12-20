@@ -13,7 +13,22 @@ export type UserPublic = {
   name: string;
   role: UserRole;
   credits: number;
+  is_ta: boolean;
   created_at: string;
+};
+
+export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
+
+export type TAReviewRequestPublic = {
+  id: string;
+  assignment_id: string;
+  submission_id: string;
+  teacher_id: string;
+  ta_id: string;
+  status: TAReviewRequestStatus;
+  review_assignment_id: string | null;
+  created_at: string;
+  responded_at: string | null;
 };
 
 export type AssignmentPublic = {
@@ -126,6 +141,12 @@ export type ReviewReceived = {
   ai_quality_reason: string | null;
 };
 
+export type RephraseResponse = {
+  original: string;
+  rephrased: string;
+  notice?: string | null;
+};
+
 export type MetaReviewCreate = {
   helpfulness: number;
   comment?: string | null;
@@ -150,4 +171,3 @@ export type TeacherGradeSubmit = {
   teacher_feedback?: string | null;
   rubric_scores: RubricScore[];
 };
-
