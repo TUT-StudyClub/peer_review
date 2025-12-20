@@ -32,11 +32,6 @@ def test_pdf_extraction():
         info = service.get_pdf_info(test_pdf)
 
         print(f"✓ ページ数: {info['page_count']}")
-        if info['metadata']:
-            print("✓ メタデータ:")
-            for key, value in info['metadata'].items():
-                if value:
-                    print(f"    {key}: {value}")
         print()
 
         # テスト2: 画像情報の確認（サービス経由）
