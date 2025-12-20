@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
 from app.models.review import Review, ReviewAssignment
 from app.models.submission import Submission, SubmissionFileType, SubmissionRubricScore
 from app.models.user import User, UserRole
