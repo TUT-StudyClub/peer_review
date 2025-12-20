@@ -31,9 +31,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setToken(stored);
+
     apiGetMe(stored)
-      .then((me) => setUser(me))
-      .finally(() => setLoading(false));
+      .then((me) => {
+        setUser(me);
+      })
+      .catch((err) => {
+        console.warn("自動ログイン失敗（トークン期限切れなど）:", err);
+
+        // 無効なトークンをブラウザから削除
+        localStorage.removeItem(TOKEN_KEY);
+
+        setToken(null);
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   const refreshMe = async () => {
