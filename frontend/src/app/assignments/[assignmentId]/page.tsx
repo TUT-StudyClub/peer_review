@@ -11,10 +11,13 @@ import {
   apiDownloadSubmissionFile,
   apiGetMyGrade,
   apiGetMySubmission,
+  apiListEligibleTAs,
   apiGetReviewerSkill,
   apiListAssignments,
   apiListRubric,
   apiNextReviewTask,
+  apiCreateTARequest,
+  apiListTARequestsForAssignment,
   apiReceivedReviews,
   apiSubmitReport,
   apiSubmitReview,
@@ -32,6 +35,8 @@ import type {
   RubricCriterionPublic,
   SubmissionPublic,
   SubmissionTeacherPublic,
+  TAReviewRequestPublic,
+  UserPublic,
 } from "@/lib/types";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
@@ -130,6 +135,13 @@ export default function AssignmentDetailPage() {
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
   const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, number>>({});
+  const [taCandidates, setTaCandidates] = useState<UserPublic[]>([]);
+  const [taCandidatesLoading, setTaCandidatesLoading] = useState(false);
+  const [taDialogSubmissionId, setTaDialogSubmissionId] = useState<string | null>(null);
+  const [taSelectedUserId, setTaSelectedUserId] = useState<string | null>(null);
+  const [taRequesting, setTaRequesting] = useState(false);
+  const [taRequests, setTaRequests] = useState<TAReviewRequestPublic[]>([]);
+  const [taRequestsLoading, setTaRequestsLoading] = useState(false);
 
   const [rubricName, setRubricName] = useState("");
   const [rubricDesc, setRubricDesc] = useState("");
@@ -140,6 +152,14 @@ export default function AssignmentDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
+  const taRequestsBySubmission = useMemo(() => {
+    const map: Record<string, TAReviewRequestPublic[]> = {};
+    for (const r of taRequests) {
+      if (!map[r.submission_id]) map[r.submission_id] = [];
+      map[r.submission_id].push(r);
+    }
+    return map;
+  }, [taRequests]);
 
   const loadBase = useCallback(async () => {
     setLoadingBase(true);
@@ -288,7 +308,7 @@ export default function AssignmentDetailPage() {
       await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
       setReviewTask(null);
       setReviewComment("");
-      setNotice("レビューを提出しました（credits +1）");
+      setNotice("レビューを提出しました（credits 加算）");
       await refreshMe();
     } catch (err) {
       setNotice(formatApiError(err));
@@ -365,6 +385,57 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const loadTARequests = async () => {
+    if (!token) return;
+    setTaRequestsLoading(true);
+    try {
+      const list = await apiListTARequestsForAssignment(token, assignmentId);
+      setTaRequests(list);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setTaRequestsLoading(false);
+    }
+  };
+
+  const loadEligibleTAs = async () => {
+    if (!token) return;
+    setTaCandidatesLoading(true);
+    try {
+      const list = await apiListEligibleTAs(token);
+      setTaCandidates(list);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setTaCandidatesLoading(false);
+    }
+  };
+
+  const openTARequest = (submissionId: string) => {
+    setTaDialogSubmissionId(submissionId);
+    setTaSelectedUserId(null);
+    if (!taCandidates.length) {
+      void loadEligibleTAs();
+    }
+  };
+
+  const submitTARequest = async () => {
+    if (!token || !taDialogSubmissionId || !taSelectedUserId) return;
+    setTaRequesting(true);
+    setNotice(null);
+    try {
+      await apiCreateTARequest(token, taDialogSubmissionId, taSelectedUserId);
+      setNotice("TA依頼を送信しました");
+      setTaDialogSubmissionId(null);
+      setTaSelectedUserId(null);
+      await loadTARequests();
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setTaRequesting(false);
+    }
+  };
+
   const openTeacherGrade = (submissionId: string) => {
     setGradeTargetId(submissionId);
     setTeacherFeedback("");
@@ -422,6 +493,7 @@ export default function AssignmentDetailPage() {
     if (!token || !user) return;
     if (user.role === "teacher") {
       void loadTeacherSubmissions();
+      void loadTARequests();
       return;
     }
     void loadMySubmission();
@@ -534,11 +606,19 @@ export default function AssignmentDetailPage() {
         <SectionCard
           title="（teacher）提出一覧 & 採点"
           actions={
-            <Button variant="outline" onClick={loadTeacherSubmissions} disabled={teacherSubmissionsLoading}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void loadTeacherSubmissions();
+                void loadTARequests();
+              }}
+              disabled={teacherSubmissionsLoading}
+            >
               更新
             </Button>
           }
         >
+          {taRequestsLoading ? <p className="text-xs text-muted-foreground">TA依頼を読み込み中...</p> : null}
           {teacherSubmissionsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
           {teacherSubmissions.length === 0 ? (
             <p className="text-sm text-muted-foreground">提出がまだありません</p>
@@ -555,12 +635,40 @@ export default function AssignmentDetailPage() {
                       <div className="text-xs text-muted-foreground">
                         teacher_total_score: {s.teacher_total_score ?? "-"}
                       </div>
+                      <div className="text-xs text-muted-foreground">
+                        TA依頼:{" "}
+                        {taRequestsBySubmission[s.id]?.length ? (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {taRequestsBySubmission[s.id].map((r) => (
+                              <span
+                                key={r.id}
+                                className={[
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                                  r.status === "offered"
+                                    ? "bg-amber-100 text-amber-900"
+                                    : r.status === "accepted"
+                                      ? "bg-emerald-100 text-emerald-900"
+                                      : "bg-slate-100 text-slate-900",
+                                ].join(" ")}
+                                title={`ta: ${shortId(r.ta_id)} / ${new Date(r.created_at).toLocaleString()}`}
+                              >
+                                {r.status} ({shortId(r.ta_id)})
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          "なし"
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button variant="outline" onClick={() => downloadSubmission(s.id, s.file_type)}>
                         DL
                       </Button>
                       <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
+                      <Button variant="outline" onClick={() => openTARequest(s.id)}>
+                        TA依頼
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -629,6 +737,63 @@ export default function AssignmentDetailPage() {
                   <Button onClick={submitTeacherGrade}>保存</Button>
                   <Button variant="outline" onClick={() => setGradeTargetId(null)}>
                     キャンセル
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            ) : null}
+          </Dialog>
+
+          <Dialog
+            open={Boolean(taDialogSubmissionId)}
+            onOpenChange={(open: boolean) => {
+              if (!open) {
+                setTaDialogSubmissionId(null);
+                setTaSelectedUserId(null);
+              }
+            }}
+          >
+            {taDialogSubmissionId ? (
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>TA依頼: {shortId(taDialogSubmissionId)}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    TA資格のある学生に依頼します。受諾されると、その学生がこの提出物をレビューできます。
+                  </p>
+                  <Field label="TAを選択">
+                    <Select
+                      value={taSelectedUserId ?? undefined}
+                      onValueChange={(v) => setTaSelectedUserId(v)}
+                      onOpenChange={(o) => {
+                        if (o && !taCandidates.length && !taCandidatesLoading) void loadEligibleTAs();
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={taCandidatesLoading ? "読み込み中..." : "選択してください"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {taCandidates.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            {taCandidatesLoading ? "読み込み中..." : "TA資格の学生がいません"}
+                          </div>
+                        ) : (
+                          taCandidates.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name} / credits: {u.credits}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setTaDialogSubmissionId(null)}>
+                    キャンセル
+                  </Button>
+                  <Button onClick={submitTARequest} disabled={!taSelectedUserId || taRequesting}>
+                    {taRequesting ? "送信中..." : "依頼を送信"}
                   </Button>
                 </DialogFooter>
               </DialogContent>

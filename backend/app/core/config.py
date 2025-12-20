@@ -17,6 +17,12 @@ class Settings(BaseSettings):
 
     storage_dir: str = "storage"
 
+    # TA/credits
+    ta_qualification_threshold: int = 20
+    review_credit_base: float = 1.0
+    review_credit_alignment_bonus_max: float = 1.0
+    ta_credit_multiplier: float = 2.0
+
     openai_api_key: str | None = None
 
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
