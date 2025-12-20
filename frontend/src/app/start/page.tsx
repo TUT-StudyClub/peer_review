@@ -99,7 +99,7 @@ export default function StartPage() {
                         href="/assignments"
                         className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
                     >
-                        課題一覧へ
+                        授業一覧へ
                     </Link>
                     <Link
                         href="/auth/login"
