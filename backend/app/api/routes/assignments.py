@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
+from app.models.course import Course
 from app.models.submission import Submission
 from app.schemas.assignment import (
     AssignmentCreate,
@@ -24,8 +25,15 @@ def create_assignment(
     db: Session = Depends(get_db),
     _teacher=Depends(require_teacher),
 ) -> Assignment:
+    course = db.query(Course).filter(Course.id == payload.course_id).first()
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if course.teacher_id != _teacher.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
     assignment = Assignment(
         title=payload.title,
+        course_id=payload.course_id,
         description=payload.description,
         target_reviews_per_submission=payload.target_reviews_per_submission,
     )
@@ -36,8 +44,14 @@ def create_assignment(
 
 
 @router.get("", response_model=list[AssignmentPublic])
-def list_assignments(db: Session = Depends(get_db)) -> list[Assignment]:
-    return db.query(Assignment).order_by(Assignment.created_at.desc()).all()
+def list_assignments(
+    course_id: UUID | None = None,
+    db: Session = Depends(get_db),
+) -> list[Assignment]:
+    query = db.query(Assignment)
+    if course_id is not None:
+        query = query.filter(Assignment.course_id == course_id)
+    return query.order_by(Assignment.created_at.desc()).all()
 
 
 @router.post("/{assignment_id}/rubric", response_model=RubricCriterionPublic)
