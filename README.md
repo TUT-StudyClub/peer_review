@@ -274,7 +274,6 @@ curl -sS "$BASE_URL/assignments/$ASSIGNMENT_ID/rubric" | jq
 
 `POST /submissions/assignment/{assignment_id}` に **`multipart/form-data`** で `file` を送ります。
 
-> AIの「本文＋レビュー」評価をちゃんと行いたい場合、現状は **Markdown提出が推奨** です（PDFの本文抽出は未実装のため）。
 
 #### 2-1. 提出用ファイルを用意（例）
 ```bash
