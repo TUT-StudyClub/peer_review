@@ -112,3 +112,9 @@ class TAReviewRequestPublic(BaseModel):
     review_assignment_id: UUID | None
     created_at: datetime
     responded_at: datetime | None
+class PolishRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2048)
+
+class PolishResponse(BaseModel):
+    polished_text: str
+    notes: str | None = None

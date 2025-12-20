@@ -17,6 +17,8 @@ from app.models.user import User
 from app.schemas.review import (
     MetaReviewCreate,
     MetaReviewPublic,
+    PolishRequest,
+    PolishResponse,
     RephraseRequest,
     RephraseResponse,
     ReviewAssignmentTask,
@@ -24,7 +26,16 @@ from app.schemas.review import (
     ReviewReceived,
     ReviewSubmit,
 )
-from app.services.ai import analyze_review
+from app.services.ai import (
+    FeatureDisabledError,
+    ModerationError,
+    OpenAIEmptyChoiceError,
+    OpenAIRequestError,
+    OpenAIResponseParseError,
+    OpenAIUnavailableError,
+    analyze_review,
+    polish_review,
+)
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
 from app.services.credits import calculate_review_credit_gain
@@ -70,6 +81,36 @@ def next_review_task(
         file_type=submission.file_type,
         rubric=rubric,
     )
+
+
+@router.post("/reviews/polish", response_model=PolishResponse)
+def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_current_user)):
+    try:
+        polished_text, notes = polish_review(payload.text)
+        
+    except FeatureDisabledError as e:
+        raise HTTPException(status_code=503, detail="OpenAI not configured") from e
+    
+    except OpenAIUnavailableError as e:
+        raise HTTPException(status_code=503, detail="OpenAI temporarily unavailable") from e
+    
+    except OpenAIRequestError as e:
+        status = 504 if e.reason == "timeout" else 502
+        raise HTTPException(
+            status_code=status,
+            detail={"message": "OpenAI request failed", "reason": e.reason, "status_code": e.status_code},
+        ) from e
+    
+    except (OpenAIResponseParseError, OpenAIEmptyChoiceError) as e:
+        raise HTTPException(status_code=502, detail={"message": "OpenAI response parse failed", "reason": str(e)}) from e
+    
+    except ModerationError as e:
+        raise HTTPException(
+            status_code=422, 
+            detail={"message": "Polish blocked by moderation", "details": e.args[0]}
+        ) from e
+
+    return PolishResponse(polished_text=polished_text, notes=notes)
 
 
 @router.post("/review-assignments/{review_assignment_id}/submit", response_model=ReviewPublic)
