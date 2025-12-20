@@ -166,15 +166,19 @@ class PDFExtractionService:
 
     @staticmethod
     def extract_tables_by_page(pdf_path: str | Path) -> dict[int, list[list[list[str | None]]]]:
-        """ページごとのテーブル（セル文字列）を抽出する。"""
-        pdf_path = Path(pdf_path)
-
-        if not pdf_path.exists():
-            raise FileNotFoundError(f"PDFファイルが見つかりません: {pdf_path}")
-        if not pdf_path.suffix.lower() == ".pdf":
-            raise ValueError(f"ファイルはPDF形式である必要があります: {pdf_path}")
-        if not PDFExtractionService._has_pdf_signature(pdf_path):
-            raise ValueError(f"PDFシグネチャが不正です: {pdf_path}")
+        """ページごとのテーブル（セル文字列）を抽出する。
+        
+        Args:
+            pdf_path: PDFファイルのパス
+            
+        Returns:
+            ページ番号をキー、テーブル情報（セル行列）をリストで返す
+            
+        Raises:
+            FileNotFoundError: PDFファイルが見つからない場合
+            ValueError: PDFファイルが無効/破損している場合
+        """
+        pdf_path = PDFExtractionService._validate_pdf_path(pdf_path)
 
         results: dict[int, list[list[list[str | None]]]] = {}
         try:
