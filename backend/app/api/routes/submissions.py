@@ -1,3 +1,5 @@
+import logging
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -11,8 +13,11 @@ from app.models.submission import Submission, SubmissionFileType, SubmissionRubr
 from app.models.user import User, UserRole
 from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
 from app.services.auth import get_current_user, require_teacher
+from app.services.pdf import PDFExtractionService
 from app.services.sanitize import redact_personal_info, sanitize_pdf_file
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -49,18 +54,36 @@ def submit_report(
         file_type=file_type,
     )
 
+    # テキスト抽出処理
+    submission_text: str | None = None
     markdown_text: str | None = None
-    if file_type == SubmissionFileType.markdown:
-        raw_text = stored_path.read_text(encoding="utf-8", errors="replace")
+
+    if file_type == SubmissionFileType.pdf:
+        # PDF: 先に抽出して submission_text をセット
+        try:
+            stored_path_obj = Path(stored_path)
+            extracted_text = PDFExtractionService.extract_text(
+                stored_path_obj,
+                max_pages=50,
+                max_chars=50000,
+            )
+            submission_text = extracted_text if extracted_text.strip() else None
+        except Exception as e:
+            logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
+            submission_text = None
+
+        # その後サニタイズ（個人情報マスク）。レイアウトは保持しない簡易版。
+        redacted_text, modified = sanitize_pdf_file(Path(stored_path))
+        if redacted_text:
+            markdown_text = redacted_text
+            submission_text = redacted_text  # 同期しておく
+
+    elif file_type == SubmissionFileType.markdown:
+        raw_text = Path(stored_path).read_text(encoding="utf-8", errors="replace")
         markdown_text = redact_personal_info(raw_text)
+        submission_text = markdown_text
         if markdown_text != raw_text:
-            stored_path.write_text(markdown_text, encoding="utf-8")
-    elif file_type == SubmissionFileType.pdf:
-        redacted_text, modified = sanitize_pdf_file(stored_path)
-        markdown_text = redacted_text
-        if modified and redacted_text:
-            # PDFは単純なテキストのみで上書き（レイアウトは保持しない）
-            pass
+            Path(stored_path).write_text(markdown_text, encoding="utf-8")
 
     submission = Submission(
         id=submission_id,
@@ -70,6 +93,7 @@ def submit_report(
         original_filename=file.filename or "upload",
         storage_path=str(stored_path),
         markdown_text=markdown_text,
+        submission_text=submission_text,
     )
     db.add(submission)
     db.commit()
