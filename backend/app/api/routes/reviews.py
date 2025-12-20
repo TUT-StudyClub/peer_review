@@ -314,7 +314,7 @@ def paraphrase(
     ):
         # OpenAI が使えない場合は簡易変換にフォールバック
         return _simple_rephrase(payload.text)
-    except ModerationError as e:
+    except ModerationError:
         # モデレーションエラーは簡易変換を返す（エラーにしない）
         return _simple_rephrase(payload.text)
 
