@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.submission import SubmissionFileType
+from app.models.ta_review_request import TAReviewRequestStatus
 
 
 class RubricScore(BaseModel):
@@ -84,6 +85,33 @@ class ReviewReceived(BaseModel):
     ai_quality_score: int | None
     ai_quality_reason: str | None
 
+
+class RephraseRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2_000)
+
+
+class RephraseResponse(BaseModel):
+    original: str
+    rephrased: str
+    notice: str | None = None
+
+
+class TAReviewRequestCreate(BaseModel):
+    ta_user_id: UUID
+
+
+class TAReviewRequestPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    assignment_id: UUID
+    submission_id: UUID
+    teacher_id: UUID
+    ta_id: UUID
+    status: TAReviewRequestStatus
+    review_assignment_id: UUID | None
+    created_at: datetime
+    responded_at: datetime | None
 class PolishRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2048)
 
