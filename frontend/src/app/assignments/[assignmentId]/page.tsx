@@ -150,7 +150,6 @@ export default function AssignmentDetailPage() {
   const [taRequesting, setTaRequesting] = useState(false);
   const [taRequests, setTaRequests] = useState<TAReviewRequestPublic[]>([]);
   const [taRequestsLoading, setTaRequestsLoading] = useState(false);
-  const [paraphraseOpen, setParaphraseOpen] = useState(false);
   const [paraphrasePreview, setParaphrasePreview] = useState<RephraseResponse | null>(null);
   const [paraphraseLoading, setParaphraseLoading] = useState(false);
   const [paraphraseError, setParaphraseError] = useState<string | null>(null);
@@ -332,18 +331,15 @@ export default function AssignmentDetailPage() {
   const runParaphrase = async () => {
     if (!token) {
       setParaphraseError("ログインが必要です");
-      setParaphraseOpen(true);
       return;
     }
     if (!reviewComment.trim()) {
       setParaphraseError("言い換えるテキストを入力してください");
-      setParaphraseOpen(true);
       return;
     }
     setParaphraseLoading(true);
     setParaphraseError(null);
     setParaphrasePreview(null);
-    setParaphraseOpen(true);
     try {
       const res = await apiParaphrase(token, reviewComment);
       setParaphrasePreview(res);
@@ -859,60 +855,6 @@ export default function AssignmentDetailPage() {
             ) : null}
           </Dialog>
 
-          <Dialog open={paraphraseOpen} onOpenChange={setParaphraseOpen}>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>言い換え</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 text-sm">
-                {!paraphrasePreview && !paraphraseError ? (
-                  <p className="text-muted-foreground">
-                    レビューコメントを簡易的に言い換えます。必要に応じて手動で調整してください。
-                  </p>
-                ) : null}
-                {paraphraseError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>エラー</AlertTitle>
-                    <AlertDescription className="whitespace-pre-wrap">{paraphraseError}</AlertDescription>
-                  </Alert>
-                ) : null}
-                {paraphrasePreview ? (
-                  <div className="space-y-2">
-                    <div>
-                      <div className="text-xs text-muted-foreground">変換結果</div>
-                      <div className="rounded-md border bg-muted/50 p-3">{paraphrasePreview.rephrased}</div>
-                    </div>
-                    {paraphrasePreview.notice ? (
-                      <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {paraphraseLoading ? <p className="text-muted-foreground">変換中...</p> : null}
-              </div>
-              <DialogFooter className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => setParaphraseOpen(false)}>
-                  閉じる
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={runParaphrase}
-                  disabled={paraphraseLoading || !reviewComment.trim()}
-                >
-                  再変換
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
-                    setParaphraseOpen(false);
-                  }}
-                  disabled={!paraphrasePreview}
-                >
-                  反映する
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
           <Dialog
             open={Boolean(teacherReviewListTargetId)}
             onOpenChange={(open: boolean) => {
@@ -1153,11 +1095,48 @@ export default function AssignmentDetailPage() {
                     </div>
                   </div>
                   <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
-                      言い換え
-                    </Button>
-                    {paraphraseLoading ? <span>変換中...</span> : null}
+                  <div className="space-y-2">
+                    <div className="">
+                      <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
+                        言い換え
+                      </Button>
+                      {paraphraseLoading ? <span className="ml-2 text-sm text-muted-foreground">変換中...</span> : null}
+                    </div>
+                    {paraphraseError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>エラー</AlertTitle>
+                        <AlertDescription className="text-sm">{paraphraseError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    {paraphrasePreview ? (
+                      <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                        <div>
+                          <div className="text-xs font-medium text-muted-foreground">変換結果</div>
+                          <div className="mt-1 whitespace-pre-wrap text-sm">{paraphrasePreview.rephrased}</div>
+                        </div>
+                        {paraphrasePreview.notice ? (
+                          <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
+                        ) : null}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
+                            }}
+                          >
+                            反映する
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={runParaphrase}
+                            disabled={paraphraseLoading || !reviewComment.trim()}
+                          >
+                            再変換
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </Field>
