@@ -4,6 +4,7 @@ import type {
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
+  RephraseResponse,
   ReviewerSkill,
   ReviewAssignmentTask,
   ReviewPublic,
@@ -480,4 +481,12 @@ export async function apiListTARequestsForAssignment(
   assignmentId: string
 ): Promise<TAReviewRequestPublic[]> {
   return apiFetch<TAReviewRequestPublic[]>(`/assignments/${assignmentId}/ta-requests`, {}, token);
+}
+
+export async function apiParaphrase(token: string, text: string): Promise<RephraseResponse> {
+  return apiFetch<RephraseResponse>(
+    "/reviews/paraphrase",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) },
+    token
+  );
 }
