@@ -73,8 +73,11 @@ def _openai_polish(text: str) -> dict:
     if not settings.openai_api_key or not settings.enable_openai:
         raise FeatureDisabledError("OpenAI not configured")
 
-    system = "You are an assistant that rewrites reviews to be polite, constructive, and helpful. Return JSON only."
-    user = {
+    system: str = (
+        "You are an assistant that rewrites reviews to be polite, constructive, and helpful. "
+        "Return JSON only."
+    )
+    user: dict[str, str | list[str]] = {
         "text": text,
         "instructions": [
             "Rewrite to be polite and constructive.",
