@@ -55,6 +55,10 @@
 - `GET /users/me/reviewer-skill` で、AI（または簡易判定）による4軸の平均値を返します
   - `logic`, `specificity`, `empathy`, `insight`
 
+### 7) レビュー推敲（Review Polish）
+- `POST /reviews/polish` で、AIがレビュー文を「丁寧で建設的」な表現に書き換えます。
+- **安全性の担保**: 変換後の文章が入力時よりも攻撃的（禁止語の増加など）になった場合は、エラー（422）を返して変換を拒否します。
+
 ---
 
 ## セットアップ（最短で動かす）
@@ -290,6 +294,25 @@ echo "$SUBMISSION_S2_ID"
 curl -sS "$BASE_URL/submissions/assignment/$ASSIGNMENT_ID/me" -H "$AUTH_S1" | jq
 ```
 
+#### 3-0. レビューの推敲（任意）
+レビューを提出する前に、AIに文章を整えてもらうことができます。
+
+```bash
+curl -sS -X POST "$BASE_URL/reviews/polish" \
+  -H "$AUTH_S1" -H "Content-Type: application/json" \
+  -d '{"text":"もっと具体的に書け。意味不明。"}' | jq
+```
+
+レスポンス例：
+```json
+{
+  "polished_text": "具体的な改善案を提示いただけると、より理解が深まるかと思います。一部、意図を汲み取ることが難しい箇所がありましたので、補足いただけますでしょうか。",
+  "notes": "建設的で丁寧なトーンに修正しました。"
+}
+```
+
+> **注意**: `.env` で `ENABLE_OPENAI=true` に設定されていない場合は `503 Service Unavailable` が返ります。
+
 ### 3) レビュー（student）
 
 流れは必ずこの順番です：
@@ -412,7 +435,11 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 ---
 
 ## Swagger UI（/docs）で操作する場合のコツ
-
+- `503 Service Unavailable`
+  - OpenAI 連携機能（推敲など）を呼び出しましたが、サーバー側で `ENABLE_OPENAI` が `false` になっているか、APIキーが設定されていません。
+- `422 Unprocessable Entity`
+  - レビュー推敲の結果、文章の攻撃性が高まったと判定され、出力がブロックされました。
+- 
 1. ブラウザで `http://127.0.0.1:8000/docs` を開く
 2. まず `POST /auth/register` でアカウント作成
 3. `POST /auth/token` でログイン（フォーム入力）
@@ -437,14 +464,15 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
   - 複数行のcurlを使う場合、行末の `\` の後ろにスペースがあると壊れます（`\` は行末に置く、または1行で実行）
 
 ---
-
 ## AI機能（任意）
 
-`.env` に `OPENAI_API_KEY` を設定すると、レビュー提出時に以下を実行します。
+`.env` に `OPENAI_API_KEY` を設定し、`ENABLE_OPENAI=true` にすると、以下の機能が有効になります。
+
 
 1. **レビュー品質スコア**（1〜5）と理由
 2. **攻撃性/不適切表現**の検知（true/false）と理由
-3. レーダーチャート用 4軸（`logic/specificity/empathy/insight`）
+3. **レビューの推敲（Polish）**: 提出前に文章を丁寧・建設的な表現へ変換
+4. **レビュアースキル可視化**: 4軸（`logic/specificity/empathy/insight`）の分析
 
 未設定の場合は、短すぎるレビューや禁止語の簡易チェックを行います（完全な検知ではありません）。
 
