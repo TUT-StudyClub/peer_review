@@ -20,6 +20,8 @@ import type {
   TAReviewRequestStatus,
   UserCreate,
   UserPublic,
+  UserRankingEntry,
+  RankingPeriod,
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -327,6 +329,17 @@ export async function apiLogin(email: string, password: string): Promise<string>
 
 export async function apiGetMe(token: string): Promise<UserPublic> {
   return apiFetch<UserPublic>("/users/me", {}, token);
+}
+
+export async function apiGetRanking(
+  limit = 5,
+  period: RankingPeriod = "total"
+): Promise<UserRankingEntry[]> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("period", period);
+  const query = params.toString();
+  return apiFetch<UserRankingEntry[]>(`/users/ranking?${query}`);
 }
 
 export async function apiListAssignments(): Promise<AssignmentPublic[]> {

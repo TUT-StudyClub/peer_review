@@ -21,8 +21,20 @@ class UserPublic(BaseModel):
     name: str
     role: UserRole
     credits: int
+    rank: str
+    title: str
     is_ta: bool
     created_at: datetime
+
+
+class UserRankingEntry(BaseModel):
+    id: UUID
+    name: str
+    credits: int
+    rank: str
+    title: str
+    is_ta: bool
+    period_credits: int | None = None
 
 
 class ReviewerSkill(BaseModel):

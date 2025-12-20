@@ -839,7 +839,7 @@ export default function AssignmentDetailPage() {
                         ) : (
                           taCandidates.map((u) => (
                             <SelectItem key={u.id} value={u.id}>
-                              {u.name} / credits: {u.credits}
+                              {u.name} / {u.title} / ランク: {u.rank} / credits: {u.credits}
                             </SelectItem>
                           ))
                         )}
