@@ -1035,14 +1035,41 @@ export default function AssignmentDetailPage() {
               <p className="text-sm text-muted-foreground">
                 まだ提出していません。Markdown（.md）推奨（AIの「本文＋レビュー」判定が効きやすいです）。
               </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="file"
-                  accept=".md,.pdf,text/markdown,application/pdf"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-                <Button onClick={upload} disabled={uploading || !file}>
-                  提出
+              <div className="space-y-3">
+                <div
+                  className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 transition-colors"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add("border-muted-foreground/60", "bg-muted/60");
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+                    const droppedFile = e.dataTransfer.files?.[0];
+                    if (droppedFile && (droppedFile.type === "text/markdown" || droppedFile.type === "application/pdf" || droppedFile.name.endsWith(".md") || droppedFile.name.endsWith(".pdf"))) {
+                      setFile(droppedFile);
+                    }
+                  }}
+                >
+                  <label className="flex flex-col items-center justify-center gap-2 cursor-pointer">
+                    <div className="text-sm font-medium">ファイルを選択またはドラッグ＆ドロップ</div>
+                    <div className="text-xs text-muted-foreground">
+                      {file ? file.name : "Markdown (.md) または PDF (.pdf)"}
+                    </div>
+                    <input
+                      type="file"
+                      accept=".md,.pdf,text/markdown,application/pdf"
+                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <Button onClick={upload} disabled={uploading || !file} className="w-full">
+                  {uploading ? "提出中..." : "提出"}
                 </Button>
               </div>
             </div>
