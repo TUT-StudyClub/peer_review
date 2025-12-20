@@ -11,7 +11,6 @@ import {
   apiGetMyGrade,
   apiGetMySubmission,
   apiListEligibleTAs,
-  apiGetReviewerSkill,
   apiListAssignments,
   apiListRubric,
   apiNextReviewTask,
@@ -32,7 +31,6 @@ import type {
   GradeMe,
   ReviewAssignmentTask,
   ReviewReceived,
-  ReviewerSkill,
   RubricCriterionPublic,
   SubmissionPublic,
   SubmissionTeacherPublic,
@@ -41,9 +39,7 @@ import type {
   UserPublic,
   RephraseResponse,
 } from "@/lib/types";
-import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { ErrorMessages } from "@/components/ErrorMessages";
-import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -141,9 +137,6 @@ export default function AssignmentDetailPage() {
 
   const [grade, setGrade] = useState<GradeMe | null>(null);
   const [gradeLoading, setGradeLoading] = useState(false);
-
-  const [skill, setSkill] = useState<ReviewerSkill | null>(null);
-  const [skillLoading, setSkillLoading] = useState(false);
 
   const [teacherSubmissions, setTeacherSubmissions] = useState<SubmissionTeacherPublic[]>([]);
   const [teacherSubmissionsLoading, setTeacherSubmissionsLoading] = useState(false);
@@ -398,20 +391,6 @@ export default function AssignmentDetailPage() {
     }
   };
 
-  const loadSkill = async () => {
-    if (!token) return;
-    setSkillLoading(true);
-    setNotice(null);
-    try {
-      const s = await apiGetReviewerSkill(token, assignmentId);
-      setSkill(s);
-    } catch (err) {
-      setNotice(formatApiError(err));
-    } finally {
-      setSkillLoading(false);
-    }
-  };
-
   const loadTeacherSubmissions = async () => {
     if (!token) return;
     setTeacherSubmissionsLoading(true);
@@ -533,7 +512,6 @@ export default function AssignmentDetailPage() {
     void loadMySubmission();
     void loadReceived();
     void loadGrade();
-    void loadSkill();
     // NOTE: 初期表示時にだけロードしたいので、意図的に dependency を最小限にしています。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user, assignmentId]);
@@ -895,10 +873,10 @@ export default function AssignmentDetailPage() {
                                     </div>
                                   ) : null}
                                   {r.rubric_alignment_score !== null ||
-                                  r.ai_comment_alignment_score !== null ||
-                                  r.total_alignment_score !== null ||
-                                  r.credit_awarded !== null ||
-                                  r.ai_comment_alignment_reason ? (
+                                    r.ai_comment_alignment_score !== null ||
+                                    r.total_alignment_score !== null ||
+                                    r.credit_awarded !== null ||
+                                    r.ai_comment_alignment_reason ? (
                                     <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
                                       <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
                                       <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
@@ -1160,10 +1138,10 @@ export default function AssignmentDetailPage() {
                     </div>
                   ) : null}
                   {r.rubric_alignment_score !== null ||
-                  r.ai_comment_alignment_score !== null ||
-                  r.total_alignment_score !== null ||
-                  r.credit_awarded !== null ||
-                  r.ai_comment_alignment_reason ? (
+                    r.ai_comment_alignment_score !== null ||
+                    r.total_alignment_score !== null ||
+                    r.credit_awarded !== null ||
+                    r.ai_comment_alignment_reason ? (
                     <div className="mt-2 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
                       <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
                       <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
@@ -1226,39 +1204,6 @@ export default function AssignmentDetailPage() {
                 <summary className="cursor-pointer">breakdown</summary>
                 <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(grade.breakdown, null, 2)}</pre>
               </details>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
-          )}
-        </SectionCard>
-      ) : null}
-
-      {user?.role === "student" ? (
-        <SectionCard
-          title="（student）レビュアースキル（この課題 / teacher比較）"
-          actions={
-            <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
-              更新
-            </Button>
-          }
-        >
-          {!token ? (
-            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
-          ) : skillLoading ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : skill ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key}>
-                    {axis.label}: {formatSkill(skill[axis.key])}
-                  </div>
-                ))}
-                <div>総合: {formatSkill(skill.overall)}</div>
-              </div>
-              <div className="rounded-lg border bg-background p-3">
-                <RadarSkillChart skill={skill} />
-              </div>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
