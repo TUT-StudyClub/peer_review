@@ -66,8 +66,7 @@ class OpenAIUnavailableError(Exception):
 
 
 def detect_toxic_hits(text: str) -> list[str]:
-    hits = [p for p in _BANNED_PATTERNS if re.search(p, text)]
-    return hits
+    return [p for p in _BANNED_PATTERNS if re.search(p, text)]
 
 
 def _openai_polish(text: str) -> dict:
