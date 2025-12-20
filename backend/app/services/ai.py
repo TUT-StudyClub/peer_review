@@ -78,8 +78,10 @@ def _openai_polish(text: str) -> dict | None:
     except Exception:
         return None
 def polish_review(text: str) -> tuple[str, str | None]:
-    if not settings.openai_api_key or not settings.enable_openai:
-        raise FeatureDisabledError("OpenAI not configured or disabled")
+    if not settings.openai_api_key:
+        raise FeatureDisabledError("OpenAI API key not set")
+    elif not settings.enable_openai:
+        raise FeatureDisabledError("OpenAI feature is disabled")
 
     result = _openai_polish(text)
     if result is None:
