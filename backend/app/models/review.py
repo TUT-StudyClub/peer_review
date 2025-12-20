@@ -2,7 +2,7 @@ import enum
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Text, UniqueConstraint, Float
 from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,6 +67,14 @@ class Review(Base):
     ai_specificity: Mapped[int | None] = mapped_column(Integer, default=None)
     ai_empathy: Mapped[int | None] = mapped_column(Integer, default=None)
     ai_insight: Mapped[int | None] = mapped_column(Integer, default=None)
+
+    # 類似検知関連
+    similarity_score: Mapped[float | None] = mapped_column(Float, default=None)
+    similar_review_id: Mapped[UUID | None] = mapped_column(
+        SAUuid(as_uuid=True), ForeignKey("reviews.id", ondelete="SET NULL"), default=None, index=True
+    )
+    similarity_warning: Mapped[str | None] = mapped_column(Text, default=None)
+    similarity_penalty_rate: Mapped[float | None] = mapped_column(Float, default=None)
 
     review_assignment = relationship("ReviewAssignment", back_populates="review")
     rubric_scores = relationship(

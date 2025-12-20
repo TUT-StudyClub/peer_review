@@ -27,6 +27,7 @@ from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
 from app.services.credits import calculate_review_credit_gain
 from app.services.matching import get_or_assign_review_assignment
+from app.services.similarity import check_similarity
 
 router = APIRouter()
 
@@ -156,6 +157,13 @@ def submit_review(
             },
         )
 
+    # 類似検知を実行
+    similarity_result = check_similarity(
+        db,
+        assignment_id=review_assignment.assignment_id,
+        new_comment=payload.comment,
+    )
+
     review = Review(
         review_assignment_id=review_assignment.id,
         comment=payload.comment,
@@ -167,6 +175,11 @@ def submit_review(
         ai_specificity=ai_result.specificity,
         ai_empathy=ai_result.empathy,
         ai_insight=ai_result.insight,
+        # 類似検知結果を保存
+        similarity_score=similarity_result.similarity,
+        similar_review_id=similarity_result.similar_review_id,
+        similarity_warning=similarity_result.warning_message,
+        similarity_penalty_rate=similarity_result.penalty_rate,
     )
     db.add(review)
     db.flush()

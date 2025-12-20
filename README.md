@@ -398,6 +398,25 @@ curl -sS -X POST "$BASE_URL/submissions/$SUBMISSION_S1_ID/teacher-grade" \
     "teacher_total_score": 80,
     "teacher_feedback":"全体的に良い。根拠をもう少し増やすとさらに良い。",
     "rubric_scores":[
+```
+
+---
+
+## レビュー類似検知（新機能）
+
+- 概要: レビューコメント間の類似度を文字N-gram + Jaccard係数で判定し、閾値以上でコピー検知・減点を行います。
+- 設定値（`backend/app/core/config.py`）:
+  - `SIMILARITY_THRESHOLD` (`similarity_threshold` 環境変数): デフォルト 0.5
+  - `SIMILARITY_PENALTY_ENABLED` (`similarity_penalty_enabled` 環境変数): デフォルト True
+  - `SIMILARITY_NGRAM_N` (`similarity_ngram_n` 環境変数): デフォルト 2
+
+動作確認手順:
+1. `POST /review-assignments/{review_assignment_id}/submit` でレビューを提出
+2. 類似レビューが存在する場合、`reviews` テーブルに `similarity_score`, `similar_review_id`, `similarity_warning`, `similarity_penalty_rate` が保存されます
+3. 採点時のレビュー貢献点に減点が反映されます（`GET /assignments/{assignment_id}/grades/me` を確認）
+
+マイグレーション: `backend/docs/migration_add_review_similarity.md` を参照してください。
+
       {"criterion_id":"'"$CRIT_LOGIC_ID"'","score":4},
       {"criterion_id":"'"$CRIT_SPEC_ID"'","score":4}
     ]

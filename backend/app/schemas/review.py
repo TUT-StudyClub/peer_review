@@ -33,6 +33,12 @@ class ReviewPublic(BaseModel):
     ai_empathy: int | None
     ai_insight: int | None
 
+    # 類似検知関連
+    similarity_score: float | None
+    similar_review_id: UUID | None
+    similarity_warning: str | None
+    similarity_penalty_rate: float | None
+
 
 class MetaReviewCreate(BaseModel):
     helpfulness: int = Field(ge=1, le=5)
@@ -84,6 +90,12 @@ class ReviewReceived(BaseModel):
     meta_review: MetaReviewPublic | None
     ai_quality_score: int | None
     ai_quality_reason: str | None
+
+    # 類似検知関連
+    similarity_score: float | None
+    similar_review_id: UUID | None
+    similarity_warning: str | None
+    similarity_penalty_rate: float | None
 
 
 class TAReviewRequestCreate(BaseModel):

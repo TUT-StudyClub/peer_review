@@ -164,12 +164,18 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
             )
 
         points = 0.0 if toxic else 10.0 * (score_norm or 0.0)
+        # 類似度による減点
+        similarity_penalty = r.similarity_penalty_rate if r.similarity_penalty_rate is not None else 0.0
+        if similarity_penalty > 0:
+            points = points * (1 - similarity_penalty)
+
         per_review_points.append(points)
         per_review_breakdown.append(
             {
                 "review_id": str(r.id),
                 "available_weights_sum": available_weight_sum,
                 "toxic": toxic,
+                "similarity_penalty": similarity_penalty,
                 "metrics": {
                     "helpfulness": {
                         "raw": helpfulness_raw,
