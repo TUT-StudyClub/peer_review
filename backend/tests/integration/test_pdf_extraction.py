@@ -43,8 +43,6 @@ def test_pdf_extraction():
         for page_num in sorted(images_by_page.keys()):
             imgs = images_by_page[page_num]
             print(f"ページ {page_num}: 画像 {len(imgs)} 個")
-            for idx, info in enumerate(imgs, 1):
-                print(f"  [{idx}] bbox: {info['bbox']}, name: {info['name']}")
         print(f"✓ 合計画像数: {total_images} 個\n")
 
         # テスト3: テーブル情報の確認（サービス経由）
