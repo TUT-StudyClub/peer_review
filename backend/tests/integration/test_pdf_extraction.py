@@ -5,7 +5,6 @@ from pathlib import Path
 
 from app.services.pdf import PDFExtractionService
 
-
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
 

@@ -5,9 +5,10 @@ Revises:
 Create Date: 2025-01-01 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0001_add_review_similarity"
@@ -56,7 +57,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
 	conn = op.get_bind()
-	dialect = conn.dialect.name
 
 	if _has_column(conn, "reviews", "similarity_penalty_rate"):
 		op.drop_column("reviews", "similarity_penalty_rate")
@@ -67,5 +67,4 @@ def downgrade() -> None:
 	if _has_column(conn, "reviews", "similar_review_id"):
 		# SQLite doesn't support FK drops cleanly; just drop the column
 		op.drop_column("reviews", "similar_review_id")
-
 
