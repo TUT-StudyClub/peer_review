@@ -164,6 +164,9 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
             )
 
         points = 0.0 if toxic else 10.0 * (score_norm or 0.0)
+        duplicate_penalty = r.duplicate_penalty_rate if r.duplicate_penalty_rate is not None else 0.0
+        if duplicate_penalty > 0:
+            points = points * (1 - duplicate_penalty)
         # 類似度による減点
         similarity_penalty = r.similarity_penalty_rate if r.similarity_penalty_rate is not None else 0.0
         if similarity_penalty > 0:
@@ -175,6 +178,7 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
                 "review_id": str(r.id),
                 "available_weights_sum": available_weight_sum,
                 "toxic": toxic,
+                "duplicate_penalty": duplicate_penalty,
                 "similarity_penalty": similarity_penalty,
                 "metrics": {
                     "helpfulness": {

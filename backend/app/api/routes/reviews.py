@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
+from app.core.config import settings
 from app.models.assignment import Assignment, RubricCriterion
 from app.models.review import (
     MetaReview,
@@ -42,6 +43,7 @@ from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user, require_teacher
 from app.services.credits import calculate_review_credit_gain
 from app.services.matching import get_or_assign_review_assignment
+from app.services.duplicate import detect_duplicate_review, hash_comment
 from app.services.similarity import check_similarity
 
 router = APIRouter()
@@ -203,6 +205,21 @@ def submit_review(
             },
         )
 
+    normalized_comment_hash = hash_comment(payload.comment)
+    duplicate_result = detect_duplicate_review(
+        db,
+        reviewer_id=current_user.id,
+        assignment_id=review_assignment.assignment_id,
+        normalized_hash=normalized_comment_hash,
+    )
+    quality_score = ai_result.quality_score
+    quality_reason = ai_result.quality_reason
+    quality_penalty_points = max(0, int(getattr(settings, "duplicate_quality_penalty_points", 0)))
+    if duplicate_result.is_duplicate and quality_penalty_points > 0:
+        quality_score = max(1, quality_score - quality_penalty_points)
+        extra_reason = "重複検知により品質スコアを減点しました。"
+        quality_reason = f"{quality_reason or ''} {extra_reason}".strip()
+
     # 類似検知を実行
     similarity_result = check_similarity(
         db,
@@ -213,14 +230,18 @@ def submit_review(
     review = Review(
         review_assignment_id=review_assignment.id,
         comment=payload.comment,
-        ai_quality_score=ai_result.quality_score,
-        ai_quality_reason=ai_result.quality_reason,
+        ai_quality_score=quality_score,
+        ai_quality_reason=quality_reason,
         ai_toxic=ai_result.toxic,
         ai_toxic_reason=ai_result.toxic_reason,
         ai_logic=ai_result.logic,
         ai_specificity=ai_result.specificity,
         ai_empathy=ai_result.empathy,
         ai_insight=ai_result.insight,
+        normalized_comment_hash=normalized_comment_hash,
+        duplicate_of_review_id=duplicate_result.duplicate_review_id,
+        duplicate_warning=duplicate_result.warning_message,
+        duplicate_penalty_rate=duplicate_result.penalty_rate if duplicate_result.is_duplicate else None,
         # 類似検知結果を保存
         similarity_score=similarity_result.similarity,
         similar_review_id=similarity_result.similar_review_id,
@@ -333,6 +354,9 @@ def received_reviews(
                 meta_review=meta,
                 ai_quality_score=r.ai_quality_score,
                 ai_quality_reason=r.ai_quality_reason,
+                duplicate_of_review_id=r.duplicate_of_review_id,
+                duplicate_warning=r.duplicate_warning,
+                duplicate_penalty_rate=r.duplicate_penalty_rate,
                 similarity_score=r.similarity_score,
                 similar_review_id=r.similar_review_id,
                 similarity_warning=r.similarity_warning,
@@ -447,6 +471,9 @@ def list_reviews_for_submission(
                 meta_review=meta,
                 ai_quality_score=r.ai_quality_score,
                 ai_quality_reason=r.ai_quality_reason,
+                duplicate_of_review_id=r.duplicate_of_review_id,
+                duplicate_warning=r.duplicate_warning,
+                duplicate_penalty_rate=r.duplicate_penalty_rate,
             )
         )
     return results
