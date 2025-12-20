@@ -19,6 +19,8 @@ export type UserPublic = {
   created_at: string;
 };
 
+export type RankingPeriod = "total" | "monthly" | "weekly";
+
 export type UserRankingEntry = {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export type UserRankingEntry = {
   rank: string;
   title: string;
   is_ta: boolean;
+  period_credits?: number;
 };
 
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
