@@ -24,7 +24,16 @@ from app.schemas.review import (
     ReviewReceived,
     ReviewSubmit,
 )
-from app.services.ai import FeatureDisabledError, ModerationError, analyze_review, polish_review
+from app.services.ai import (
+    FeatureDisabledError,
+    ModerationError,
+    OpenAIEmptyChoiceError,
+    OpenAIRequestError,
+    OpenAIResponseParseError,
+    OpenAIUnavailableError,
+    analyze_review,
+    polish_review,
+)
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
 from app.services.matching import get_or_assign_review_assignment
@@ -77,6 +86,16 @@ def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_c
         polished_text, notes = polish_review(payload.text)
     except FeatureDisabledError as e:
         raise HTTPException(status_code=503, detail="OpenAI not configured") from e
+    except OpenAIUnavailableError as e:
+        raise HTTPException(status_code=503, detail="OpenAI temporarily unavailable") from e
+    except OpenAIRequestError as e:
+        status = 504 if e.reason == "timeout" else 502
+        raise HTTPException(
+            status_code=status,
+            detail={"message": "OpenAI request failed", "reason": e.reason, "status_code": e.status_code},
+        ) from e
+    except (OpenAIResponseParseError, OpenAIEmptyChoiceError) as e:
+        raise HTTPException(status_code=502, detail={"message": "OpenAI response parse failed", "reason": str(e)}) from e
     except ModerationError as e:
         raise HTTPException(
             status_code=422, 
