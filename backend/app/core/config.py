@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     ta_credit_multiplier: float = 2.0
 
     openai_api_key: str | None = None
+    # 類似検知 (review similarity) の設定
+    similarity_threshold: float = 0.5
+    similarity_penalty_enabled: bool = True
+    similarity_ngram_n: int = 2
+    duplicate_penalty_rate: float = 0.4
+    duplicate_quality_penalty_points: int = 1
 
     # OpenAI依存の機能を有効にするためのフラグ
     enable_openai: bool = False #defaultでは無効
