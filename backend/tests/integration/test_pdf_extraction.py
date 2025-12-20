@@ -51,14 +51,13 @@ def test_pdf_extraction():
         print("=" * 70)
         tables_by_page = service.extract_tables_by_page(test_pdf)
         total_tables = sum(len(v) for v in tables_by_page.values())
-        for page_num in sorted(tables_by_page.keys()):
-            tables = tables_by_page[page_num]
+        for page_num, tables in sorted(tables_by_page.items()):
             print(f"ページ {page_num}: テーブル {len(tables)} 個")
             for idx, table in enumerate(tables, 1):
-                print(f"  [{idx}] 全行データ ({len(table)} 行):")
-                for row_idx, row in enumerate(table, 1):
+                print(f"  [{idx}] 行数: {len(table)}")
+                for row in table:
                     row_text = " | ".join(cell or "" for cell in row)
-                    print(f"     行{row_idx}: {row_text}")
+                    print(f"    {row_text}")
         print(f"✓ 合計テーブル数: {total_tables} 個\n")
 
         # テスト4: 全ページテキスト抽出
