@@ -33,11 +33,11 @@ class ReviewPublic(BaseModel):
     ai_empathy: int | None
     ai_insight: int | None
 
-    # 類似検知関連
-    similarity_score: float | None
-    similar_review_id: UUID | None
-    similarity_warning: str | None
-    similarity_penalty_rate: float | None
+    # 類似度フィールド
+    similarity_score: float | None = None
+    similar_review_id: UUID | None = None
+    similarity_warning: str | None = None
+    similarity_penalty_rate: float | None = None
 
 
 class MetaReviewCreate(BaseModel):
@@ -82,6 +82,8 @@ class ReviewRubricScorePublic(BaseModel):
 
 
 class ReviewReceived(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: UUID
     reviewer_alias: str
     comment: str
@@ -91,11 +93,11 @@ class ReviewReceived(BaseModel):
     ai_quality_score: int | None
     ai_quality_reason: str | None
 
-    # 類似検知関連
-    similarity_score: float | None
-    similar_review_id: UUID | None
-    similarity_warning: str | None
-    similarity_penalty_rate: float | None
+    # 類似度フィールド（オプション）
+    similarity_score: float | None = None
+    similar_review_id: UUID | None = None
+    similarity_warning: str | None = None
+    similarity_penalty_rate: float | None = None
 
 
 class TAReviewRequestCreate(BaseModel):

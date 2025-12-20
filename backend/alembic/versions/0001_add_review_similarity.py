@@ -1,50 +1,71 @@
-"""add similarity fields to reviews
+"""add review similarity fields
 
 Revision ID: 0001_add_review_similarity
 Revises: 
-Create Date: 2025-12-20 00:00:00.000000
+Create Date: 2025-01-01 00:00:00.000000
 """
+
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
-revision = '0001_add_review_similarity'
+revision = "0001_add_review_similarity"
 down_revision = None
 branch_labels = None
 depends_on = None
 
 
-def upgrade():
-    bind = op.get_bind()
-    dialect = bind.dialect.name
-
-    # similarity_score
-    op.add_column('reviews', sa.Column('similarity_score', sa.Float(), nullable=True))
-
-    # similar_review_id: choose UUID type for postgres, string otherwise
-    if dialect == 'postgresql':
-        op.add_column('reviews', sa.Column('similar_review_id', postgresql.UUID(as_uuid=True), nullable=True))
-    else:
-        op.add_column('reviews', sa.Column('similar_review_id', sa.String(length=36), nullable=True))
-
-    # similarity_warning
-    op.add_column('reviews', sa.Column('similarity_warning', sa.Text(), nullable=True))
-
-    # similarity_penalty_rate
-    op.add_column('reviews', sa.Column('similarity_penalty_rate', sa.Float(), nullable=True))
-
-    # add foreign key (self reference) and index
-    op.create_foreign_key('fk_reviews_similar_review_id', 'reviews', 'reviews', ['similar_review_id'], ['id'], ondelete='SET NULL')
-    op.create_index('ix_reviews_similar_review_id', 'reviews', ['similar_review_id'])
+def _has_column(connection, table_name: str, column_name: str) -> bool:
+	insp = inspect(connection)
+	cols = [c["name"] for c in insp.get_columns(table_name)]
+	return column_name in cols
 
 
-def downgrade():
-    # drop index and foreign key first
-    op.drop_index('ix_reviews_similar_review_id', table_name='reviews')
-    op.drop_constraint('fk_reviews_similar_review_id', 'reviews', type_='foreignkey')
+def upgrade() -> None:
+	conn = op.get_bind()
+	dialect = conn.dialect.name
 
-    op.drop_column('reviews', 'similarity_penalty_rate')
-    op.drop_column('reviews', 'similarity_warning')
-    op.drop_column('reviews', 'similar_review_id')
-    op.drop_column('reviews', 'similarity_score')
+	if not _has_column(conn, "reviews", "similarity_score"):
+		op.add_column("reviews", sa.Column("similarity_score", sa.Float(), nullable=True))
+
+	if not _has_column(conn, "reviews", "similarity_warning"):
+		op.add_column("reviews", sa.Column("similarity_warning", sa.Text(), nullable=True))
+
+	if not _has_column(conn, "reviews", "similarity_penalty_rate"):
+		op.add_column("reviews", sa.Column("similarity_penalty_rate", sa.Float(), nullable=True))
+
+	if not _has_column(conn, "reviews", "similar_review_id"):
+		# For sqlite, avoid creating FK constraints (limited ALTER support)
+		if dialect != "sqlite":
+			op.add_column(
+				"reviews",
+				sa.Column(
+					"similar_review_id",
+					sa.Uuid(as_uuid=True),
+					sa.ForeignKey("reviews.id", ondelete="SET NULL"),
+					nullable=True,
+				),
+			)
+		else:
+			op.add_column(
+				"reviews",
+				sa.Column("similar_review_id", sa.Uuid(as_uuid=True), nullable=True),
+			)
+
+
+def downgrade() -> None:
+	conn = op.get_bind()
+	dialect = conn.dialect.name
+
+	if _has_column(conn, "reviews", "similarity_penalty_rate"):
+		op.drop_column("reviews", "similarity_penalty_rate")
+	if _has_column(conn, "reviews", "similarity_warning"):
+		op.drop_column("reviews", "similarity_warning")
+	if _has_column(conn, "reviews", "similarity_score"):
+		op.drop_column("reviews", "similarity_score")
+	if _has_column(conn, "reviews", "similar_review_id"):
+		# SQLite doesn't support FK drops cleanly; just drop the column
+		op.drop_column("reviews", "similar_review_id")
+
+
