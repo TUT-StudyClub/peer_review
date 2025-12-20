@@ -6,17 +6,21 @@ from dotenv import load_dotenv
 
 # Ensure project root (backend/) is on sys.path when running as a script
 ROOT = Path(__file__).resolve().parent.parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from app.core.config import settings
-from app.core.security import get_password_hash
-from app.db.session import SessionLocal
-from app.models.user import User, UserRole
+
+def _ensure_app_path() -> None:
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
 
 
 def main() -> int:
     load_dotenv()
+    _ensure_app_path()
+    from app.core.config import settings
+    from app.core.security import get_password_hash
+    from app.db.session import SessionLocal
+    from app.models.user import User, UserRole
+
     password = os.getenv("TEST_USER_PASSWORD")
     if not password:
         print("ERROR: TEST_USER_PASSWORD is not set. Add it to backend/.env or export it before running.")

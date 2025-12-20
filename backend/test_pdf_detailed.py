@@ -6,8 +6,8 @@
 """
 from pathlib import Path
 
-from app.services.pdf import PDFExtractionService
 from app.services.ai import analyze_review
+from app.services.pdf import PDFExtractionService
 
 
 def test_pdf_detailed() -> None:
