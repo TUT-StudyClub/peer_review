@@ -21,6 +21,8 @@ class UserPublic(BaseModel):
     name: str
     role: UserRole
     credits: int
+    rank: str
+    title: str
     is_ta: bool
     created_at: datetime
 

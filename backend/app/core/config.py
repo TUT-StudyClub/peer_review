@@ -42,3 +42,13 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# ユーザーランク（クレジット）
+USER_RANK_DEFINITIONS = [
+    {"key": "novice", "min_credits": 0, "title": "見習いレビュアー"},
+    {"key": "bronze", "min_credits": 5, "title": "ブロンズレビュアー"},
+    {"key": "silver", "min_credits": 15, "title": "シルバーレビュアー"},
+    {"key": "gold", "min_credits": 30, "title": "ゴールドレビュアー"},
+    {"key": "platinum", "min_credits": 50, "title": "プラチナレビュアー"},
+    {"key": "diamond", "min_credits": 80, "title": "ダイヤモンドレビュアー"},
+]
