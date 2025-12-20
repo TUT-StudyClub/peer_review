@@ -51,6 +51,10 @@
   - `review_contribution`: レビュー貢献点（メタ評価・rubric一致・AI品質を簡易的に合成し、レビュー1本あたり最大10点）
   - `final_score`: `min(100, assignment_score + review_contribution)`
 
+#### 補足: 教師基準の信頼度スコア（新）
+- teacher rubric との一致度（信頼度スコア）と、teacher レビュー文との意味一致度を合成し、レビュー提出時の `credits` に反映します。
+- 詳細は `teacher-baseline/README.md` を参照してください。
+
 ### 6) レビュアースキル可視化（レーダーチャート用データ）
 - `GET /users/me/reviewer-skill` で、AI（または簡易判定）による4軸の平均値を返します
   - `logic`, `specificity`, `empathy`, `insight`

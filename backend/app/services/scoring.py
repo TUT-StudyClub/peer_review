@@ -139,6 +139,10 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
         quality_raw = r.ai_quality_score if r.ai_quality_score is not None else None
         quality_norm = _norm_1_to_5(quality_raw)
         toxic = bool(r.ai_toxic)
+        comment_alignment_raw = (
+            r.ai_comment_alignment_score if r.ai_comment_alignment_score is not None else None
+        )
+        comment_alignment_norm = _norm_1_to_5(comment_alignment_raw)
 
         available = {
             "helpfulness": helpfulness_norm is not None,
@@ -197,6 +201,10 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
                         "norm": quality_norm,
                         "base_weight": _REVIEW_POINTS_BASE_WEIGHTS["quality"],
                         "weight": weights["quality"],
+                    },
+                    "comment_alignment": {
+                        "raw": comment_alignment_raw,
+                        "norm": comment_alignment_norm,
                     },
                 },
                 "score_norm": score_norm,

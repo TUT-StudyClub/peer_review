@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import settings
+from app.services.similarity import jaccard_similarity, tokenize
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,12 @@ class ReviewAIResult:
     specificity: int
     empathy: int
     insight: int
+
+
+@dataclass(frozen=True)
+class ReviewAlignmentResult:
+    alignment_score: int
+    alignment_reason: str
 
 
 _BANNED_PATTERNS = [
@@ -157,6 +164,28 @@ def _clamp_1_5(value: int) -> int:
     return max(1, min(5, int(value)))
 
 
+def _heuristic_review_alignment(
+    teacher_review_text: str, student_review_text: str
+) -> ReviewAlignmentResult:
+    teacher_tokens = tokenize(teacher_review_text)
+    student_tokens = tokenize(student_review_text)
+    similarity = jaccard_similarity(teacher_tokens, student_tokens)
+
+    if similarity >= 0.75:
+        score = 5
+    elif similarity >= 0.6:
+        score = 4
+    elif similarity >= 0.4:
+        score = 3
+    elif similarity >= 0.2:
+        score = 2
+    else:
+        score = 1
+
+    reason = f"（簡易判定）レビュー文の表層一致度から推定しました。Jaccard={similarity:.2f}"
+    return ReviewAlignmentResult(alignment_score=score, alignment_reason=reason)
+
+
 def _heuristic_analyze(review_text: str) -> ReviewAIResult:
     text = review_text.strip()
     toxic_hits = [p for p in _BANNED_PATTERNS if re.search(p, text)]
@@ -218,6 +247,52 @@ def _heuristic_analyze(review_text: str) -> ReviewAIResult:
     )
 
 
+def _openai_review_alignment(
+    teacher_review_text: str, student_review_text: str
+) -> ReviewAlignmentResult | None:
+    if not settings.openai_api_key:
+        return None
+
+    system = (
+        "You are an assistant that evaluates semantic alignment between a teacher's review and a student's review. "
+        "Return JSON only."
+        "Return Japanese text."
+    )
+    user = {
+        "teacher_review": teacher_review_text,
+        "student_review": student_review_text,
+        "instructions": [
+            "Judge whether the student's review meaning aligns with the teacher's review.",
+            "Rate alignment from 1 to 5 (5=strongly aligned, 1=unrelated or contradictory).",
+            "Return strict JSON with keys: alignment_score, alignment_reason.",
+        ],
+    }
+
+    try:
+        with httpx.Client(timeout=15.0) as client:
+            res = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
+                json={
+                    "model": "gpt-4o-mini",
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+                    ],
+                    "temperature": 0.0,
+                },
+            )
+            res.raise_for_status()
+            content = res.json()["choices"][0]["message"]["content"]
+            data = json.loads(content)
+            return ReviewAlignmentResult(
+                alignment_score=_clamp_1_5(int(data["alignment_score"])),
+                alignment_reason=str(data["alignment_reason"]),
+            )
+    except Exception:
+        return None
+
+
 def _openai_analyze(submission_text: str, review_text: str) -> ReviewAIResult | None:
     if not settings.openai_api_key:
         return None
@@ -275,3 +350,19 @@ def analyze_review(*, submission_text: str, review_text: str) -> ReviewAIResult:
         return openai_result
     return _heuristic_analyze(review_text=review_text)
 
+
+def analyze_review_alignment(
+    *, teacher_review_text: str | None, student_review_text: str
+) -> ReviewAlignmentResult | None:
+    if not teacher_review_text or not teacher_review_text.strip():
+        return None
+    if not student_review_text.strip():
+        return None
+
+    openai_result = _openai_review_alignment(
+        teacher_review_text=teacher_review_text,
+        student_review_text=student_review_text,
+    )
+    if openai_result is not None:
+        return openai_result
+    return _heuristic_review_alignment(teacher_review_text, student_review_text)

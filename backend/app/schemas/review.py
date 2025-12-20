@@ -32,6 +32,11 @@ class ReviewPublic(BaseModel):
     ai_specificity: int | None
     ai_empathy: int | None
     ai_insight: int | None
+    ai_comment_alignment_score: int | None
+    ai_comment_alignment_reason: str | None
+    rubric_alignment_score: int | None = None
+    total_alignment_score: int | None = None
+    credit_awarded: int | None = None
     duplicate_of_review_id: UUID | None = None
     duplicate_warning: str | None = None
     duplicate_penalty_rate: float | None = None
@@ -95,6 +100,11 @@ class ReviewReceived(BaseModel):
     meta_review: MetaReviewPublic | None
     ai_quality_score: int | None
     ai_quality_reason: str | None
+    ai_comment_alignment_score: int | None = None
+    ai_comment_alignment_reason: str | None = None
+    rubric_alignment_score: int | None = None
+    total_alignment_score: int | None = None
+    credit_awarded: int | None = None
 
     duplicate_of_review_id: UUID | None = None
     duplicate_warning: str | None = None
@@ -117,6 +127,11 @@ class TeacherReviewPublic(BaseModel):
     meta_review: MetaReviewPublic | None
     ai_quality_score: int | None
     ai_quality_reason: str | None
+    ai_comment_alignment_score: int | None = None
+    ai_comment_alignment_reason: str | None = None
+    rubric_alignment_score: int | None = None
+    total_alignment_score: int | None = None
+    credit_awarded: int | None = None
     duplicate_of_review_id: UUID | None = None
     duplicate_warning: str | None = None
     duplicate_penalty_rate: float | None = None
