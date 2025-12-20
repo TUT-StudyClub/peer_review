@@ -171,6 +171,7 @@ export default function AssignmentDetailPage() {
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
   const rubricNameById = useMemo(() => new Map(rubric.map((c) => [c.id, c.name])), [rubric]);
+  const backHref = assignment?.course_id ? `/assignments?course_id=${assignment.course_id}` : "/assignments";
   const taRequestsBySubmission = useMemo(() => {
     const map: Record<string, TAReviewRequestPublic[]> = {};
     for (const r of taRequests) {
@@ -552,7 +553,7 @@ export default function AssignmentDetailPage() {
           </AlertDescription>
         </Alert>
         <Button variant="link" asChild className="px-0">
-          <Link href="/assignments">課題一覧へ戻る</Link>
+          <Link href={backHref}>課題一覧へ戻る</Link>
         </Button>
       </div>
     );
