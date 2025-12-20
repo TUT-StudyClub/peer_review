@@ -15,6 +15,7 @@ import type {
   SubmissionPublic,
   SubmissionTeacherPublic,
   TeacherGradeSubmit,
+  TeacherReviewPublic,
   TAReviewRequestPublic,
   TAReviewRequestStatus,
   UserCreate,
@@ -489,4 +490,11 @@ export async function apiParaphrase(token: string, text: string): Promise<Rephra
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) },
     token
   );
+}
+
+export async function apiListReviewsForSubmission(
+  token: string,
+  submissionId: string
+): Promise<TeacherReviewPublic[]> {
+  return apiFetch<TeacherReviewPublic[]>(`/submissions/${submissionId}/reviews`, {}, token);
 }

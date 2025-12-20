@@ -17,6 +17,7 @@ import {
   apiListRubric,
   apiNextReviewTask,
   apiCreateTARequest,
+  apiListReviewsForSubmission,
   apiListTARequestsForAssignment,
   apiReceivedReviews,
   apiSubmitReport,
@@ -36,6 +37,7 @@ import type {
   RubricCriterionPublic,
   SubmissionPublic,
   SubmissionTeacherPublic,
+  TeacherReviewPublic,
   TAReviewRequestPublic,
   UserPublic,
   RephraseResponse,
@@ -137,6 +139,10 @@ export default function AssignmentDetailPage() {
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
   const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, number>>({});
+  const [teacherReviewList, setTeacherReviewList] = useState<TeacherReviewPublic[]>([]);
+  const [teacherReviewListLoading, setTeacherReviewListLoading] = useState(false);
+  const [teacherReviewListTargetId, setTeacherReviewListTargetId] = useState<string | null>(null);
+  const [teacherReviewListError, setTeacherReviewListError] = useState<string | null>(null);
   const [taCandidates, setTaCandidates] = useState<UserPublic[]>([]);
   const [taCandidatesLoading, setTaCandidatesLoading] = useState(false);
   const [taDialogSubmissionId, setTaDialogSubmissionId] = useState<string | null>(null);
@@ -520,6 +526,25 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const openTeacherReviews = async (submissionId: string) => {
+    if (!token) return;
+    setTeacherReviewListTargetId(submissionId);
+    setTeacherReviewList([]);
+    setTeacherReviewListLoading(true);
+    setTeacherReviewListError(null);
+    setNotice(null);
+    try {
+      const list = await apiListReviewsForSubmission(token, submissionId);
+      setTeacherReviewList(list);
+    } catch (err) {
+      const msg = formatApiError(err);
+      setTeacherReviewListError(msg);
+      setNotice(msg);
+    } finally {
+      setTeacherReviewListLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token || !user) return;
     if (user.role === "teacher") {
@@ -697,6 +722,9 @@ export default function AssignmentDetailPage() {
                         DL
                       </Button>
                       <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
+                      <Button variant="outline" onClick={() => openTeacherReviews(s.id)}>
+                        レビュー一覧
+                      </Button>
                       <Button variant="outline" onClick={() => openTARequest(s.id)}>
                         TA依頼
                       </Button>
@@ -883,6 +911,108 @@ export default function AssignmentDetailPage() {
                 </Button>
               </DialogFooter>
             </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={Boolean(teacherReviewListTargetId)}
+            onOpenChange={(open: boolean) => {
+              if (!open) {
+                setTeacherReviewListTargetId(null);
+                setTeacherReviewList([]);
+              }
+            }}
+          >
+            {teacherReviewListTargetId ? (
+              <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>レビュー一覧: {shortId(teacherReviewListTargetId)}</DialogTitle>
+                </DialogHeader>
+                {teacherReviewListLoading ? (
+                  <p className="text-sm text-muted-foreground">読み込み中...</p>
+                ) : teacherReviewList.length === 0 ? (
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    {teacherReviewListError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>取得に失敗しました</AlertTitle>
+                        <AlertDescription className="whitespace-pre-wrap">
+                          {teacherReviewListError}
+                        </AlertDescription>
+                      </Alert>
+                    ) : (
+                      <p>まだレビューがありません</p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (teacherReviewListTargetId) void openTeacherReviews(teacherReviewListTargetId);
+                      }}
+                    >
+                      再読み込み
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {["TA", "student"].map((group) => {
+                      const list = teacherReviewList.filter((r) => (group === "TA" ? r.is_ta : !r.is_ta));
+                      return (
+                        <div key={group} className="space-y-2">
+                          <div className="text-sm font-semibold">
+                            {group === "TA" ? "TAレビュー" : "一般レビュー"}（{list.length}件）
+                          </div>
+                          {list.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">なし</p>
+                          ) : (
+                            <div className="space-y-3">
+                              {list.map((r) => (
+                                <div key={r.id} className="rounded-lg border p-3 space-y-2">
+                                  <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                      <div className="font-medium">Reviewer: {r.reviewer_alias}</div>
+                                      <div className="text-xs text-muted-foreground">
+                                        {new Date(r.created_at).toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      AI品質: {r.ai_quality_score ?? "-"}
+                                    </div>
+                                  </div>
+                                  <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
+                                  <div className="space-y-1 rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
+                                    <div className="font-semibold">Rubric</div>
+                                    {r.rubric_scores.map((s) => (
+                                      <div key={s.criterion_id}>
+                                        {s.criterion_id}: {s.score}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {r.meta_review ? (
+                                    <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                                      メタ評価: {r.meta_review.helpfulness}/5
+                                      {r.meta_review.comment ? ` / ${r.meta_review.comment}` : ""}
+                                    </div>
+                                  ) : null}
+                                  {r.ai_quality_reason ? (
+                                    <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                                      {r.ai_quality_reason}
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setTeacherReviewListTargetId(null)}>
+                    閉じる
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            ) : null}
           </Dialog>
         </SectionCard>
       ) : null}
