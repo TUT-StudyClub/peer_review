@@ -1,6 +1,7 @@
 import enum
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.schemas.user import ReviewerSkill, UserPublic, UserRankingEntry
 from app.services.auth import get_current_user
 from app.services.credits import calculate_review_credit_gain
 from app.services.rank import get_user_rank
+from app.services.reviewer_skill import calculate_reviewer_skill
 
 router = APIRouter()
 
@@ -113,23 +115,12 @@ def user_ranking(
 
 @router.get("/me/reviewer-skill", response_model=ReviewerSkill)
 def my_reviewer_skill(
+    assignment_id: UUID | None = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ReviewerSkill:
-    reviews = (
-        db.query(Review)
-        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
-        .filter(ReviewAssignment.reviewer_id == current_user.id)
-        .all()
-    )
-
-    def avg(values: list[int | None]) -> float:
-        nums = [float(v) for v in values if v is not None]
-        return (sum(nums) / len(nums)) if nums else 0.0
-
-    return ReviewerSkill(
-        logic=avg([r.ai_logic for r in reviews]),
-        specificity=avg([r.ai_specificity for r in reviews]),
-        empathy=avg([r.ai_empathy for r in reviews]),
-        insight=avg([r.ai_insight for r in reviews]),
+    return calculate_reviewer_skill(
+        db,
+        reviewer_id=current_user.id,
+        assignment_id=assignment_id,
     )
