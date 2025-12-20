@@ -155,7 +155,8 @@ def submit_review(
         if not (0 <= s.score <= criterion.max_score):
             raise HTTPException(status_code=400, detail="Rubric score out of range")
 
-    submission_text = submission.markdown_text or ""
+    # submission_text を優先、なければ markdown_text、それもなければ空文字列を使用
+    submission_text = submission.submission_text or submission.markdown_text or ""
     ai_result = analyze_review(
         submission_text=submission_text,
         review_text=payload.comment,
