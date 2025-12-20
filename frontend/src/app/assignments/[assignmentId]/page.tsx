@@ -316,10 +316,11 @@ export default function AssignmentDetailPage() {
           score: Number(reviewScores[c.id] ?? 0),
         })),
       };
-      await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
+      const res = await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
       setReviewTask(null);
       setReviewComment("");
-      setNotice("レビューを提出しました（credits 加算）");
+      const creditLabel = res.credit_awarded ? `credits +${res.credit_awarded}` : "credits 加算";
+      setNotice(`レビューを提出しました（${creditLabel}）`);
       await refreshMe();
     } catch (err) {
       setNotice(formatApiError(err));
@@ -939,6 +940,21 @@ export default function AssignmentDetailPage() {
                                       {r.ai_quality_reason}
                                     </div>
                                   ) : null}
+                                  {r.rubric_alignment_score !== null ||
+                                  r.ai_comment_alignment_score !== null ||
+                                  r.total_alignment_score !== null ||
+                                  r.credit_awarded !== null ||
+                                  r.ai_comment_alignment_reason ? (
+                                    <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
+                                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
+                                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
+                                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
+                                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
+                                      {r.ai_comment_alignment_reason ? (
+                                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                 </div>
                               ))}
                             </div>
@@ -1185,6 +1201,21 @@ export default function AssignmentDetailPage() {
                   {r.ai_quality_reason ? (
                     <div className="mt-2 rounded-md bg-muted p-3 text-xs text-muted-foreground">
                       {r.ai_quality_reason}
+                    </div>
+                  ) : null}
+                  {r.rubric_alignment_score !== null ||
+                  r.ai_comment_alignment_score !== null ||
+                  r.total_alignment_score !== null ||
+                  r.credit_awarded !== null ||
+                  r.ai_comment_alignment_reason ? (
+                    <div className="mt-2 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
+                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
+                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
+                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
+                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
+                      {r.ai_comment_alignment_reason ? (
+                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                      ) : null}
                     </div>
                   ) : null}
                   <div className="mt-2 whitespace-pre-wrap text-sm">{r.comment}</div>
