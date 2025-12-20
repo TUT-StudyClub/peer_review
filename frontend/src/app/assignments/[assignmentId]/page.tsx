@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/app/providers";
 import {
@@ -11,16 +11,21 @@ import {
   apiDownloadSubmissionFile,
   apiGetMyGrade,
   apiGetMySubmission,
+  apiListEligibleTAs,
   apiGetReviewerSkill,
   apiListAssignments,
   apiListRubric,
   apiNextReviewTask,
+  apiCreateTARequest,
+  apiListTARequestsForAssignment,
   apiReceivedReviews,
   apiSubmitReport,
   apiSubmitReview,
   apiTeacherGradeSubmission,
   apiTeacherListSubmissions,
   apiCreateMetaReview,
+  apiParaphrase,
+  formatApiError,
 } from "@/lib/api";
 import type {
   AssignmentPublic,
@@ -31,7 +36,11 @@ import type {
   RubricCriterionPublic,
   SubmissionPublic,
   SubmissionTeacherPublic,
+  TAReviewRequestPublic,
+  UserPublic,
+  RephraseResponse,
 } from "@/lib/types";
+import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -41,6 +50,15 @@ import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+
+const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
+  { key: "good", label: "良い点", text: "【良い点】主張が明確で、根拠となるデータ/引用が添えられています。" },
+  { key: "improve", label: "改善点", text: "【改善点】この部分の論拠が弱いので、出典や具体例を1〜2個追加してください。" },
+  { key: "evidence", label: "根拠不足", text: "【根拠不足】結論と根拠の間に飛躍があります。データ/引用/図表などのエビデンスを補ってください。" },
+  { key: "typo", label: "誤字", text: "【誤字】タイポや表記ゆれがあります。最終提出前に再確認してください。" },
+  { key: "structure", label: "構成", text: "【構成】段落ごとに主張→根拠→結論の流れを意識すると読みやすくなります。" },
+  { key: "example", label: "具体例", text: "【具体例】読者がイメージできる具体例を1つ追加すると説得力が増します。" },
+];
 
 function shortId(id: string) {
   return id.slice(0, 8);
@@ -55,14 +73,6 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-function formatApiError(err: unknown) {
-  if (err instanceof ApiError) {
-    const detail = err.detail ? `\n${JSON.stringify(err.detail, null, 2)}` : "";
-    return `${err.message}${detail}`;
-  }
-  return err instanceof Error ? err.message : "エラーが発生しました";
 }
 
 function SectionCard({
@@ -110,6 +120,7 @@ export default function AssignmentDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, number>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const templateClicks = useRef<Record<string, number>>({});
 
   const [received, setReceived] = useState<ReviewReceived[]>([]);
   const [receivedLoading, setReceivedLoading] = useState(false);
@@ -126,6 +137,17 @@ export default function AssignmentDetailPage() {
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
   const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, number>>({});
+  const [taCandidates, setTaCandidates] = useState<UserPublic[]>([]);
+  const [taCandidatesLoading, setTaCandidatesLoading] = useState(false);
+  const [taDialogSubmissionId, setTaDialogSubmissionId] = useState<string | null>(null);
+  const [taSelectedUserId, setTaSelectedUserId] = useState<string | null>(null);
+  const [taRequesting, setTaRequesting] = useState(false);
+  const [taRequests, setTaRequests] = useState<TAReviewRequestPublic[]>([]);
+  const [taRequestsLoading, setTaRequestsLoading] = useState(false);
+  const [paraphraseOpen, setParaphraseOpen] = useState(false);
+  const [paraphrasePreview, setParaphrasePreview] = useState<RephraseResponse | null>(null);
+  const [paraphraseLoading, setParaphraseLoading] = useState(false);
+  const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
   const [rubricName, setRubricName] = useState("");
   const [rubricDesc, setRubricDesc] = useState("");
@@ -136,6 +158,14 @@ export default function AssignmentDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
+  const taRequestsBySubmission = useMemo(() => {
+    const map: Record<string, TAReviewRequestPublic[]> = {};
+    for (const r of taRequests) {
+      if (!map[r.submission_id]) map[r.submission_id] = [];
+      map[r.submission_id].push(r);
+    }
+    return map;
+  }, [taRequests]);
 
   const loadBase = useCallback(async () => {
     setLoadingBase(true);
@@ -255,6 +285,20 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const appendReviewComment = (text: string) => {
+    setReviewComment((prev) => {
+      if (!prev.trim()) return text;
+      return `${prev}\n\n${text}`;
+    });
+  };
+
+  const insertTemplate = (tpl: { key: string; label: string; text: string }) => {
+    appendReviewComment(tpl.text);
+    const nextCount = (templateClicks.current[tpl.key] ?? 0) + 1;
+    templateClicks.current = { ...templateClicks.current, [tpl.key]: nextCount };
+    console.info("review template used", { key: tpl.key, label: tpl.label, count: nextCount });
+  };
+
   const submitReview = async () => {
     if (!token || !reviewTask) return;
     setReviewSubmitting(true);
@@ -270,12 +314,37 @@ export default function AssignmentDetailPage() {
       await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
       setReviewTask(null);
       setReviewComment("");
-      setNotice("レビューを提出しました（credits +1）");
+      setNotice("レビューを提出しました（credits 加算）");
       await refreshMe();
     } catch (err) {
       setNotice(formatApiError(err));
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const runParaphrase = async () => {
+    if (!token) {
+      setParaphraseError("ログインが必要です");
+      setParaphraseOpen(true);
+      return;
+    }
+    if (!reviewComment.trim()) {
+      setParaphraseError("言い換えるテキストを入力してください");
+      setParaphraseOpen(true);
+      return;
+    }
+    setParaphraseLoading(true);
+    setParaphraseError(null);
+    setParaphrasePreview(null);
+    setParaphraseOpen(true);
+    try {
+      const res = await apiParaphrase(token, reviewComment);
+      setParaphrasePreview(res);
+    } catch (err) {
+      setParaphraseError(formatApiError(err));
+    } finally {
+      setParaphraseLoading(false);
     }
   };
 
@@ -347,6 +416,57 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const loadTARequests = async () => {
+    if (!token) return;
+    setTaRequestsLoading(true);
+    try {
+      const list = await apiListTARequestsForAssignment(token, assignmentId);
+      setTaRequests(list);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setTaRequestsLoading(false);
+    }
+  };
+
+  const loadEligibleTAs = async () => {
+    if (!token) return;
+    setTaCandidatesLoading(true);
+    try {
+      const list = await apiListEligibleTAs(token);
+      setTaCandidates(list);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setTaCandidatesLoading(false);
+    }
+  };
+
+  const openTARequest = (submissionId: string) => {
+    setTaDialogSubmissionId(submissionId);
+    setTaSelectedUserId(null);
+    if (!taCandidates.length) {
+      void loadEligibleTAs();
+    }
+  };
+
+  const submitTARequest = async () => {
+    if (!token || !taDialogSubmissionId || !taSelectedUserId) return;
+    setTaRequesting(true);
+    setNotice(null);
+    try {
+      await apiCreateTARequest(token, taDialogSubmissionId, taSelectedUserId);
+      setNotice("TA依頼を送信しました");
+      setTaDialogSubmissionId(null);
+      setTaSelectedUserId(null);
+      await loadTARequests();
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setTaRequesting(false);
+    }
+  };
+
   const openTeacherGrade = (submissionId: string) => {
     setGradeTargetId(submissionId);
     setTeacherFeedback("");
@@ -404,6 +524,7 @@ export default function AssignmentDetailPage() {
     if (!token || !user) return;
     if (user.role === "teacher") {
       void loadTeacherSubmissions();
+      void loadTARequests();
       return;
     }
     void loadMySubmission();
@@ -422,7 +543,9 @@ export default function AssignmentDetailPage() {
       <div className="space-y-3">
         <Alert variant="destructive">
           <AlertTitle>エラー</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{errorBase}</AlertDescription>
+          <AlertDescription>
+            <ErrorMessages message={errorBase} />
+          </AlertDescription>
         </Alert>
         <Button variant="link" asChild className="px-0">
           <Link href="/assignments">課題一覧へ戻る</Link>
@@ -444,7 +567,9 @@ export default function AssignmentDetailPage() {
       {notice ? (
         <Alert>
           <AlertTitle>通知</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">{notice}</AlertDescription>
+          <AlertDescription>
+            <ErrorMessages message={notice} />
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -512,11 +637,19 @@ export default function AssignmentDetailPage() {
         <SectionCard
           title="（teacher）提出一覧 & 採点"
           actions={
-            <Button variant="outline" onClick={loadTeacherSubmissions} disabled={teacherSubmissionsLoading}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                void loadTeacherSubmissions();
+                void loadTARequests();
+              }}
+              disabled={teacherSubmissionsLoading}
+            >
               更新
             </Button>
           }
         >
+          {taRequestsLoading ? <p className="text-xs text-muted-foreground">TA依頼を読み込み中...</p> : null}
           {teacherSubmissionsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
           {teacherSubmissions.length === 0 ? (
             <p className="text-sm text-muted-foreground">提出がまだありません</p>
@@ -533,12 +666,40 @@ export default function AssignmentDetailPage() {
                       <div className="text-xs text-muted-foreground">
                         teacher_total_score: {s.teacher_total_score ?? "-"}
                       </div>
+                      <div className="text-xs text-muted-foreground">
+                        TA依頼:{" "}
+                        {taRequestsBySubmission[s.id]?.length ? (
+                          <span className="inline-flex flex-wrap gap-1">
+                            {taRequestsBySubmission[s.id].map((r) => (
+                              <span
+                                key={r.id}
+                                className={[
+                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
+                                  r.status === "offered"
+                                    ? "bg-amber-100 text-amber-900"
+                                    : r.status === "accepted"
+                                      ? "bg-emerald-100 text-emerald-900"
+                                      : "bg-slate-100 text-slate-900",
+                                ].join(" ")}
+                                title={`ta: ${shortId(r.ta_id)} / ${new Date(r.created_at).toLocaleString()}`}
+                              >
+                                {r.status} ({shortId(r.ta_id)})
+                              </span>
+                            ))}
+                          </span>
+                        ) : (
+                          "なし"
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button variant="outline" onClick={() => downloadSubmission(s.id, s.file_type)}>
                         DL
                       </Button>
                       <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
+                      <Button variant="outline" onClick={() => openTARequest(s.id)}>
+                        TA依頼
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -548,7 +709,7 @@ export default function AssignmentDetailPage() {
 
           <Dialog
             open={Boolean(gradeTargetId)}
-            onOpenChange={(open) => {
+            onOpenChange={(open: boolean) => {
               if (!open) setGradeTargetId(null);
             }}
           >
@@ -611,6 +772,117 @@ export default function AssignmentDetailPage() {
                 </DialogFooter>
               </DialogContent>
             ) : null}
+          </Dialog>
+
+          <Dialog
+            open={Boolean(taDialogSubmissionId)}
+            onOpenChange={(open: boolean) => {
+              if (!open) {
+                setTaDialogSubmissionId(null);
+                setTaSelectedUserId(null);
+              }
+            }}
+          >
+            {taDialogSubmissionId ? (
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>TA依頼: {shortId(taDialogSubmissionId)}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    TA資格のある学生に依頼します。受諾されると、その学生がこの提出物をレビューできます。
+                  </p>
+                  <Field label="TAを選択">
+                    <Select
+                      value={taSelectedUserId ?? undefined}
+                      onValueChange={(v) => setTaSelectedUserId(v)}
+                      onOpenChange={(o) => {
+                        if (o && !taCandidates.length && !taCandidatesLoading) void loadEligibleTAs();
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={taCandidatesLoading ? "読み込み中..." : "選択してください"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {taCandidates.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">
+                            {taCandidatesLoading ? "読み込み中..." : "TA資格の学生がいません"}
+                          </div>
+                        ) : (
+                          taCandidates.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name} / credits: {u.credits}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setTaDialogSubmissionId(null)}>
+                    キャンセル
+                  </Button>
+                  <Button onClick={submitTARequest} disabled={!taSelectedUserId || taRequesting}>
+                    {taRequesting ? "送信中..." : "依頼を送信"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            ) : null}
+          </Dialog>
+
+          <Dialog open={paraphraseOpen} onOpenChange={setParaphraseOpen}>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>言い換え</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                {!paraphrasePreview && !paraphraseError ? (
+                  <p className="text-muted-foreground">
+                    レビューコメントを簡易的に言い換えます。必要に応じて手動で調整してください。
+                  </p>
+                ) : null}
+                {paraphraseError ? (
+                  <Alert variant="destructive">
+                    <AlertTitle>エラー</AlertTitle>
+                    <AlertDescription className="whitespace-pre-wrap">{paraphraseError}</AlertDescription>
+                  </Alert>
+                ) : null}
+                {paraphrasePreview ? (
+                  <div className="space-y-2">
+                    <div>
+                      <div className="text-xs text-muted-foreground">変換結果</div>
+                      <div className="rounded-md border bg-muted/50 p-3">{paraphrasePreview.rephrased}</div>
+                    </div>
+                    {paraphrasePreview.notice ? (
+                      <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {paraphraseLoading ? <p className="text-muted-foreground">変換中...</p> : null}
+              </div>
+              <DialogFooter className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={() => setParaphraseOpen(false)}>
+                  閉じる
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={runParaphrase}
+                  disabled={paraphraseLoading || !reviewComment.trim()}
+                >
+                  再変換
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
+                    setParaphraseOpen(false);
+                  }}
+                  disabled={!paraphrasePreview}
+                >
+                  反映する
+                </Button>
+              </DialogFooter>
+            </DialogContent>
           </Dialog>
         </SectionCard>
       ) : null}
@@ -712,7 +984,25 @@ export default function AssignmentDetailPage() {
               </div>
 
               <Field label="レビューコメント（具体的に）" hint="短すぎるとAI/簡易判定で低評価になります">
-                <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                <div className="space-y-2">
+                  <div className="space-y-2 rounded-md border bg-muted/70 p-3">
+                    <div className="text-xs font-medium text-muted-foreground">定型文を挿入</div>
+                    <div className="flex flex-wrap gap-2">
+                      {REVIEW_TEMPLATES.map((tpl) => (
+                        <Button key={tpl.key} size="sm" variant="outline" onClick={() => insertTemplate(tpl)}>
+                          {tpl.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                  <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
+                      言い換え
+                    </Button>
+                    {paraphraseLoading ? <span>変換中...</span> : null}
+                  </div>
+                </div>
               </Field>
 
               <div className="flex gap-2">
@@ -805,6 +1095,9 @@ export default function AssignmentDetailPage() {
             <div className="space-y-2 text-sm">
               <div>assignment_score: {grade.assignment_score ?? "-"}</div>
               <div>review_contribution: {grade.review_contribution.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">
+                ※ review_contribution はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+              </p>
               <div className="font-semibold">final_score: {grade.final_score ?? "-"}</div>
               <details className="rounded-md border bg-muted p-3 text-xs">
                 <summary className="cursor-pointer">breakdown</summary>
@@ -893,7 +1186,7 @@ function MetaReviewForm({
       <div className="text-sm font-medium">メタ評価（このレビューは役に立ちましたか？）</div>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         <Field label="helpfulness (1-5)">
-          <Select value={String(helpfulness)} onValueChange={(v) => setHelpfulness(Number(v))}>
+          <Select value={String(helpfulness)} onValueChange={(v: string) => setHelpfulness(Number(v))}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>

@@ -4,6 +4,7 @@ import type {
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
+  RephraseResponse,
   ReviewerSkill,
   ReviewAssignmentTask,
   ReviewPublic,
@@ -14,6 +15,8 @@ import type {
   SubmissionPublic,
   SubmissionTeacherPublic,
   TeacherGradeSubmit,
+  TAReviewRequestPublic,
+  TAReviewRequestStatus,
   UserCreate,
   UserPublic,
 } from "@/lib/types";
@@ -31,10 +34,196 @@ export class ApiError extends Error {
   }
 }
 
+type StringifyOptions = {
+  maxDepth?: number;
+  maxKeys?: number;
+  maxArrayLength?: number;
+  maxStringLength?: number;
+  maxOutputLength?: number;
+};
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n…(truncated ${text.length - max} chars)`;
+}
+
+function normalizeForJson(
+  value: unknown,
+  params: {
+    depth: number;
+    options: Required<Omit<StringifyOptions, "maxOutputLength">>;
+    seen: WeakSet<object>;
+  }
+): unknown {
+  const { depth, options, seen } = params;
+  if (depth >= options.maxDepth) return "[MaxDepth]";
+
+  if (value === null) return null;
+
+  if (typeof value === "string") return truncate(value, options.maxStringLength);
+  if (typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "undefined") return "[undefined]";
+  if (typeof value === "function") return "[function]";
+  if (typeof value === "symbol") return value.toString();
+
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack ? truncate(value.stack, options.maxStringLength) : undefined,
+    };
+  }
+
+  if (!value || typeof value !== "object") return String(value);
+
+  const obj = value as Record<string, unknown>;
+  if (seen.has(obj)) return "[Circular]";
+  seen.add(obj);
+
+  if (Array.isArray(obj)) {
+    const sliced = obj.slice(0, options.maxArrayLength);
+    const mapped = sliced.map((item) =>
+      normalizeForJson(item, { depth: depth + 1, options, seen })
+    );
+    if (obj.length > sliced.length) {
+      mapped.push(`[+${obj.length - sliced.length} more items]`);
+    }
+    return mapped;
+  }
+
+  if (obj instanceof Map) {
+    const entries = Array.from(obj.entries()).slice(0, options.maxArrayLength);
+    return {
+      "[Map]": entries.map(([k, v]) => [
+        normalizeForJson(k, { depth: depth + 1, options, seen }),
+        normalizeForJson(v, { depth: depth + 1, options, seen }),
+      ]),
+    };
+  }
+
+  if (obj instanceof Set) {
+    const items = Array.from(obj.values()).slice(0, options.maxArrayLength);
+    return {
+      "[Set]": items.map((v) => normalizeForJson(v, { depth: depth + 1, options, seen })),
+    };
+  }
+
+  const keys = Object.keys(obj);
+  const slicedKeys = keys.slice(0, options.maxKeys);
+  const out: Record<string, unknown> = {};
+  for (const key of slicedKeys) {
+    out[key] = normalizeForJson(obj[key], { depth: depth + 1, options, seen });
+  }
+  if (keys.length > slicedKeys.length) {
+    out["…"] = `[+${keys.length - slicedKeys.length} more keys]`;
+  }
+  return out;
+}
+
+export function stringifyForDisplay(value: unknown, options: StringifyOptions = {}): string {
+  if (typeof value === "string") return value;
+
+  const normalized = normalizeForJson(value, {
+    depth: 0,
+    options: {
+      maxDepth: options.maxDepth ?? 6,
+      maxKeys: options.maxKeys ?? 50,
+      maxArrayLength: options.maxArrayLength ?? 50,
+      maxStringLength: options.maxStringLength ?? 2000,
+    },
+    seen: new WeakSet<object>(),
+  });
+
+  let text: string;
+  try {
+    text = JSON.stringify(normalized, null, 2);
+  } catch (err) {
+    text = normalized ? String(normalized) : "Unknown error";
+    if (err instanceof Error) {
+      text = `${text}\n(stringify failed: ${err.message})`;
+    }
+  }
+
+  return truncate(text, options.maxOutputLength ?? 8000);
+}
+
+export function formatApiError(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (typeof err.detail === "string") return err.detail;
+    if (err.detail == null) return err.message;
+
+    if (typeof err.detail === "object" && !Array.isArray(err.detail)) {
+      try {
+        const json = JSON.stringify(err.detail, null, 2);
+        if (json) return `${err.message}\n${json}`;
+      } catch {
+        // fall through to generic formatter
+      }
+    }
+
+    const detailText = stringifyForDisplay(err.detail);
+    if (!detailText || detailText === err.message) return err.message;
+
+    return `${err.message}\n${detailText}`;
+  }
+  if (err instanceof Error) return err.message;
+  return stringifyForDisplay(err);
+}
+
 type FastApiValidationErrorItem = {
   loc?: unknown;
   msg?: unknown;
 };
+
+function formatLoc(loc: unknown): string | null {
+  if (Array.isArray(loc) && loc.length) return String(loc[loc.length - 1]);
+  if (typeof loc === "string" && loc.trim()) return loc;
+  return null;
+}
+
+function collectErrorMessages(detail: unknown, depth = 0): string[] {
+  if (depth > 5 || detail == null) return [];
+
+  if (typeof detail === "string") {
+    const trimmed = detail.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  if (Array.isArray(detail)) {
+    return detail.flatMap((item) => collectErrorMessages(item, depth + 1));
+  }
+
+  if (typeof detail !== "object") return [];
+
+  const obj = detail as Record<string, unknown>;
+  const messages: string[] = [];
+  const field = formatLoc(obj.loc ?? obj.path ?? obj.field);
+
+  for (const key of ["msg", "message", "reason"] as const) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) {
+      messages.push(field ? `${field}: ${value}` : value);
+    }
+  }
+
+  if ("errors" in obj) {
+    messages.push(...collectErrorMessages((obj as { errors: unknown }).errors, depth + 1));
+  }
+
+  for (const [key, value] of Object.entries(obj)) {
+    if (["loc", "path", "field", "msg", "message", "reason", "errors"].includes(key)) continue;
+    if (typeof value === "string" && value.trim()) {
+      messages.push(`${key}: ${value}`);
+    } else if (Array.isArray(value)) {
+      const nested = collectErrorMessages(value, depth + 1);
+      messages.push(...nested.map((msg) => (key ? `${key}: ${msg}` : msg)));
+    }
+  }
+
+  return messages;
+}
 
 function formatFastApiValidationErrors(detail: unknown): string | null {
   if (!Array.isArray(detail)) return null;
@@ -43,8 +232,7 @@ function formatFastApiValidationErrors(detail: unknown): string | null {
     .map((item) => {
       if (!item || typeof item !== "object") return null;
       const { loc, msg } = item as FastApiValidationErrorItem;
-      const locParts = Array.isArray(loc) ? loc : [];
-      const field = locParts.length ? String(locParts[locParts.length - 1]) : "body";
+      const field = formatLoc(loc) ?? "body";
       const message = typeof msg === "string" ? msg : "Invalid value";
       return `${field}: ${message}`;
     })
@@ -63,25 +251,27 @@ async function parseErrorDetail(res: Response): Promise<{ message: string; detai
         return { message: detail, detail };
       }
 
+       const messages = new Set<string>();
       const validationMessage = formatFastApiValidationErrors(detail);
       if (validationMessage) {
-        return { message: validationMessage, detail };
-      }
-
-      if (detail && typeof detail === "object") {
-        const maybeMessage = (detail as Record<string, unknown>).message;
-        const maybeReason = (detail as Record<string, unknown>).reason;
-        if (typeof maybeMessage === "string" && typeof maybeReason === "string") {
-          return { message: `${maybeMessage}\n${maybeReason}`, detail };
-        }
-        if (typeof maybeMessage === "string") {
-          return { message: maybeMessage, detail };
+        for (const line of validationMessage.split(/\r?\n/)) {
+          const trimmed = line.trim();
+          if (trimmed) messages.add(trimmed);
         }
       }
 
-      return { message: "Request failed", detail };
+      for (const msg of collectErrorMessages(detail)) {
+        const trimmed = msg.trim();
+        if (trimmed) messages.add(trimmed);
+      }
+
+      if (messages.size) {
+        return { message: Array.from(messages).join("\n"), detail };
+      }
+
+      return { message: stringifyForDisplay(detail), detail };
     }
-    return { message: "Request failed", detail: data };
+    return { message: stringifyForDisplay(data), detail: data };
   }
   const text = await res.text().catch(() => "");
   return { message: text || "Request failed", detail: text };
@@ -246,6 +436,57 @@ export async function apiTeacherGradeSubmission(
   return apiFetch<SubmissionPublic>(
     `/submissions/${submissionId}/teacher-grade`,
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    token
+  );
+}
+
+export async function apiListMyTARequests(
+  token: string,
+  status?: TAReviewRequestStatus
+): Promise<TAReviewRequestPublic[]> {
+  const query = status ? `?status=${status}` : "";
+  return apiFetch<TAReviewRequestPublic[]>(`/ta-requests/me${query}`, {}, token);
+}
+
+export async function apiAcceptTARequest(token: string, requestId: string): Promise<TAReviewRequestPublic> {
+  return apiFetch<TAReviewRequestPublic>(`/ta-requests/${requestId}/accept`, { method: "POST" }, token);
+}
+
+export async function apiDeclineTARequest(token: string, requestId: string): Promise<TAReviewRequestPublic> {
+  return apiFetch<TAReviewRequestPublic>(`/ta-requests/${requestId}/decline`, { method: "POST" }, token);
+}
+
+export async function apiListEligibleTAs(token: string): Promise<UserPublic[]> {
+  return apiFetch<UserPublic[]>(`/ta/eligible`, {}, token);
+}
+
+export async function apiCreateTARequest(
+  token: string,
+  submissionId: string,
+  taUserId: string
+): Promise<TAReviewRequestPublic> {
+  return apiFetch<TAReviewRequestPublic>(
+    `/submissions/${submissionId}/ta-requests`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ta_user_id: taUserId }),
+    },
+    token
+  );
+}
+
+export async function apiListTARequestsForAssignment(
+  token: string,
+  assignmentId: string
+): Promise<TAReviewRequestPublic[]> {
+  return apiFetch<TAReviewRequestPublic[]>(`/assignments/${assignmentId}/ta-requests`, {}, token);
+}
+
+export async function apiParaphrase(token: string, text: string): Promise<RephraseResponse> {
+  return apiFetch<RephraseResponse>(
+    "/reviews/paraphrase",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) },
     token
   );
 }

@@ -2,7 +2,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # Allow extra env vars (e.g., local-only secrets for scripts)
+    )
 
     app_env: str = "dev"
     database_url: str = "sqlite:///./dev.db"
@@ -13,7 +17,16 @@ class Settings(BaseSettings):
 
     storage_dir: str = "storage"
 
+    # TA/credits
+    ta_qualification_threshold: int = 20
+    review_credit_base: float = 1.0
+    review_credit_alignment_bonus_max: float = 1.0
+    ta_credit_multiplier: float = 2.0
+
     openai_api_key: str | None = None
+
+    # OpenAI依存の機能を有効にするためのフラグ
+    enable_openai: bool = False #defaultでは無効
 
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

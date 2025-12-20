@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiCreateAssignment, apiListAssignments } from "@/lib/api";
+import { apiCreateAssignment, apiListAssignments, formatApiError } from "@/lib/api";
 import type { AssignmentPublic } from "@/lib/types";
+import { ErrorMessages } from "@/components/ErrorMessages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +32,7 @@ export default function AssignmentsPage() {
       const list = await apiListAssignments();
       setAssignments(list);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "読み込みに失敗しました");
+      setError(formatApiError(err));
     } finally {
       setLoading(false);
     }
@@ -59,7 +60,7 @@ export default function AssignmentsPage() {
       setTargetReviews(2);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "作成に失敗しました");
+      setError(formatApiError(err));
     } finally {
       setCreating(false);
     }
@@ -78,7 +79,9 @@ export default function AssignmentsPage() {
           {error ? (
             <Alert variant="destructive">
               <AlertTitle>エラー</AlertTitle>
-              <AlertDescription className="whitespace-pre-wrap">{error}</AlertDescription>
+              <AlertDescription>
+                <ErrorMessages message={error} />
+              </AlertDescription>
             </Alert>
           ) : null}
 

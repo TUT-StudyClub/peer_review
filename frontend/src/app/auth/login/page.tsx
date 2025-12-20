@@ -6,8 +6,10 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 
 import { useAuth } from "@/app/providers";
+import { ErrorMessages } from "@/components/ErrorMessages";
 import { Card } from "@/components/legacy-ui/Card";
 import { Field, PrimaryButton, TextInput } from "@/components/legacy-ui/Form";
+import { formatApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,7 +25,7 @@ export default function LoginPage() {
       await login(email, password);
       router.push("/assignments");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "ログインに失敗しました");
+      setError(formatApiError(err));
     }
   };
 
@@ -44,7 +46,7 @@ export default function LoginPage() {
           </Field>
           {error ? (
             <div className="whitespace-pre-wrap rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-              {error}
+              <ErrorMessages message={error} />
             </div>
           ) : null}
           <PrimaryButton type="submit" disabled={loading}>
