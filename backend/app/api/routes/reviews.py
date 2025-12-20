@@ -13,6 +13,7 @@ from app.models.review import (
     ReviewRubricScore,
 )
 from app.models.submission import Submission
+from app.models.ta_review_request import TAReviewRequest, TAReviewRequestStatus
 from app.models.user import User
 from app.schemas.review import (
     MetaReviewCreate,
@@ -25,6 +26,7 @@ from app.schemas.review import (
     ReviewPublic,
     ReviewReceived,
     ReviewSubmit,
+    TeacherReviewPublic,
 )
 from app.services.ai import (
     FeatureDisabledError,
@@ -37,7 +39,7 @@ from app.services.ai import (
     polish_review,
 )
 from app.services.anonymize import alias_for_user
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, require_teacher
 from app.services.credits import calculate_review_credit_gain
 from app.services.matching import get_or_assign_review_assignment
 
@@ -360,3 +362,73 @@ def create_meta_review(
     db.commit()
     db.refresh(meta)
     return meta
+
+
+@router.get("/submissions/{submission_id}/reviews", response_model=list[TeacherReviewPublic])
+def list_reviews_for_submission(
+    submission_id: UUID,
+    db: Session = Depends(get_db),
+    _teacher: User = Depends(require_teacher),
+) -> list[TeacherReviewPublic]:
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    review_assignments = (
+        db.query(ReviewAssignment)
+        .filter(ReviewAssignment.submission_id == submission_id)
+        .all()
+    )
+    ra_by_id = {ra.id: ra for ra in review_assignments}
+    reviewer_by_id = {ra.reviewer_id for ra in review_assignments}
+    reviewers = (
+        db.query(User)
+        .filter(User.id.in_(list(reviewer_by_id)))
+        .all()
+    )
+    reviewer_map = {u.id: u for u in reviewers}
+    accepted_ta_ids = {
+        req.ta_id
+        for req in db.query(TAReviewRequest)
+        .filter(
+            TAReviewRequest.submission_id == submission_id,
+            TAReviewRequest.status == TAReviewRequestStatus.accepted,
+        )
+        .all()
+    }
+    reviews = (
+        db.query(Review)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .filter(ReviewAssignment.submission_id == submission_id)
+        .order_by(Review.created_at.asc())
+        .all()
+    )
+    results: list[TeacherReviewPublic] = []
+    for r in reviews:
+        ra = ra_by_id.get(r.review_assignment_id)
+        if ra is None:
+            continue
+        reviewer_user = reviewer_map.get(ra.reviewer_id)
+        reviewer_alias = alias_for_user(
+            user_id=ra.reviewer_id, assignment_id=submission.assignment_id, prefix="Reviewer"
+        )
+        scores = (
+            db.query(ReviewRubricScore)
+            .filter(ReviewRubricScore.review_id == r.id)
+            .all()
+        )
+        meta = db.query(MetaReview).filter(MetaReview.review_id == r.id).first()
+        results.append(
+            TeacherReviewPublic(
+                id=r.id,
+                reviewer_alias=reviewer_alias,
+                is_ta=bool(reviewer_user.is_ta) if (reviewer_user and reviewer_user.is_ta) else ra.reviewer_id in accepted_ta_ids,
+                comment=r.comment,
+                created_at=r.created_at,
+                rubric_scores=scores,
+                meta_review=meta,
+                ai_quality_score=r.ai_quality_score,
+                ai_quality_reason=r.ai_quality_reason,
+            )
+        )
+    return results
