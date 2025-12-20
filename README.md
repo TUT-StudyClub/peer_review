@@ -224,13 +224,29 @@ AUTH_S1="Authorization: Bearer $TOK_S1"
 AUTH_S2="Authorization: Bearer $TOK_S2"
 ```
 
+### 0) 授業（Course）作成 & 受講登録
+
+#### 0-1. 授業を作成（teacher）
+```bash
+COURSE_ID="$(curl -sS -X POST "$BASE_URL/courses" \
+  -H "$AUTH_T" -H "Content-Type: application/json" \
+  -d '{"title":"情報工学A","description":"2025年度 前期"}' | jq -r .id)"
+echo "$COURSE_ID"
+```
+
+#### 0-2. student が受講登録
+```bash
+curl -sS -X POST "$BASE_URL/courses/$COURSE_ID/enroll" -H "$AUTH_S1" | jq
+curl -sS -X POST "$BASE_URL/courses/$COURSE_ID/enroll" -H "$AUTH_S2" | jq
+```
+
 ### 1) 課題（Assignment）作成（teacher）
 
 #### 1-1. 課題作成
 ```bash
 ASSIGNMENT_ID="$(curl -sS -X POST "$BASE_URL/assignments" \
   -H "$AUTH_T" -H "Content-Type: application/json" \
-  -d '{"title":"レポート課題1","description":"MarkdownかPDFを提出してください","target_reviews_per_submission":2}' | jq -r .id)"
+  -d '{"course_id":"'"$COURSE_ID"'","title":"レポート課題1","description":"MarkdownかPDFを提出してください","target_reviews_per_submission":2}' | jq -r .id)"
 echo "$ASSIGNMENT_ID"
 ```
 

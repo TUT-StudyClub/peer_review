@@ -53,11 +53,17 @@ export function NavBar() {
               <div className="text-xs text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-foreground">{user.name}</span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">{user.title}</span>
+                  {user.role !== "teacher" ? (
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px]">{user.title}</span>
+                  ) : null}
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2">
-                  <span>ランク: {user.rank}</span>
-                  <span>credits: {user.credits}</span>
+                  {user.role !== "teacher" ? (
+                    <>
+                      <span>ランク: {user.rank}</span>
+                      <span>credits: {user.credits}</span>
+                    </>
+                  ) : null}
                   <span>{user.role}</span>
                   {user.is_ta ? <span className="text-amber-600">TA⭐</span> : null}
                 </div>
