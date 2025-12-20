@@ -18,9 +18,9 @@ class PDFExtractionService:
             with pdf_path.open("rb") as f:
                 header = f.read(5)
             return header.startswith(b"%PDF-")
-        except (OSError, IOError) as e:
+        except (OSError, IOError):
             return False
-        except Exception as e:
+        except Exception:
             # 予期しないエラーもFalseとして扱う
             return False
 
