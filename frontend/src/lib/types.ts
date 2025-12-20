@@ -13,8 +13,19 @@ export type UserPublic = {
   name: string;
   role: UserRole;
   credits: number;
+  rank: string;
+  title: string;
   is_ta: boolean;
   created_at: string;
+};
+
+export type UserRankingEntry = {
+  id: string;
+  name: string;
+  credits: number;
+  rank: string;
+  title: string;
+  is_ta: boolean;
 };
 
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";

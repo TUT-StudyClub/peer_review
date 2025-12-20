@@ -27,6 +27,15 @@ class UserPublic(BaseModel):
     created_at: datetime
 
 
+class UserRankingEntry(BaseModel):
+    id: UUID
+    name: str
+    credits: int
+    rank: str
+    title: str
+    is_ta: bool
+
+
 class ReviewerSkill(BaseModel):
     logic: float
     specificity: float
