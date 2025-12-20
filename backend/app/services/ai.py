@@ -76,6 +76,7 @@ def _openai_polish(text: str) -> dict:
     system: str = (
         "You are an assistant that rewrites reviews to be polite, constructive, and helpful. "
         "Return JSON only."
+        "Return Japanese text."
     )
     user: dict[str, str | list[str]] = {
         "text": text,
@@ -225,6 +226,7 @@ def _openai_analyze(submission_text: str, review_text: str) -> ReviewAIResult | 
     system = (
         "You are an assistant that evaluates peer-review quality and toxicity. "
         "Return JSON only."
+        "Return Japanese text."
     )
     user = {
         "submission": submission_text,
