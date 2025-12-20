@@ -83,7 +83,7 @@ def polish_review(text: str) -> tuple[str, str | None]:
 
     result = _openai_polish(text)
     if result is None:
-        raise FeatureDisabledError("OpenAI polish failed or not available")
+        raise FeatureDisabledError("OpenAI API request failed")
 
     polished = str(result.get("polished_text", "")).strip()
     notes = result.get("notes")
