@@ -3,8 +3,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
 from app.core.config import settings
+from app.db.session import get_db
 from app.models.assignment import Assignment, RubricCriterion
 from app.models.review import (
     MetaReview,
@@ -42,8 +42,8 @@ from app.services.ai import (
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user, require_teacher
 from app.services.credits import calculate_review_credit_gain
-from app.services.matching import get_or_assign_review_assignment
 from app.services.duplicate import detect_duplicate_review, hash_comment
+from app.services.matching import get_or_assign_review_assignment
 from app.services.similarity import check_similarity
 
 router = APIRouter()

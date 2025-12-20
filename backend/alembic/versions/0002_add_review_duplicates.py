@@ -5,9 +5,10 @@ Revises: 0001_add_review_similarity
 Create Date: 2025-02-01 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0002_add_review_duplicates"
@@ -70,7 +71,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
 	conn = op.get_bind()
-	dialect = conn.dialect.name
 
 	if _has_column(conn, "reviews", "duplicate_of_review_id"):
 		if _has_index(conn, "reviews", "ix_reviews_duplicate_of_review_id"):

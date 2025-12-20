@@ -1,15 +1,13 @@
-from uuid import uuid4
-from datetime import datetime
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.api.routes.reviews import received_reviews, submit_review
 from app.db.base import Base
 from app.models.assignment import Assignment, RubricCriterion
+from app.models.review import ReviewAssignment
 from app.models.submission import Submission, SubmissionRubricScore
 from app.models.user import User
-from app.models.review import ReviewAssignment, ReviewRubricScore
-from app.api.routes.reviews import submit_review, received_reviews
 from app.schemas.review import ReviewSubmit, RubricScore
 
 
