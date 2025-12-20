@@ -68,7 +68,6 @@ class OpenAIUnavailableError(Exception):
 def detect_toxic_hits(text: str) -> list[str]:
     return [p for p in _BANNED_PATTERNS if re.search(p, text)]
 
-
 def _openai_polish(text: str) -> dict:
     if not settings.openai_api_key or not settings.enable_openai:
         raise FeatureDisabledError("OpenAI not configured")
