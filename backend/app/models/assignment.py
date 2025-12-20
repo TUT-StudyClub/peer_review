@@ -12,6 +12,13 @@ class Assignment(Base):
     __tablename__ = "assignments"
 
     id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
+    course_id: Mapped[UUID | None] = mapped_column(
+        SAUuid(as_uuid=True),
+        ForeignKey("courses.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
+        default=None,
+    )
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, default=None)
     target_reviews_per_submission: Mapped[int] = mapped_column(Integer, default=2)
@@ -19,6 +26,7 @@ class Assignment(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
+    course = relationship("Course", back_populates="assignments")
     rubric_criteria = relationship(
         "RubricCriterion", back_populates="assignment", cascade="all, delete-orphan"
     )

@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class AssignmentCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
+    course_id: UUID
     description: str | None = None
     target_reviews_per_submission: int = Field(default=2, ge=1, le=3)
 
@@ -14,6 +15,7 @@ class AssignmentPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    course_id: UUID | None
     title: str
     description: str | None
     target_reviews_per_submission: int
@@ -36,4 +38,3 @@ class RubricCriterionPublic(BaseModel):
     description: str | None
     max_score: int
     order_index: int
-
