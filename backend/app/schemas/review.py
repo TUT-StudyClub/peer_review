@@ -3,8 +3,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.ta_review_request import TAReviewRequestStatus
 from app.models.submission import SubmissionFileType
+from app.models.ta_review_request import TAReviewRequestStatus
 
 
 class RubricScore(BaseModel):

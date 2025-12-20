@@ -4,14 +4,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
 from app.core.config import settings
+from app.db.session import get_db
 from app.models.review import ReviewAssignment, ReviewAssignmentStatus
 from app.models.submission import Submission
 from app.models.ta_review_request import TAReviewRequest, TAReviewRequestStatus
 from app.models.user import User, UserRole
-from app.schemas.user import UserPublic
 from app.schemas.review import TAReviewRequestCreate, TAReviewRequestPublic
+from app.schemas.user import UserPublic
 from app.services.auth import get_current_user, require_teacher
 
 router = APIRouter()
