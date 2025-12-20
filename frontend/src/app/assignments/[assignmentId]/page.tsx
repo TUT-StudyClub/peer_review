@@ -62,6 +62,14 @@ const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
   { key: "example", label: "具体例", text: "【具体例】読者がイメージできる具体例を1つ追加すると説得力が増します。" },
 ];
 
+type ScoreInput = number | "";
+
+const parseScoreInput = (value: string): ScoreInput => {
+  if (value === "") return "";
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? "" : parsed;
+};
+
 function shortId(id: string) {
   return id.slice(0, 8);
 }
@@ -120,7 +128,7 @@ export default function AssignmentDetailPage() {
 
   const [reviewTask, setReviewTask] = useState<ReviewAssignmentTask | null>(null);
   const [reviewComment, setReviewComment] = useState("");
-  const [reviewScores, setReviewScores] = useState<Record<string, number>>({});
+  const [reviewScores, setReviewScores] = useState<Record<string, ScoreInput>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const templateClicks = useRef<Record<string, number>>({});
 
@@ -138,7 +146,7 @@ export default function AssignmentDetailPage() {
   const [gradeTargetId, setGradeTargetId] = useState<string | null>(null);
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
-  const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, number>>({});
+  const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, ScoreInput>>({});
   const [teacherReviewList, setTeacherReviewList] = useState<TeacherReviewPublic[]>([]);
   const [teacherReviewListLoading, setTeacherReviewListLoading] = useState(false);
   const [teacherReviewListTargetId, setTeacherReviewListTargetId] = useState<string | null>(null);
@@ -198,14 +206,14 @@ export default function AssignmentDetailPage() {
     if (!rubric.length) return;
     setReviewScores((prev) => {
       if (Object.keys(prev).length) return prev;
-      const init: Record<string, number> = {};
-      for (const c of rubric) init[c.id] = 0;
+      const init: Record<string, ScoreInput> = {};
+      for (const c of rubric) init[c.id] = "";
       return init;
     });
     setTeacherRubricScores((prev) => {
       if (Object.keys(prev).length) return prev;
-      const init: Record<string, number> = {};
-      for (const c of rubric) init[c.id] = 0;
+      const init: Record<string, ScoreInput> = {};
+      for (const c of rubric) init[c.id] = "";
       return init;
     });
   }, [rubric]);
@@ -277,8 +285,8 @@ export default function AssignmentDetailPage() {
       const task = await apiNextReviewTask(token, assignmentId);
       setReviewTask(task);
       setReviewComment("");
-      const init: Record<string, number> = {};
-      for (const c of task.rubric) init[c.id] = 0;
+      const init: Record<string, ScoreInput> = {};
+      for (const c of task.rubric) init[c.id] = "";
       setReviewScores(init);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
@@ -474,8 +482,8 @@ export default function AssignmentDetailPage() {
     setGradeTargetId(submissionId);
     setTeacherFeedback("");
     setTeacherTotalScore(80);
-    const init: Record<string, number> = {};
-    for (const c of rubric) init[c.id] = 0;
+    const init: Record<string, ScoreInput> = {};
+    for (const c of rubric) init[c.id] = "";
     setTeacherRubricScores(init);
   };
 
@@ -780,9 +788,12 @@ export default function AssignmentDetailPage() {
                         type="number"
                         min={0}
                         max={c.max_score}
-                        value={teacherRubricScores[c.id] ?? 0}
+                        value={teacherRubricScores[c.id] ?? ""}
                         onChange={(e) =>
-                          setTeacherRubricScores((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
+                          setTeacherRubricScores((prev) => ({
+                            ...prev,
+                            [c.id]: parseScoreInput(e.target.value),
+                          }))
                         }
                       />
                     </Field>
@@ -1091,8 +1102,10 @@ export default function AssignmentDetailPage() {
                       type="number"
                       min={0}
                       max={c.max_score}
-                      value={reviewScores[c.id] ?? 0}
-                      onChange={(e) => setReviewScores((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))}
+                      value={reviewScores[c.id] ?? ""}
+                      onChange={(e) =>
+                        setReviewScores((prev) => ({ ...prev, [c.id]: parseScoreInput(e.target.value) }))
+                      }
                     />
                   </div>
                 ))}
