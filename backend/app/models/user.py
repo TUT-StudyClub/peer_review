@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.config import settings
 from app.db.base import Base
+from app.services.rank import get_user_rank
 
 
 class UserRole(str, enum.Enum):
@@ -34,3 +35,11 @@ class User(Base):
     @property
     def is_ta(self) -> bool:
         return self.credits >= settings.ta_qualification_threshold
+
+    @property
+    def rank(self) -> str:
+        return get_user_rank(self.credits).key
+
+    @property
+    def title(self) -> str:
+        return get_user_rank(self.credits).title

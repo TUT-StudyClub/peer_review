@@ -517,6 +517,24 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 - マッチングは「まだレビューされていない提出物」を優先しつつ、同条件なら `credits` が高い提出物が先に回ります  
   → **レビューをサボると自分の提出物が後回しになりやすい** 仕組みです
 
+### ランク（rank / 称号）
+- ランクは `credits` に基づいて決まり、`/users/me` などで `rank` と `title` が返却されます。
+- 定義は `backend/app/core/config.py` の `USER_RANK_DEFINITIONS` にあり、`min_credits` の閾値で判定します。
+- デフォルトの称号/閾値:
+  - 0: 見習いレビュアー
+  - 5: ブロンズレビュアー
+  - 15: シルバーレビュアー
+  - 30: ゴールドレビュアー
+  - 50: プラチナレビュアー
+  - 80: ダイヤモンドレビュアー
+
+### ランキング（TOP5）
+- `GET /users/ranking?limit=5` で取得できます。
+- `period=weekly|monthly` を指定すると週間/月間ランキングを取得できます（省略時は `total`）。
+- 週間/月間は直近7日/30日（UTC）を集計し、`period_credits` に獲得creditsを返します。
+- 対象は **TA要件（`TA_QUALIFICATION_THRESHOLD`）を満たすユーザーのみ** です。
+- フロントの `/start` にランキング表を表示しています。
+
 ---
 
 ## 開発メモ
