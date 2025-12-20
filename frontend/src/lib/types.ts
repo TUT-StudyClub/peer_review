@@ -153,6 +153,11 @@ export type ReviewPublic = {
   ai_specificity: number | null;
   ai_empathy: number | null;
   ai_insight: number | null;
+  ai_comment_alignment_score: number | null;
+  ai_comment_alignment_reason: string | null;
+  rubric_alignment_score: number | null;
+  total_alignment_score: number | null;
+  credit_awarded: number | null;
 };
 
 export type MetaReviewPublic = {
@@ -178,6 +183,11 @@ export type ReviewReceived = {
   meta_review: MetaReviewPublic | null;
   ai_quality_score: number | null;
   ai_quality_reason: string | null;
+  ai_comment_alignment_score: number | null;
+  ai_comment_alignment_reason: string | null;
+  rubric_alignment_score: number | null;
+  total_alignment_score: number | null;
+  credit_awarded: number | null;
 };
 
 export type TeacherReviewPublic = {
@@ -190,6 +200,11 @@ export type TeacherReviewPublic = {
   meta_review: MetaReviewPublic | null;
   ai_quality_score: number | null;
   ai_quality_reason: string | null;
+  ai_comment_alignment_score: number | null;
+  ai_comment_alignment_reason: string | null;
+  rubric_alignment_score: number | null;
+  total_alignment_score: number | null;
+  credit_awarded: number | null;
 };
 
 export type RephraseResponse = {
