@@ -13,18 +13,33 @@ from app.models.review import (
     ReviewRubricScore,
 )
 from app.models.submission import Submission
+from app.models.ta_review_request import TAReviewRequest, TAReviewRequestStatus
 from app.models.user import User
 from app.schemas.review import (
     MetaReviewCreate,
     MetaReviewPublic,
+    PolishRequest,
+    PolishResponse,
+    RephraseRequest,
+    RephraseResponse,
     ReviewAssignmentTask,
     ReviewPublic,
     ReviewReceived,
     ReviewSubmit,
+    TeacherReviewPublic,
 )
-from app.services.ai import analyze_review
+from app.services.ai import (
+    FeatureDisabledError,
+    ModerationError,
+    OpenAIEmptyChoiceError,
+    OpenAIRequestError,
+    OpenAIResponseParseError,
+    OpenAIUnavailableError,
+    analyze_review,
+    polish_review,
+)
 from app.services.anonymize import alias_for_user
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, require_teacher
 from app.services.credits import calculate_review_credit_gain
 from app.services.matching import get_or_assign_review_assignment
 from app.services.similarity import check_similarity
@@ -71,6 +86,36 @@ def next_review_task(
     )
 
 
+@router.post("/reviews/polish", response_model=PolishResponse)
+def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_current_user)):
+    try:
+        polished_text, notes = polish_review(payload.text)
+        
+    except FeatureDisabledError as e:
+        raise HTTPException(status_code=503, detail="OpenAI not configured") from e
+    
+    except OpenAIUnavailableError as e:
+        raise HTTPException(status_code=503, detail="OpenAI temporarily unavailable") from e
+    
+    except OpenAIRequestError as e:
+        status = 504 if e.reason == "timeout" else 502
+        raise HTTPException(
+            status_code=status,
+            detail={"message": "OpenAI request failed", "reason": e.reason, "status_code": e.status_code},
+        ) from e
+    
+    except (OpenAIResponseParseError, OpenAIEmptyChoiceError) as e:
+        raise HTTPException(status_code=502, detail={"message": "OpenAI response parse failed", "reason": str(e)}) from e
+    
+    except ModerationError as e:
+        raise HTTPException(
+            status_code=422, 
+            detail={"message": "Polish blocked by moderation", "details": e.args[0]}
+        ) from e
+
+    return PolishResponse(polished_text=polished_text, notes=notes)
+
+
 @router.post("/review-assignments/{review_assignment_id}/submit", response_model=ReviewPublic)
 def submit_review(
     review_assignment_id: UUID,
@@ -113,7 +158,8 @@ def submit_review(
         if not (0 <= s.score <= criterion.max_score):
             raise HTTPException(status_code=400, detail="Rubric score out of range")
 
-    submission_text = submission.markdown_text or ""
+    # submission_text を優先、なければ markdown_text、それもなければ空文字列を使用
+    submission_text = submission.submission_text or submission.markdown_text or ""
     ai_result = analyze_review(
         submission_text=submission_text,
         review_text=payload.comment,
@@ -201,6 +247,37 @@ def submit_review(
     db.commit()
     db.refresh(review)
     return review
+
+
+def _simple_rephrase(text: str) -> RephraseResponse:
+    cleaned = " ".join(text.split())
+    replacements = {
+        "と思います": "と考えます",
+        "です。": "です。",
+        "だと思う": "と考えます",
+        "と思う": "と考えます",
+        "もう少し": "より一層",
+        "いいと思います": "良い点だと感じます",
+    }
+    rephrased = cleaned
+    for src, dst in replacements.items():
+        rephrased = rephrased.replace(src, dst)
+    if len(rephrased) == 0:
+        rephrased = cleaned
+    if not rephrased.endswith(("。", ".", "！", "?", "！", "?", "」")) and rephrased:
+        rephrased += "。"
+
+    notice = "開発用の簡易言い換えです。必要に応じて調整してください。"
+    return RephraseResponse(original=text, rephrased=rephrased, notice=notice)
+
+
+@router.post("/reviews/paraphrase", response_model=RephraseResponse)
+def paraphrase(
+    payload: RephraseRequest,
+    _current_user: User = Depends(get_current_user),
+) -> RephraseResponse:
+    # AI未設定でも使えるように簡易変換のみ。
+    return _simple_rephrase(payload.text)
 
 
 @router.get("/assignments/{assignment_id}/reviews/received", response_model=list[ReviewReceived])
@@ -303,3 +380,73 @@ def create_meta_review(
     db.commit()
     db.refresh(meta)
     return meta
+
+
+@router.get("/submissions/{submission_id}/reviews", response_model=list[TeacherReviewPublic])
+def list_reviews_for_submission(
+    submission_id: UUID,
+    db: Session = Depends(get_db),
+    _teacher: User = Depends(require_teacher),
+) -> list[TeacherReviewPublic]:
+    submission = db.query(Submission).filter(Submission.id == submission_id).first()
+    if submission is None:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    review_assignments = (
+        db.query(ReviewAssignment)
+        .filter(ReviewAssignment.submission_id == submission_id)
+        .all()
+    )
+    ra_by_id = {ra.id: ra for ra in review_assignments}
+    reviewer_by_id = {ra.reviewer_id for ra in review_assignments}
+    reviewers = (
+        db.query(User)
+        .filter(User.id.in_(list(reviewer_by_id)))
+        .all()
+    )
+    reviewer_map = {u.id: u for u in reviewers}
+    accepted_ta_ids = {
+        req.ta_id
+        for req in db.query(TAReviewRequest)
+        .filter(
+            TAReviewRequest.submission_id == submission_id,
+            TAReviewRequest.status == TAReviewRequestStatus.accepted,
+        )
+        .all()
+    }
+    reviews = (
+        db.query(Review)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .filter(ReviewAssignment.submission_id == submission_id)
+        .order_by(Review.created_at.asc())
+        .all()
+    )
+    results: list[TeacherReviewPublic] = []
+    for r in reviews:
+        ra = ra_by_id.get(r.review_assignment_id)
+        if ra is None:
+            continue
+        reviewer_user = reviewer_map.get(ra.reviewer_id)
+        reviewer_alias = alias_for_user(
+            user_id=ra.reviewer_id, assignment_id=submission.assignment_id, prefix="Reviewer"
+        )
+        scores = (
+            db.query(ReviewRubricScore)
+            .filter(ReviewRubricScore.review_id == r.id)
+            .all()
+        )
+        meta = db.query(MetaReview).filter(MetaReview.review_id == r.id).first()
+        results.append(
+            TeacherReviewPublic(
+                id=r.id,
+                reviewer_alias=reviewer_alias,
+                is_ta=bool(reviewer_user.is_ta) if (reviewer_user and reviewer_user.is_ta) else ra.reviewer_id in accepted_ta_ids,
+                comment=r.comment,
+                created_at=r.created_at,
+                rubric_scores=scores,
+                meta_review=meta,
+                ai_quality_score=r.ai_quality_score,
+                ai_quality_reason=r.ai_quality_reason,
+            )
+        )
+    return results

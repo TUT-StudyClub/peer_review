@@ -1,3 +1,5 @@
+import logging
+from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -11,7 +13,10 @@ from app.models.submission import Submission, SubmissionFileType, SubmissionRubr
 from app.models.user import User, UserRole
 from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
 from app.services.auth import get_current_user, require_teacher
+from app.services.pdf import PDFExtractionService
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -48,9 +53,28 @@ def submit_report(
         file_type=file_type,
     )
 
+    # テキスト抽出処理
+    submission_text: str | None = None
     markdown_text: str | None = None
-    if file_type == SubmissionFileType.markdown:
+
+    if file_type == SubmissionFileType.pdf:
+        # PDF形式：PDFExtractionServiceで抽出
+        try:
+            stored_path_obj = Path(stored_path)
+            extracted_text = PDFExtractionService.extract_text(
+                stored_path_obj,
+                max_pages=50,
+                max_chars=50000,
+            )
+            submission_text = extracted_text if extracted_text.strip() else None
+        except Exception as e:
+            # PDF抽出失敗時はログ記録しつつ提出を続行
+            logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
+            submission_text = None
+    elif file_type == SubmissionFileType.markdown:
+        # Markdown形式：ファイル内容を読み込み
         markdown_text = stored_path.read_text(encoding="utf-8", errors="replace")
+        submission_text = markdown_text
 
     submission = Submission(
         id=submission_id,
@@ -60,6 +84,7 @@ def submit_report(
         original_filename=file.filename or "upload",
         storage_path=str(stored_path),
         markdown_text=markdown_text,
+        submission_text=submission_text,
     )
     db.add(submission)
     db.commit()

@@ -5,9 +5,6 @@ export default function StartPage() {
         <div className="space-y-6">
             <div className="rounded-xl border bg-white p-6">
                 <h1 className="text-2xl font-semibold">Peer Review（匿名ピアレビュー）</h1>
-                <p className="mt-2 text-sm text-black">
-                    提出 → 匿名マッチング → ルーブリックレビュー → メタ評価 → 成績算出までを試せるMVP UIです。
-                </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                     <Link
                         href="/assignments"

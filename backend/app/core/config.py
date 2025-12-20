@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     similarity_threshold: float = 0.5
     similarity_penalty_enabled: bool = True
     similarity_ngram_n: int = 2
+
+    # OpenAI依存の機能を有効にするためのフラグ
+    enable_openai: bool = False #defaultでは無効
+
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Optional regex-based origins (useful when Next.js dev port changes, e.g. 3001/3002).
