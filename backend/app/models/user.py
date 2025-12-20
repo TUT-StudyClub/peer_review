@@ -6,6 +6,7 @@ from sqlalchemy import DateTime, Enum, Integer, String
 from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.config import settings
 from app.db.base import Base
 
 
@@ -30,3 +31,6 @@ class User(Base):
     submissions = relationship("Submission", back_populates="author")
     review_assignments = relationship("ReviewAssignment", back_populates="reviewer")
 
+    @property
+    def is_ta(self) -> bool:
+        return self.credits >= settings.ta_qualification_threshold
