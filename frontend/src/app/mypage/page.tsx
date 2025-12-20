@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiGetReviewerSkill, apiListCourses, formatApiError } from "@/lib/api";
-import type { CoursePublic, ReviewerSkill } from "@/lib/types";
+import { apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
+import type { AssignmentPublic, CoursePublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { ErrorMessages } from "@/components/ErrorMessages";
@@ -23,10 +23,19 @@ export default function MyPage() {
   const [courses, setCourses] = useState<CoursePublic[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
   const [refreshing, setRefreshing] = useState(false);
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
+  const selectedCourse = useMemo(
+    () => enrolledCourses.find((course) => course.id === selectedCourseId) ?? null,
+    [enrolledCourses, selectedCourseId]
+  );
+
+  const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
 
   const loadSkill = useCallback(async () => {
     if (!token) return;
@@ -56,21 +65,56 @@ export default function MyPage() {
     }
   }, [token]);
 
+  const loadAssignments = useCallback(async (courseId: string) => {
+    setAssignmentsLoading(true);
+    setAssignmentsError(null);
+    try {
+      const list = await apiListAssignments(courseId);
+      setAssignments(list);
+    } catch (err) {
+      setAssignmentsError(formatApiError(err));
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  }, []);
+
   const refreshAll = useCallback(async () => {
     if (!token) return;
     setRefreshing(true);
     try {
-      await Promise.all([refreshMe(), loadSkill(), loadCourses()]);
+      const tasks = [refreshMe(), loadSkill(), loadCourses()];
+      if (selectedCourseId) tasks.push(loadAssignments(selectedCourseId));
+      await Promise.all(tasks);
     } finally {
       setRefreshing(false);
     }
-  }, [token, refreshMe, loadSkill, loadCourses]);
+  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments, selectedCourseId]);
 
   useEffect(() => {
     if (!token || user?.role !== "student") return;
     void loadSkill();
     void loadCourses();
   }, [loadSkill, loadCourses, token, user?.role]);
+
+  useEffect(() => {
+    if (!enrolledCourses.length) {
+      setSelectedCourseId(null);
+      setAssignments([]);
+      return;
+    }
+    if (selectedCourseId && enrolledCourses.some((course) => course.id === selectedCourseId)) {
+      return;
+    }
+    setSelectedCourseId(enrolledCourses[0].id);
+  }, [enrolledCourses, selectedCourseId]);
+
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setAssignments([]);
+      return;
+    }
+    void loadAssignments(selectedCourseId);
+  }, [loadAssignments, selectedCourseId]);
 
   const formatSkill = (value: number) => (value > 0 ? value.toFixed(2) : "-");
 
@@ -199,14 +243,9 @@ export default function MyPage() {
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <CardTitle>受講中の授業</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" onClick={loadCourses} disabled={!token || coursesLoading}>
-              {coursesLoading ? "読み込み中..." : "更新"}
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/assignments">授業一覧へ</Link>
-            </Button>
-          </div>
+          <Button variant="outline" onClick={loadCourses} disabled={!token || coursesLoading}>
+            {coursesLoading ? "読み込み中..." : "更新"}
+          </Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {coursesError ? (
@@ -222,10 +261,18 @@ export default function MyPage() {
             <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
           ) : null}
           <ul className="space-y-2">
-            {enrolledCourses.map((course) => (
-              <li key={course.id}>
-                <Link href={`/assignments?course_id=${course.id}`} className="block">
-                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
+            {enrolledCourses.map((course) => {
+              const isSelected = course.id === selectedCourseId;
+              return (
+                <li key={course.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCourseId(course.id)}
+                    className={[
+                      "w-full rounded-lg border border-border p-4 text-left transition",
+                      isSelected ? "border-slate-900 bg-slate-50" : "hover:bg-accent",
+                    ].join(" ")}
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{course.title}</div>
@@ -238,6 +285,61 @@ export default function MyPage() {
                       </div>
                       <div className="text-right text-xs text-muted-foreground">
                         {course.student_count ? <div>受講生: {course.student_count}人</div> : null}
+                      </div>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {isSelected ? "選択中" : "クリックで課題一覧を表示"}
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between gap-3">
+          <CardTitle>課題一覧{selectedCourse ? ` / ${selectedCourse.title}` : ""}</CardTitle>
+          <Button
+            variant="outline"
+            onClick={() => selectedCourseId && loadAssignments(selectedCourseId)}
+            disabled={assignmentsLoading || !selectedCourseId}
+          >
+            {assignmentsLoading ? "読み込み中..." : "更新"}
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {assignmentsError ? (
+            <Alert variant="destructive">
+              <AlertTitle>エラー</AlertTitle>
+              <AlertDescription>
+                <ErrorMessages message={assignmentsError} />
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {!selectedCourseId ? (
+            <p className="text-sm text-muted-foreground">授業を選択してください。</p>
+          ) : null}
+          {assignmentsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
+          {!assignmentsLoading && selectedCourseId && assignments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">この授業にはまだ課題がありません。</p>
+          ) : null}
+          <ul className="space-y-2">
+            {assignments.map((assignment) => (
+              <li key={assignment.id}>
+                <Link href={`/assignments/${assignment.id}`} className="block">
+                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-medium">{assignment.title}</div>
+                        {assignment.description ? (
+                          <div className="mt-1 text-sm text-muted-foreground">{assignment.description}</div>
+                        ) : null}
+                      </div>
+                      <div className="text-right text-xs text-muted-foreground">
+                        <div>reviews/submission: {assignment.target_reviews_per_submission}</div>
+                        <div>{new Date(assignment.created_at).toLocaleString()}</div>
                       </div>
                     </div>
                   </div>

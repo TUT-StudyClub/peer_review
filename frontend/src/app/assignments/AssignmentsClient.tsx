@@ -32,9 +32,9 @@ type AssignmentsClientProps = {
 };
 
 export default function AssignmentsClient({ initialCourseId }: AssignmentsClientProps) {
-  const { user, token } = useAuth();
+  const { user, token, loading } = useAuth();
   const router = useRouter();
-  const activeCourseId = initialCourseId;
+  const [activeCourseId, setActiveCourseId] = useState<string | null>(initialCourseId);
 
   const courseTitleOptions = [
     "プログラミング基礎",
@@ -142,10 +142,22 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   }, [loadCourses]);
 
   useEffect(() => {
+    if (loading) return;
+    if (user?.role === "student") {
+      router.replace("/mypage");
+    }
+  }, [loading, router, user?.role]);
+
+  useEffect(() => {
+    setActiveCourseId(initialCourseId);
+  }, [initialCourseId]);
+
+  useEffect(() => {
     if (token) return;
     if (activeCourseId) {
       router.replace("/assignments");
     }
+    setActiveCourseId(null);
     setAssignments([]);
     setCourseStudents([]);
   }, [token, activeCourseId, router]);
@@ -205,6 +217,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       setCourseTitle("");
       setCourseDescription("");
       await loadCourses();
+      setActiveCourseId(course.id);
       router.push(`/assignments?course_id=${course.id}`);
     } catch (err) {
       setCoursesError(formatApiError(err));
@@ -227,6 +240,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
           course.id === courseId ? { ...course, is_enrolled: true } : course
         )
       );
+      setActiveCourseId(courseId);
       router.push(`/assignments?course_id=${courseId}`);
     } catch (err) {
       setCoursesError(formatApiError(err));
@@ -263,6 +277,10 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       setCreatingAssignment(false);
     }
   };
+
+  if (!loading && user?.role === "student") {
+    return <p className="text-sm text-muted-foreground">マイページに移動中...</p>;
+  }
 
   return (
     <div className="space-y-6">
@@ -362,7 +380,10 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                         <div className="flex flex-wrap items-center gap-2">
                           <Button
                             variant="outline"
-                            onClick={() => router.push(`/assignments?course_id=${course.id}`)}
+                            onClick={() => {
+                              setActiveCourseId(course.id);
+                              router.push(`/assignments?course_id=${course.id}`);
+                            }}
                             disabled={!canSelect}
                             title={!canSelect ? "受講してから選択できます" : undefined}
                           >
@@ -430,7 +451,13 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
           <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle>課題一覧{activeCourse ? ` / ${activeCourse.title}` : ""}</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={() => router.push("/assignments")}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setActiveCourseId(null);
+                  router.push("/assignments");
+                }}
+              >
                 授業一覧へ戻る
               </Button>
               <Button

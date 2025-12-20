@@ -1,11 +1,12 @@
 import AssignmentsClient from "./AssignmentsClient";
 
 type AssignmentsPageProps = {
-  searchParams?: { course_id?: string | string[] };
+  searchParams?: Promise<{ course_id?: string | string[] }> | { course_id?: string | string[] };
 };
 
-export default function AssignmentsPage({ searchParams }: AssignmentsPageProps) {
-  const courseIdParam = searchParams?.course_id;
+export default async function AssignmentsPage({ searchParams }: AssignmentsPageProps) {
+  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const courseIdParam = resolvedSearchParams?.course_id;
   const initialCourseId = Array.isArray(courseIdParam)
     ? courseIdParam[0] ?? null
     : courseIdParam ?? null;
