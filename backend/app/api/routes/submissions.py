@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
 from app.models.review import Review, ReviewAssignment
 from app.models.submission import Submission, SubmissionFileType, SubmissionRubricScore
 from app.models.user import User, UserRole
@@ -15,6 +15,7 @@ from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
 from app.services.ai import analyze_review_alignment
 from app.services.auth import get_current_user, require_teacher
 from app.services.pdf import PDFExtractionService
+from app.services.rubric import ensure_fixed_rubric
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
 
 logger = logging.getLogger(__name__)
@@ -164,11 +165,7 @@ def set_teacher_grade(
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    criteria = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == submission.assignment_id)
-        .all()
-    )
+    criteria = ensure_fixed_rubric(db, submission.assignment_id)
     criteria_by_id = {c.id: c for c in criteria}
     if len(payload.rubric_scores) != len(criteria_by_id):
         raise HTTPException(status_code=400, detail="All rubric criteria must be scored")

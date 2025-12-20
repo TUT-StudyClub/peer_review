@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/app/providers";
 import {
   ApiError,
-  apiAddRubric,
   apiDownloadSubmissionFile,
   apiGetMyGrade,
   apiGetMySubmission,
@@ -42,6 +41,7 @@ import type {
   UserPublic,
   RephraseResponse,
 } from "@/lib/types";
+import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -72,6 +72,10 @@ const parseScoreInput = (value: string): ScoreInput => {
 
 function shortId(id: string) {
   return id.slice(0, 8);
+}
+
+function formatSkill(value: number) {
+  return value > 0 ? value.toFixed(2) : "-";
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -162,11 +166,6 @@ export default function AssignmentDetailPage() {
   const [paraphraseLoading, setParaphraseLoading] = useState(false);
   const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
-  const [rubricName, setRubricName] = useState("");
-  const [rubricDesc, setRubricDesc] = useState("");
-  const [rubricMax, setRubricMax] = useState(5);
-  const [rubricOrder, setRubricOrder] = useState(0);
-  const [rubricAdding, setRubricAdding] = useState(false);
 
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -404,7 +403,7 @@ export default function AssignmentDetailPage() {
     setSkillLoading(true);
     setNotice(null);
     try {
-      const s = await apiGetReviewerSkill(token);
+      const s = await apiGetReviewerSkill(token, assignmentId);
       setSkill(s);
     } catch (err) {
       setNotice(formatApiError(err));
@@ -504,32 +503,6 @@ export default function AssignmentDetailPage() {
     }
   };
 
-  const addRubric = async () => {
-    if (!token) {
-      setNotice("ルーブリック追加にはログインが必要です");
-      return;
-    }
-    setRubricAdding(true);
-    setNotice(null);
-    try {
-      await apiAddRubric(token, assignmentId, {
-        name: rubricName,
-        description: rubricDesc || null,
-        max_score: rubricMax,
-        order_index: rubricOrder,
-      });
-      setRubricName("");
-      setRubricDesc("");
-      setRubricMax(5);
-      setRubricOrder(rubricOrder + 1);
-      await loadBase();
-      setNotice("ルーブリックを追加しました");
-    } catch (err) {
-      setNotice(formatApiError(err));
-    } finally {
-      setRubricAdding(false);
-    }
-  };
 
   const openTeacherReviews = async (submissionId: string) => {
     if (!token) return;
@@ -627,38 +600,8 @@ export default function AssignmentDetailPage() {
         )}
 
         {user?.role === "teacher" ? (
-          <div className="rounded-lg border bg-muted p-4">
-            <div className="text-sm font-semibold">（teacher）ルーブリックを追加</div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Field label="項目名">
-                <Input value={rubricName} onChange={(e) => setRubricName(e.target.value)} />
-              </Field>
-              <Field label="max score">
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={rubricMax}
-                  onChange={(e) => setRubricMax(Number(e.target.value))}
-                />
-              </Field>
-              <Field label="表示順（order_index）">
-                <Input
-                  type="number"
-                  min={0}
-                  value={rubricOrder}
-                  onChange={(e) => setRubricOrder(Number(e.target.value))}
-                />
-              </Field>
-              <Field label="説明（任意）">
-                <Input value={rubricDesc} onChange={(e) => setRubricDesc(e.target.value)} />
-              </Field>
-            </div>
-            <div className="mt-3">
-              <Button onClick={addRubric} disabled={rubricAdding || !rubricName.trim()}>
-                追加
-              </Button>
-            </div>
+          <div className="rounded-lg border bg-muted p-4 text-xs text-muted-foreground">
+            固定ルーブリックは自動で設定されます。
           </div>
         ) : null}
       </SectionCard>
@@ -1292,7 +1235,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）レビュアースキル（Radar）"
+          title="（student）レビュアースキル（この課題 / teacher比較）"
           actions={
             <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
               更新
@@ -1306,10 +1249,12 @@ export default function AssignmentDetailPage() {
           ) : skill ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1 text-sm text-muted-foreground">
-                <div>Logic: {skill.logic.toFixed(2)}</div>
-                <div>Specificity: {skill.specificity.toFixed(2)}</div>
-                <div>Empathy: {skill.empathy.toFixed(2)}</div>
-                <div>Insight: {skill.insight.toFixed(2)}</div>
+                {REVIEWER_SKILL_AXES.map((axis) => (
+                  <div key={axis.key}>
+                    {axis.label}: {formatSkill(skill[axis.key])}
+                  </div>
+                ))}
+                <div>総合: {formatSkill(skill.overall)}</div>
               </div>
               <div className="rounded-lg border bg-background p-3">
                 <RadarSkillChart skill={skill} />
