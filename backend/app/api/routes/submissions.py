@@ -11,6 +11,7 @@ from app.models.submission import Submission, SubmissionFileType, SubmissionRubr
 from app.models.user import User, UserRole
 from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
 from app.services.auth import get_current_user, require_teacher
+from app.services.sanitize import redact_personal_info, sanitize_pdf_file
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
 
 router = APIRouter()
@@ -50,7 +51,16 @@ def submit_report(
 
     markdown_text: str | None = None
     if file_type == SubmissionFileType.markdown:
-        markdown_text = stored_path.read_text(encoding="utf-8", errors="replace")
+        raw_text = stored_path.read_text(encoding="utf-8", errors="replace")
+        markdown_text = redact_personal_info(raw_text)
+        if markdown_text != raw_text:
+            stored_path.write_text(markdown_text, encoding="utf-8")
+    elif file_type == SubmissionFileType.pdf:
+        redacted_text, modified = sanitize_pdf_file(stored_path)
+        markdown_text = redacted_text
+        if modified and redacted_text:
+            # PDFは単純なテキストのみで上書き（レイアウトは保持しない）
+            pass
 
     submission = Submission(
         id=submission_id,
