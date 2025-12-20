@@ -12,8 +12,8 @@ from app.models.review import Review, ReviewAssignment
 from app.models.submission import Submission, SubmissionFileType, SubmissionRubricScore
 from app.models.user import User, UserRole
 from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
-from app.services.auth import get_current_user, require_teacher
 from app.services.ai import analyze_review_alignment
+from app.services.auth import get_current_user, require_teacher
 from app.services.pdf import PDFExtractionService
 from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
 
