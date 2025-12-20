@@ -86,6 +86,16 @@ class ReviewReceived(BaseModel):
     ai_quality_reason: str | None
 
 
+class RephraseRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2_000)
+
+
+class RephraseResponse(BaseModel):
+    original: str
+    rephrased: str
+    notice: str | None = None
+
+
 class TAReviewRequestCreate(BaseModel):
     ta_user_id: UUID
 

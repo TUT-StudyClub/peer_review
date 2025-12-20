@@ -17,6 +17,8 @@ from app.models.user import User
 from app.schemas.review import (
     MetaReviewCreate,
     MetaReviewPublic,
+    RephraseRequest,
+    RephraseResponse,
     ReviewAssignmentTask,
     ReviewPublic,
     ReviewReceived,
@@ -188,6 +190,37 @@ def submit_review(
     db.commit()
     db.refresh(review)
     return review
+
+
+def _simple_rephrase(text: str) -> RephraseResponse:
+    cleaned = " ".join(text.split())
+    replacements = {
+        "と思います": "と考えます",
+        "です。": "です。",
+        "だと思う": "と考えます",
+        "と思う": "と考えます",
+        "もう少し": "より一層",
+        "いいと思います": "良い点だと感じます",
+    }
+    rephrased = cleaned
+    for src, dst in replacements.items():
+        rephrased = rephrased.replace(src, dst)
+    if len(rephrased) == 0:
+        rephrased = cleaned
+    if not rephrased.endswith(("。", ".", "！", "?", "！", "?", "」")) and rephrased:
+        rephrased += "。"
+
+    notice = "開発用の簡易言い換えです。必要に応じて調整してください。"
+    return RephraseResponse(original=text, rephrased=rephrased, notice=notice)
+
+
+@router.post("/reviews/paraphrase", response_model=RephraseResponse)
+def paraphrase(
+    payload: RephraseRequest,
+    _current_user: User = Depends(get_current_user),
+) -> RephraseResponse:
+    # AI未設定でも使えるように簡易変換のみ。
+    return _simple_rephrase(payload.text)
 
 
 @router.get("/assignments/{assignment_id}/reviews/received", response_model=list[ReviewReceived])

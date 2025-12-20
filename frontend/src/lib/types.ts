@@ -141,6 +141,12 @@ export type ReviewReceived = {
   ai_quality_reason: string | null;
 };
 
+export type RephraseResponse = {
+  original: string;
+  rephrased: string;
+  notice?: string | null;
+};
+
 export type MetaReviewCreate = {
   helpfulness: number;
   comment?: string | null;
