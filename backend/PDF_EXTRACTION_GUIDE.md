@@ -398,12 +398,6 @@ PDF抽出機能テスト開始
 ✓ すべてのテストが完了しました！
 ```
 
-### 詳細テスト
-```bash
-cd backend
-uv run test_pdf_detailed.py
-```
-
 ---
 
 ## LLMスコア化への連携
