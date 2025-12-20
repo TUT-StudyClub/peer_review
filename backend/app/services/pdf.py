@@ -111,6 +111,8 @@ class PDFExtractionService:
             raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
         except (PermissionError, OSError) as e:
             raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+        except Exception as e:
+            raise ValueError(f"PDF処理中に予期しないエラーが発生しました: {e}") from e
 
         return out.getvalue().rstrip()
 
@@ -137,6 +139,8 @@ class PDFExtractionService:
             raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
         except (PermissionError, OSError) as e:
             raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+        except Exception as e:
+            raise ValueError(f"PDF処理中に予期しないエラーが発生しました: {e}") from e
 
     @staticmethod
     def extract_images_by_page(pdf_path: str | Path) -> dict[int, list[dict]]:
@@ -161,6 +165,8 @@ class PDFExtractionService:
             raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
         except (PermissionError, OSError) as e:
             raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+        except Exception as e:
+            raise ValueError(f"PDF処理中に予期しないエラーが発生しました: {e}") from e
 
         return results
 
@@ -190,6 +196,8 @@ class PDFExtractionService:
             raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
         except (PermissionError, OSError) as e:
             raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+        except Exception as e:
+            raise ValueError(f"PDF処理中に予期しないエラーが発生しました: {e}") from e
 
         return results
 
@@ -221,6 +229,8 @@ class PDFExtractionService:
             raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
         except (PermissionError, OSError) as e:
             raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+        except Exception as e:
+            raise ValueError(f"PDF処理中に予期しないエラーが発生しました: {e}") from e
 
         return pages_text
 
@@ -251,3 +261,5 @@ class PDFExtractionService:
             raise ValueError(f"PDFが壊れている可能性があります: {e}") from e
         except (PermissionError, OSError) as e:
             raise ValueError(f"PDFの読み取りに失敗しました: {e}") from e
+        except Exception as e:
+            raise ValueError(f"PDF処理中に予期しないエラーが発生しました: {e}") from e
