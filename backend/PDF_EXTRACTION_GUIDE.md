@@ -412,19 +412,17 @@ uv run test_pdf_detailed.py
 
 ```python
 from app.services.pdf import PDFExtractionService
-from openai import OpenAI  # 現行のクライアントベースAPI
+from openai import OpenAI
 
 service = PDFExtractionService()
-client = OpenAI()  # 環境変数 OPENAI_API_KEY を利用
+client = OpenAI()
 
-# PDFをページごとに抽出
 pages = service.extract_text_by_page("submission.pdf")
 
-# 各ページをLLMで処理（現行API: client.chat.completions.create）
 scores = {}
 for page_num, text in pages.items():
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # 利用可能なモデルに置き換えてください
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "user",
