@@ -47,6 +47,7 @@ export type TAReviewRequestPublic = {
 
 export type AssignmentPublic = {
   id: string;
+  course_id: string | null;
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
@@ -54,9 +55,33 @@ export type AssignmentPublic = {
 };
 
 export type AssignmentCreate = {
+  course_id: string;
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
+};
+
+export type CoursePublic = {
+  id: string;
+  title: string;
+  description?: string | null;
+  teacher_id: string;
+  created_at: string;
+  teacher_name?: string | null;
+  is_enrolled?: boolean | null;
+  student_count?: number | null;
+};
+
+export type CourseCreate = {
+  title: string;
+  description?: string | null;
+};
+
+export type CourseEnrollmentPublic = {
+  id: string;
+  course_id: string;
+  user_id: string;
+  created_at: string;
 };
 
 export type RubricCriterionPublic = {

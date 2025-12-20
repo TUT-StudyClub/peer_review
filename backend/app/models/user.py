@@ -31,6 +31,8 @@ class User(Base):
 
     submissions = relationship("Submission", back_populates="author")
     review_assignments = relationship("ReviewAssignment", back_populates="reviewer")
+    courses_taught = relationship("Course", back_populates="teacher")
+    course_enrollments = relationship("CourseEnrollment", back_populates="user")
 
     @property
     def is_ta(self) -> bool:

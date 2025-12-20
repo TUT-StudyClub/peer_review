@@ -1,6 +1,9 @@
 import type {
   AssignmentCreate,
   AssignmentPublic,
+  CourseCreate,
+  CourseEnrollmentPublic,
+  CoursePublic,
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
@@ -342,8 +345,13 @@ export async function apiGetRanking(
   return apiFetch<UserRankingEntry[]>(`/users/ranking?${query}`);
 }
 
-export async function apiListAssignments(): Promise<AssignmentPublic[]> {
-  return apiFetch<AssignmentPublic[]>("/assignments");
+export async function apiListAssignments(courseId?: string): Promise<AssignmentPublic[]> {
+  if (!courseId) {
+    return apiFetch<AssignmentPublic[]>("/assignments");
+  }
+  const params = new URLSearchParams();
+  params.set("course_id", courseId);
+  return apiFetch<AssignmentPublic[]>(`/assignments?${params.toString()}`);
 }
 
 export async function apiCreateAssignment(token: string, payload: AssignmentCreate): Promise<AssignmentPublic> {
@@ -352,6 +360,26 @@ export async function apiCreateAssignment(token: string, payload: AssignmentCrea
     { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
     token
   );
+}
+
+export async function apiListCourses(token: string): Promise<CoursePublic[]> {
+  return apiFetch<CoursePublic[]>("/courses", {}, token);
+}
+
+export async function apiCreateCourse(token: string, payload: CourseCreate): Promise<CoursePublic> {
+  return apiFetch<CoursePublic>(
+    "/courses",
+    { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    token
+  );
+}
+
+export async function apiEnrollCourse(token: string, courseId: string): Promise<CourseEnrollmentPublic> {
+  return apiFetch<CourseEnrollmentPublic>(`/courses/${courseId}/enroll`, { method: "POST" }, token);
+}
+
+export async function apiListCourseStudents(token: string, courseId: string): Promise<UserPublic[]> {
+  return apiFetch<UserPublic[]>(`/courses/${courseId}/students`, {}, token);
 }
 
 export async function apiListRubric(assignmentId: string): Promise<RubricCriterionPublic[]> {
