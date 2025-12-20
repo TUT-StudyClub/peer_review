@@ -22,6 +22,7 @@ from app.schemas.review import (
     ReviewReceived,
     ReviewSubmit,
 )
+from app.services.credits import calculate_review_credit_gain
 from app.services.ai import analyze_review
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
@@ -176,7 +177,13 @@ def submit_review(
     review_assignment.status = ReviewAssignmentStatus.submitted
     review_assignment.submitted_at = review.created_at
 
-    current_user.credits += 1
+    credit = calculate_review_credit_gain(
+        db,
+        review_assignment=review_assignment,
+        review=review,
+        reviewer=current_user,
+    )
+    current_user.credits += credit.added
 
     db.commit()
     db.refresh(review)
