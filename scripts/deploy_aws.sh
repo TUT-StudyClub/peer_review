@@ -12,8 +12,8 @@ REPO_NAME="${PROJECT_NAME}-api"
 DB_INSTANCE_IDENTIFIER="${PROJECT_NAME}-db"
 DB_NAME="pure_review"
 DB_USERNAME="postgres"
-# Generate a random password if not provided
-DB_PASSWORD=${DB_PASSWORD:-$(openssl rand -base64 12)}
+# Generate a random password if not provided (alphanumeric only to avoid RDS issues)
+DB_PASSWORD=${DB_PASSWORD:-$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)}
 SERVICE_NAME="${PROJECT_NAME}-api"
 IAM_ROLE_NAME="apprunner-s3-access"
 
@@ -109,6 +109,10 @@ EOF
 aws iam put-role-policy --role-name "$IAM_ROLE_NAME" --policy-name S3AccessPolicy --policy-document "$ACCESS_POLICY"
 log "IAM Policy attached."
 
+# Attach App Runner ECR Access Policy (Required for Automatic Deployment from ECR)
+aws iam attach-role-policy --role-name "$IAM_ROLE_NAME" --policy-arn "arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess"
+log "Attached AWSAppRunnerServicePolicyForECRAccess to role."
+
 ROLE_ARN=$(aws iam get-role --role-name "$IAM_ROLE_NAME" --query 'Role.Arn' --output text)
 
 # ==========================================
@@ -171,13 +175,14 @@ log "Step 5: Setting up App Runner Networking..."
 
 # Create Security Group for App Runner
 APPRUNNER_SG_NAME="apprunner-sg"
-SG_EXISTS=$(aws ec2 describe-security-groups --filters Name=group-name,Values="$APPRUNNER_SG_NAME" Name=vpc-id,Values="$VPC_ID" 2>/dev/null || true)
+# Try to get existing SG ID
+APPRUNNER_SG_ID=$(aws ec2 describe-security-groups --filters Name=group-name,Values="$APPRUNNER_SG_NAME" Name=vpc-id,Values="$VPC_ID" --query "SecurityGroups[0].GroupId" --output text 2>/dev/null || echo "None")
 
-if [ -z "$SG_EXISTS" ]; then
+if [ "$APPRUNNER_SG_ID" = "None" ] || [ "$APPRUNNER_SG_ID" = "null" ]; then
+    log "Creating Security Group..."
     APPRUNNER_SG_ID=$(aws ec2 create-security-group --group-name "$APPRUNNER_SG_NAME" --description "Security group for App Runner" --vpc-id "$VPC_ID" --query GroupId --output text)
     log "Created Security Group: $APPRUNNER_SG_ID"
 else
-    APPRUNNER_SG_ID=$(echo "$SG_EXISTS" | jq -r '.SecurityGroups[0].GroupId')
     log "Using existing Security Group: $APPRUNNER_SG_ID"
 fi
 
@@ -200,11 +205,36 @@ fi
 SUBNET_LIST=$(echo $SUBNETS | tr '\t' ' ' | tr ' ' ',')
 
 log "Creating VPC Connector in subnets: $SUBNET_LIST"
-CONNECTOR_ARN=$(aws apprunner create-vpc-connector \
+
+# Helper function to get connector ARN from error message if creation fails
+get_connector_arn_from_error() {
+    local error_msg="$1"
+    # Extract ARN using regex/grep from the error message
+    echo "$error_msg" | grep -o 'arn:aws:apprunner:[^ ]*' | head -n 1 | sed 's/,$//'
+}
+
+log "Creating VPC Connector in subnets: $SUBNET_LIST"
+
+# Try to create and capture output
+if CREATE_OUTPUT=$(aws apprunner create-vpc-connector \
     --vpc-connector-name "$CONNECTOR_NAME" \
     --subnets $SUBNETS \
-    --security-groups "$APPRUNNER_SG_ID" \
-    --query "VpcConnector.VpcConnectorArn" --output text)
+    --security-groups "$APPRUNNER_SG_ID" 2>&1); then
+    # Success
+    CONNECTOR_ARN=$(echo "$CREATE_OUTPUT" | jq -r '.VpcConnector.VpcConnectorArn')
+    log "Created VPC Connector: $CONNECTOR_ARN"
+else
+    # Failure
+    if echo "$CREATE_OUTPUT" | grep -q "already exists"; then
+        # Already exists, extract ARN from error
+        CONNECTOR_ARN=$(get_connector_arn_from_error "$CREATE_OUTPUT")
+        log "Using existing VPC Connector (from error): $CONNECTOR_ARN"
+    else
+        # Real error
+        echo "$CREATE_OUTPUT"
+        exit 1
+    fi
+fi
 
 # ==========================================
 # 6. App Runner Service
