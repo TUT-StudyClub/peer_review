@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -39,7 +40,9 @@ def submit_report(
         .first()
     )
     if existing is not None:
-        raise HTTPException(status_code=400, detail="You have already submitted for this assignment")
+        raise HTTPException(
+            status_code=400, detail="You have already submitted for this assignment"
+        )
 
     file_type = detect_file_type(file)
     if file_type is None:
@@ -150,8 +153,12 @@ def download_submission_file(
     if not allowed:
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    filename = "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
-    media_type = "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
+    filename = (
+        "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
+    )
+    media_type = (
+        "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
+    )
     return build_download_response(
         storage_path=submission.storage_path,
         filename=filename,
@@ -185,7 +192,9 @@ def set_teacher_grade(
     submission.teacher_total_score = payload.teacher_total_score
     submission.teacher_feedback = payload.teacher_feedback
 
-    db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id == submission.id).delete()
+    db.query(SubmissionRubricScore).filter(
+        SubmissionRubricScore.submission_id == submission.id
+    ).delete()
     for s in payload.rubric_scores:
         db.add(
             SubmissionRubricScore(
