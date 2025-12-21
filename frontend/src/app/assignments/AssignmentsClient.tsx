@@ -32,7 +32,7 @@ type AssignmentsClientProps = {
 };
 
 export default function AssignmentsClient({ initialCourseId }: AssignmentsClientProps) {
-  const { user, token, loading } = useAuth();
+  const { user, token } = useAuth();
   const router = useRouter();
   const [activeCourseId, setActiveCourseId] = useState<string | null>(initialCourseId);
 
@@ -140,13 +140,6 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   useEffect(() => {
     void loadCourses();
   }, [loadCourses]);
-
-  useEffect(() => {
-    if (loading) return;
-    if (user?.role === "student") {
-      router.replace("/mypage");
-    }
-  }, [loading, router, user?.role]);
 
   useEffect(() => {
     setActiveCourseId(initialCourseId);
@@ -277,10 +270,6 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       setCreatingAssignment(false);
     }
   };
-
-  if (!loading && user?.role === "student") {
-    return <p className="text-sm text-muted-foreground">マイページに移動中...</p>;
-  }
 
   return (
     <div className="space-y-6">
