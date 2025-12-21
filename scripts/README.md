@@ -1,30 +1,30 @@
-# Deployment Scripts
+# デプロイメントスクリプト
 
-This directory contains automation scripts to deploy the Peer Review application to AWS.
+このディレクトリには、Peer Review アプリケーションを AWS にデプロイするための自動化スクリプトが含まれています。
 
-## Prerequisites
-1.  **AWS CLI**: Installed and configured (`aws configure`).
-2.  **Docker**: Installed and running.
-3.  **jq**: Installed (`brew install jq` on macOS).
+## 前提条件
+1.  **AWS CLI**: インストールおよび設定済みであること (`aws configure`)。
+2.  **Docker**: インストールされ、起動していること。
+3.  **jq**: インストール済みであること (macOS の場合は `brew install jq`)。
 
-## Usage
+## 使い方
 
-1.  Open a terminal in the project root.
-2.  Run the deployment script:
+1.  プロジェクトのルートディレクトリでターミナルを開きます。
+2.  デプロイメントスクリプトを実行します:
     ```bash
     ./scripts/deploy_aws.sh
     ```
 
-## What the script does
-1.  **S3**: Creates a bucket for file uploads.
-2.  **IAM**: Creates the `apprunner-s3-access` role.
-3.  **RDS**: Creates a PostgreSQL database (if it doesn't exist) and waits for it to become available.
-4.  **ECR**: Builds the backend Docker image and pushes it to Amazon ECR.
-5.  **App Runner**: Creates the API service, connecting it to RDS and S3.
+## スクリプトの処理内容
+1.  **S3**: ファイルアップロード用のバケットを作成します。
+2.  **IAM**: `apprunner-s3-access` ロールを作成します。
+3.  **RDS**: PostgreSQL データベースを作成し（存在しない場合）、利用可能になるまで待機します。
+4.  **ECR**: バックエンドの Docker イメージをビルドし、Amazon ECR にプッシュします。
+5.  **App Runner**: API サービスを作成し、RDS および S3 と接続します。
 
-## Post-Script Steps
-1.  **Frontend (Cloudflare Pages)**:
-    -   Go to Cloudflare Dashboard.
-    -   Create a new Pages project > Connect to Git.
-    -   Settings > Environment Variables:
-        -   `NEXT_PUBLIC_API_BASE_URL`: Copy the App Runner URL (e.g., `https://xxxx.awsapprunner.com`).
+## スクリプト実行後の手順
+1.  **フロントエンド (Cloudflare Pages)**:
+    -   Cloudflare ダッシュボードに移動します。
+    -   新しい Pages プロジェクトを作成 > Git に接続します。
+    -   設定 > 環境変数 (Environment Variables):
+        -   `NEXT_PUBLIC_API_BASE_URL`: App Runner の URL (例: `https://xxxx.awsapprunner.com`) を設定します。
