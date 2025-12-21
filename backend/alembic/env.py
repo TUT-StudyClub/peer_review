@@ -9,6 +9,7 @@ from alembic import context
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from app.core.config import settings
 from app.db.base import Base
+from app import models  # Ensure models are loaded
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
