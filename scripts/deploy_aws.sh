@@ -12,6 +12,11 @@ REPO_NAME="${PROJECT_NAME}-api"
 DB_INSTANCE_IDENTIFIER="${PROJECT_NAME}-db"
 DB_NAME="pure_review"
 DB_USERNAME="postgres"
+# Load existing secrets if available to prevent password mismatch on re-runs
+if [ -f .deploy_secrets ]; then
+    source .deploy_secrets
+fi
+
 # Generate a random password if not provided (alphanumeric only to avoid RDS issues)
 DB_PASSWORD=${DB_PASSWORD:-$(openssl rand -base64 12 | tr -dc 'a-zA-Z0-9' | head -c 16)}
 SERVICE_NAME="${PROJECT_NAME}-api"
@@ -141,6 +146,13 @@ if [ -z "$DB_EXISTS" ]; then
     log "DB created and available."
 else
     log "DB instance already exists. Skipping creation."
+    # Force update password to ensure it matches local secret
+    log "Ensuring RDS password matches local secret..."
+    aws rds modify-db-instance \
+        --db-instance-identifier "$DB_INSTANCE_IDENTIFIER" \
+        --master-user-password "$DB_PASSWORD" \
+        --apply-immediately >/dev/null
+    log "Password update requested (applied immediately)."
 fi
 
 # Get DB Endpoint
