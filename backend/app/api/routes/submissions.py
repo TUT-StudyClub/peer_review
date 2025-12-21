@@ -3,7 +3,6 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -16,7 +15,7 @@ from app.services.ai import analyze_review_alignment
 from app.services.auth import get_current_user, require_teacher
 from app.services.pdf import PDFExtractionService
 from app.services.rubric import ensure_fixed_rubric
-from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
+from app.services.storage import build_download_response, detect_file_type, save_upload_file
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +45,8 @@ def submit_report(
     if file_type is None:
         raise HTTPException(status_code=400, detail="Only PDF or Markdown files are supported")
 
-    ensure_storage_dir()
     submission_id = uuid4()
-    stored_path = save_upload_file(
+    stored = save_upload_file(
         upload=file,
         assignment_id=assignment_id,
         submission_id=submission_id,
@@ -59,24 +57,27 @@ def submit_report(
     submission_text: str | None = None
     markdown_text: str | None = None
 
-    if file_type == SubmissionFileType.pdf:
-        # PDF形式：PDFExtractionServiceで抽出
-        try:
-            stored_path_obj = Path(stored_path)
-            extracted_text = PDFExtractionService.extract_text(
-                stored_path_obj,
-                max_pages=50,
-                max_chars=50000,
-            )
-            submission_text = extracted_text if extracted_text.strip() else None
-        except Exception as e:
-            # PDF抽出失敗時はログ記録しつつ提出を続行
-            logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
-            submission_text = None
-    elif file_type == SubmissionFileType.markdown:
-        # Markdown形式：ファイル内容を読み込み
-        markdown_text = stored_path.read_text(encoding="utf-8", errors="replace")
-        submission_text = markdown_text
+    try:
+        if file_type == SubmissionFileType.pdf:
+            # PDF形式：PDFExtractionServiceで抽出
+            try:
+                stored_path_obj = Path(stored.local_path)
+                extracted_text = PDFExtractionService.extract_text(
+                    stored_path_obj,
+                    max_pages=50,
+                    max_chars=50000,
+                )
+                submission_text = extracted_text if extracted_text.strip() else None
+            except Exception as e:
+                # PDF抽出失敗時はログ記録しつつ提出を続行
+                logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
+                submission_text = None
+        elif file_type == SubmissionFileType.markdown:
+            # Markdown形式：ファイル内容を読み込み
+            markdown_text = stored.local_path.read_text(encoding="utf-8", errors="replace")
+            submission_text = markdown_text
+    finally:
+        stored.cleanup()
 
     submission = Submission(
         id=submission_id,
@@ -84,7 +85,7 @@ def submit_report(
         author_id=current_user.id,
         file_type=file_type,
         original_filename=file.filename or "upload",
-        storage_path=str(stored_path),
+        storage_path=stored.storage_path,
         markdown_text=markdown_text,
         submission_text=submission_text,
     )
@@ -151,7 +152,11 @@ def download_submission_file(
 
     filename = "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
     media_type = "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
-    return FileResponse(submission.storage_path, filename=filename, media_type=media_type)
+    return build_download_response(
+        storage_path=submission.storage_path,
+        filename=filename,
+        media_type=media_type,
+    )
 
 
 @router.post("/{submission_id}/teacher-grade", response_model=SubmissionPublic)
