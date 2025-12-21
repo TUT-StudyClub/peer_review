@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     allow_teacher_registration: bool = True
 
     storage_dir: str = "storage"
+    storage_backend: str = "local"
+    s3_bucket: str | None = None
+    s3_region: str | None = None
+    s3_endpoint_url: str | None = None
+    s3_key_prefix: str = "submissions"
+    s3_use_path_style: bool = False
 
     # TA/credits
     ta_qualification_threshold: int = 20
