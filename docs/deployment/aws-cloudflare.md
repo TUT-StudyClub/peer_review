@@ -1,10 +1,10 @@
-# AWS(App Runner + RDS + S3) / Cloudflare Pages デプロイ手順（初学者向け）
+# AWS(App Runner + RDS + S3) / Vercel デプロイ手順（初学者向け）
 
-この手順は「バックエンド + DB を AWS」「フロントを Cloudflare Pages」に分けて、1回でデプロイ完了できることを目標にしています。
+この手順は「バックエンド + DB を AWS」「フロントを Vercel」に分けて、1回でデプロイ完了できることを目標にしています。
 
 ## 0. 事前準備（最初にやること）
 - ドメインを用意（例: `example.com`）
-- AWS と Cloudflare のアカウント作成
+- AWS と Vercel のアカウント作成
 - ローカルに以下を用意
   - Git
   - Docker
@@ -13,7 +13,7 @@
   - AWS CLI（任意、あれば手順が短くなります）
 
 ## 1. 構成の確認（今回の完成図）
-- フロント: Cloudflare Pages（`https://app.example.com`）
+- フロント: Vercel（`https://app.example.com`）
 - API: AWS App Runner（`https://api.example.com`）
 - DB: Amazon RDS (PostgreSQL)
 - ファイル保存: Amazon S3
@@ -130,21 +130,25 @@ App Runner のログで `alembic` 実行が成功しているか確認してく�
 2) `api.example.com` を追加  
 3) 表示される CNAME をメモ  
 
-Cloudflare DNS に CNAME を追加:
+ドメインのDNS（Route53 / Vercel DNS / その他のレジストラ）に CNAME を追加:
 - Name: `api`
 - Target: `xxxx.awsapprunner.com`
-- Proxy status: **DNS only**（まずはここ推奨）
+- Proxy設定がある場合は **DNS only**（まずはこれが安全）
 
 SSL発行が完了したら `https://api.example.com/health` が開けます。
 
-## 10. Cloudflare Pages（フロント）
-1) Cloudflare Pages → Create project  
-2) GitHub 連携 → リポジトリ選択  
-3) Framework preset: **Next.js**  
-4) Environment variables に追加:
+## 10. Vercel（フロント）
+1) Vercel Dashboard → **Add New** → **Project** → GitHub 連携でリポジトリをインポート  
+2) Framework preset: **Next.js**（デフォルトで認識されます）  
+3) Environment Variables に追加:
    - `NEXT_PUBLIC_API_BASE_URL=https://api.example.com`
+4) Deploy を実行  
+5) Domain 設定（Project → Settings → Domains）
+   - `app.example.com` を追加
+   - 外部DNSを使う場合は、指示される CNAME（例: `cname.vercel-dns.com`）を追加
+   - Vercel DNS を使う場合はそのまま適用
 
-デプロイ完了後 `https://app.example.com` を確認。
+デプロイ完了後に `https://app.example.com` を確認。
 
 ## 11. 動作確認
 - `https://api.example.com/health` が OK を返す  
@@ -153,7 +157,7 @@ SSL発行が完了したら `https://api.example.com/health` が開けます。
 ## 12. よくあるトラブル
 **CORS エラーが出る**
 - `CORS_ALLOW_ORIGINS` に `https://app.example.com` が入っているか確認
-- Cloudflare の preview URL を使うなら `https://<project>.pages.dev` も追加
+- Vercel の preview URL を使うなら `https://<project>.vercel.app` も追加
 
 **API が 502 / 503**
 - App Runner logs を確認
