@@ -299,10 +299,6 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                           <Button
                             variant="outline"
                             onClick={() => {
-                              if (user?.role === "student") {
-                                router.push(`/courses/${course.id}`);
-                                return;
-                              }
                               setActiveCourseId(course.id);
                               router.push(`/assignments?course_id=${course.id}`);
                             }}
