@@ -19,7 +19,7 @@
 - 追加先: `backend/app/api/routes/users.py` の `router` にエンドポイントを追加
 - スキーマ: `backend/app/schemas/user.py` にある `UserPublic` に `has_completed_student_onboarding: bool` と `has_completed_teacher_onboarding: bool` を追加
 - `GET /users/me`: 2種類のフラグを含めてユーザー情報を返す。
-- `PATCH /users/me/complete-onboarding`: ボディで `role: "student" | "teacher"` を受け取り、該当フラグを `true` に更新する（ロール制限なし・ログイン必須）。完了とスキップは同一フラグで運用し、必要ならイベントログで区別する。
+- `PATCH /users/me/complete-onboarding`: ボディで `role: "student" | "teacher"` を受け取り、該当フラグを `true` に更新する（全ロール（student/teacher）が実行可能、ただし認証必須）。完了とスキップは同一フラグで運用し、必要ならイベントログで区別する。
 
 
 **フロントエンド (React)**
