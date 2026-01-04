@@ -42,7 +42,7 @@ export default function RegisterPage() {
     <div className="mx-auto max-w-xl space-y-4">
       <Card title="新規登録">
         <form onSubmit={onSubmit} className="space-y-4">
-          <Field label="Role" hint="teacher は .env の ALLOW_TEACHER_REGISTRATION=true が必要です（開発用）">
+          <Field label="Role">
             <Select value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
               <option value="student">student</option>
               <option value="teacher">teacher</option>
