@@ -150,12 +150,6 @@ export default function RegisterPage() {
             </Link>
           </p>
 
-          <div className="rounded-2xl border border-sky-200 bg-sky-50/80 px-4 py-3 text-sm text-sky-700">
-            <div className="flex items-start gap-3">
-              <Lightbulb className="mt-0.5 h-5 w-5" />
-              <p>パスワードは8文字以上で登録できます</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
