@@ -11,33 +11,34 @@
 ## 実装概要
 
 **DB構成 (`users` テーブル)**
-- `has_completed_onboarding`: `BOOLEAN`, `NOT NULL`, `DEFAULT FALSE`
+- `has_completed_student_onboarding`: `BOOLEAN`, `NOT NULL`, `DEFAULT FALSE`
+- `has_completed_teacher_onboarding`: `BOOLEAN`, `NOT NULL`, `DEFAULT FALSE`
 
 
 **バックエンド API**
 - 追加先: `backend/app/api/routes/users.py` の `router` にエンドポイントを追加
-- スキーマ: `backend/app/routes/user.py` の `UserPublic` に `has_completed_onboarding: bool` を追加
-- `GET /users/me`: 現在のフラグ状態を含めてユーザー情報を返す。
-- `PATCH /users/me/complete-onboarding`: チュートリアル完了またはスキップ時に実行。フラグを `true` に更新する（同一フラグで運用、ロール制限なし・ログイン必須）必要なら「イベントログ」で区別する。
+- スキーマ: `backend/app/schemas/user.py` にある `UserPublic` に `has_completed_student_onboarding: bool` と `has_completed_teacher_onboarding: bool` を追加
+- `GET /users/me`: 2種類のフラグを含めてユーザー情報を返す。
+- `PATCH /users/me/complete-onboarding`: ボディで `role: "student" | "teacher"` を受け取り、該当フラグを `true` に更新する（ロール制限なし・ログイン必須）。完了とスキップは同一フラグで運用し、必要ならイベントログで区別する。
 
 
 **フロントエンド (React)**
 - 認証状態とユーザー情報は `frontend/src/app/providers.tsx` の `useAuth` コンテキストで管理しており、`useUser` というフックは現状存在しない。
-- `has_completed_onboarding` は `useAuth` が返す `user` のプロパティとして参照するか、必要なら新規に `frontend/src/lib/useOnboarding.ts` などで薄いフックを作成して `PATCH /users/me/complete-onboarding` を呼び出す。
-- 初回ロード時（またはログイン後）に `user.has_completed_onboarding` を確認し、`false` の場合のみチュートリアルコンポーネント（React Joyride等）を起動。
-- チュートリアルの `onFinish` または `onSkip` コールバックでAPIを叩き、フラグを更新する。
+- `user.role` が `"student"` なら `has_completed_student_onboarding`、`"teacher"` なら `has_completed_teacher_onboarding` を確認し、`false` の場合のみチュートリアルコンポーネント（React Joyride等）を起動。
+- 必要なら新規に `frontend/src/lib/useOnboarding.ts` などで薄いフックを作成し、`PATCH /users/me/complete-onboarding` を呼び出して該当ロールのフラグを更新する。
+- チュートリアルの `onFinish` または `onSkip` コールバックでAPIを叩き、フラグ更新後は `useAuth.refreshMe` かローカルキャッシュを更新して再フェッチを抑制する。
 
 
 ## 処理フロー
 
 | ステップ | 構成要素 | 動作内容 |
 | --- | --- | --- |
-| 1. 判定 | React | ユーザー情報の `has_completed_onboarding` が `false` か確認 |
+| 1. 判定 | React | `user.role` を見て、該当ロールのフラグ（student/teacher）が `false` か確認 |
 | 2. 表示 | React | チュートリアルUI（モーダルやガイド）を表示 |
 | 3. 完了 | User | チュートリアルを最後まで見る、もしくは「スキップ」を押下 |
-| 4. 更新 | API | `PATCH /users/me/complete-onboarding` を呼び出し |
-| 5. 永続化 | DB | 当該ユーザーのフラグを `true` に更新 |
-| 6. 以降 | React | 次回以降のアクセスではフラグが `true` なので表示されない |
+| 4. 更新 | API | `PATCH /users/me/complete-onboarding` をロール付きで呼び出し |
+| 5. 永続化 | DB | 当該ユーザーのロールに対応するフラグを `true` に更新 |
+| 6. 以降 | React | 該当ロールでは再表示されない（他ロールは別フラグで管理） |
 
 ## 実装設計（既存サービスとの整合性）
 
@@ -46,6 +47,6 @@
 
 ## 移行手順
 
-- **DBマイグレーション:** `backend/alembic/versions/` に新リビジョンを追加し、`users` テーブルへ `has_completed_onboarding BOOLEAN NOT NULL DEFAULT FALSE` を追加。マイグレーション内で既存ユーザーを一律 `true` にバックフィルし（既存ユーザーにはチュートリアルを再表示しないため）、新規ユーザーはカラムのデフォルト `false` によりチュートリアルを表示対象とする。
-- **API実装:** `UserPublic` に新フィールドを追加し、`GET /users/me` のレスポンスへ反映。
-- **フロントエンド実装:** チュートリアルライブラリを導入し、`useAuth`（`frontend/src/app/providers.tsx`）が返す `user.has_completed_onboarding` を参照。専用フックが必要なら `frontend/src/lib/useOnboarding.ts` 等を新設し、`PATCH` 成功時に `useAuth.refreshMe` かローカルキャッシュ更新で再フェッチを抑制する。
+- **DBマイグレーション:** `backend/alembic/versions/` に新リビジョンを追加し、`users` テーブルへ `has_completed_student_onboarding BOOLEAN NOT NULL DEFAULT FALSE` と `has_completed_teacher_onboarding BOOLEAN NOT NULL DEFAULT FALSE` を追加。マイグレーション内で既存ユーザーの両フラグを一律 `true` にバックフィルし（既存ユーザーにはチュートリアルを再表示しないため）、新規ユーザーはデフォルト `false` で表示対象とする。
+- **API実装:** `UserPublic` に2フィールドを追加し、`GET /users/me` のレスポンスへ反映。`PATCH /users/me/complete-onboarding` で `role` を受け取り該当フラグを更新。
+- **フロントエンド実装:** `useAuth`（`frontend/src/app/providers.tsx`）が返す `user.role` と各フラグを用いて表示判定。専用フックが必要なら `frontend/src/lib/useOnboarding.ts` 等を新設し、`PATCH` 成功時に `useAuth.refreshMe` かローカルキャッシュ更新で再フェッチを抑制する。
