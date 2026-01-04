@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiGetCourse, apiListAssignments, formatApiError } from "@/lib/api";
+import { apiGetCoursePage, formatApiError } from "@/lib/api";
 import type { AssignmentPublic, CoursePublic } from "@/lib/types";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,46 +18,29 @@ export default function CourseLecturePage() {
   const courseId = params?.courseId as string;
 
   const [course, setCourse] = useState<CoursePublic | null>(null);
-  const [courseLoading, setCourseLoading] = useState(false);
-  const [courseError, setCourseError] = useState<string | null>(null);
-
   const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
-  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
 
-  const loadCourse = useCallback(async () => {
+  const loadCoursePage = useCallback(async () => {
     if (!token || !courseId) return;
-    setCourseLoading(true);
-    setCourseError(null);
+    setPageLoading(true);
+    setPageError(null);
     try {
-      const data = await apiGetCourse(token, courseId);
-      setCourse(data);
+      const data = await apiGetCoursePage(token, courseId);
+      setCourse(data.course);
+      setAssignments(data.assignments);
     } catch (err) {
-      setCourseError(formatApiError(err));
+      setPageError(formatApiError(err));
     } finally {
-      setCourseLoading(false);
+      setPageLoading(false);
     }
   }, [token, courseId]);
 
-  const loadAssignments = useCallback(async () => {
-    if (!courseId) return;
-    setAssignmentsLoading(true);
-    setAssignmentsError(null);
-    try {
-      const data = await apiListAssignments(courseId);
-      setAssignments(data);
-    } catch (err) {
-      setAssignmentsError(formatApiError(err));
-    } finally {
-      setAssignmentsLoading(false);
-    }
-  }, [courseId]);
-
   useEffect(() => {
     if (loading) return;
-    void loadCourse();
-    void loadAssignments();
-  }, [loading, loadCourse, loadAssignments]);
+    void loadCoursePage();
+  }, [loading, loadCoursePage]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -91,21 +74,21 @@ export default function CourseLecturePage() {
           <h1 className="text-2xl font-semibold">講義ページ</h1>
           <p className="text-sm text-muted-foreground">受講中の授業情報を確認します</p>
         </div>
-        <Button variant="outline" onClick={() => void loadCourse()} disabled={courseLoading}>
-          {courseLoading ? "更新中..." : "更新"}
+        <Button variant="outline" onClick={() => void loadCoursePage()} disabled={pageLoading}>
+          {pageLoading ? "更新中..." : "更新"}
         </Button>
       </div>
 
-      {courseError ? (
+      {pageError ? (
         <Alert variant="destructive">
           <AlertTitle>エラー</AlertTitle>
           <AlertDescription>
-            <ErrorMessages message={courseError} />
+            <ErrorMessages message={pageError} />
           </AlertDescription>
         </Alert>
       ) : null}
 
-      {courseLoading ? (
+      {pageLoading ? (
         <p className="text-sm text-muted-foreground">読み込み中...</p>
       ) : !course ? (
         <Alert>
@@ -154,20 +137,12 @@ export default function CourseLecturePage() {
             <Card>
               <CardHeader className="flex flex-row items-start justify-between gap-3">
                 <CardTitle>課題一覧</CardTitle>
-                <Button variant="outline" onClick={() => void loadAssignments()} disabled={assignmentsLoading}>
-                  {assignmentsLoading ? "読み込み中..." : "更新"}
+                <Button variant="outline" onClick={() => void loadCoursePage()} disabled={pageLoading}>
+                  {pageLoading ? "読み込み中..." : "更新"}
                 </Button>
               </CardHeader>
               <CardContent className="space-y-3">
-                {assignmentsError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>エラー</AlertTitle>
-                    <AlertDescription>
-                      <ErrorMessages message={assignmentsError} />
-                    </AlertDescription>
-                  </Alert>
-                ) : null}
-                {assignmentsLoading ? (
+                {pageLoading ? (
                   <p className="text-sm text-muted-foreground">読み込み中...</p>
                 ) : assignments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">この授業にはまだ課題がありません。</p>
@@ -200,12 +175,6 @@ export default function CourseLecturePage() {
               </CardContent>
             </Card>
           ) : null}
-
-          <div className="mt-8">
-            <Button asChild size="lg" className="w-full" style={{ backgroundColor: '#575859' }}>
-              <Link href="/mypage">マイページへ戻る</Link>
-            </Button>
-          </div>
         </>
       )}
     </div>
