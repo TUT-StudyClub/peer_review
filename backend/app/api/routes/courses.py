@@ -113,7 +113,7 @@ def get_course_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CoursePublic:
-    """講義詳細ページのデータを取得"""
+    """講義の詳細情報を取得（講師名、受講生数、ユーザーの登録状況を含む）"""
     course = db.query(Course).filter(Course.id == course_id).first()
     if course is None:
         raise HTTPException(status_code=404, detail="Course not found")

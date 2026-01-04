@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "echo 'Skipping lint - using tsc via next build instead' && exit 0"
+    "lint": "tsc --noEmit && echo 'TypeScript check passed'"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export default function CourseLecturePage() {
+export default function CoursePage() {
   const { token, loading } = useAuth();
   const params = useParams<{ courseId: string }>();
   const courseId = params?.courseId as string;

@@ -260,7 +260,7 @@ export default function MyPageClient() {
                       </div>
                     </div>
                     <div className="mt-3">
-                      <Button asChild className="w-full" style={{ backgroundColor: '#575859' }}>
+                      <Button asChild className="w-full bg-slate-600 hover:bg-slate-700">
                         <Link href={`/courses/${course.id}`}>授業ページへ</Link>
                       </Button>
                     </div>

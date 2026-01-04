@@ -32,7 +32,22 @@ export async function GET(
     }
 
     const course = await courseResponse.json();
-    const assignments = assignmentsResponse.ok ? await assignmentsResponse.json() : [];
+
+    // 課題一覧 API のエラーを静かに無視しないため、エラー内容をログ出力する
+    let assignments: unknown[] = [];
+
+    if (assignmentsResponse.ok) {
+      assignments = await assignmentsResponse.json();
+    } else {
+      const errorText = await assignmentsResponse.text();
+      console.error(
+        "Assignments API error:",
+        assignmentsResponse.status,
+        errorText
+      );
+      // 仕様を変えないため、ここでは空配列を返し続ける
+      assignments = [];
+    }
 
     return NextResponse.json({
       course,
