@@ -329,7 +329,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs text-muted-foreground">この授業の課題一覧ページへ移動します</div>
                       <Button
                         variant={isSelected ? "outline" : "default"}
                         onClick={() => selectCourse(course.id)}
