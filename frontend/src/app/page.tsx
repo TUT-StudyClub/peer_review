@@ -33,7 +33,7 @@ const features = [
 export default function Home() {
   return (
     <div className="flex flex-col gap-24">
-      <section className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-[100vw] overflow-hidden bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-sky-50 via-white to-emerald-50">
+      <section className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] -mt-8 w-[100vw] overflow-hidden bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-sky-50 via-white to-emerald-50">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-200/50 blur-3xl motion-safe:animate-[float-slow_12s_ease-in-out_infinite]" />
           <div className="absolute bottom-0 right-0 h-64 w-64 translate-x-1/3 rounded-full bg-sky-200/50 blur-3xl motion-safe:animate-[float-slow_10s_ease-in-out_infinite] motion-safe:[animation-delay:-3s]" />
@@ -44,9 +44,9 @@ export default function Home() {
               Peer Review
             </h1>
             <p className="mt-6 text-lg text-slate-600 sm:text-xl motion-safe:animate-[fade-up_0.6s_ease-out_both] motion-safe:[animation-delay:200ms]">
-              互いに学び、成長するための匿名ピアレビュープラットフォーム。
+              互いに学び、成長するための匿名ピアレビュープラットフォーム
               <br className="hidden sm:block" />
-              安心して学び合える場を、あなたのペースで。
+              安心して学び合える場を、あなたのペースで
             </p>
             <div className="mt-10 flex justify-center motion-safe:animate-[fade-up_0.6s_ease-out_both] motion-safe:[animation-delay:280ms]">
               <Button
@@ -64,7 +64,7 @@ export default function Home() {
       <section className="space-y-12">
         <div className="space-y-3 text-center">
           <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
-            なぜPeer Reviewを選ぶのか
+            なぜ Peer Review を選ぶのか
           </h2>
           <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
             安全で効果的な学習環境で、お互いに成長できるサイクルをつくります。
@@ -89,79 +89,9 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-[100vw] bg-slate-950 text-slate-400">
-        <div className="mx-auto max-w-6xl px-6 py-12">
-          <div className="grid gap-8 md:grid-cols-4">
-            <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-white">Peer Review</h3>
-              <p className="text-sm">
-                互いに学び、成長するための匿名ピアレビュープラットフォーム。
-              </p>
-            </div>
-            <div>
-              <h4 className="mb-3 text-sm font-semibold text-white">プロダクト</h4>
-              <ul className="space-y-2 text-sm">
-                <li>
-                  <Link href="/start" className="transition hover:text-white">
-                    使い方
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/assignments" className="transition hover:text-white">
-                    課題一覧
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/ta/requests" className="transition hover:text-white">
-                    TAリクエスト
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="mb-3 text-sm font-semibold text-white">アカウント</h4>
-              <ul className="space-y-2 text-sm">
-                <li>
-                  <Link href="/auth/login" className="transition hover:text-white">
-                    ログイン
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/auth/register" className="transition hover:text-white">
-                    新規登録
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/mypage" className="transition hover:text-white">
-                    マイページ
-                  </Link>
-                </li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="mb-3 text-sm font-semibold text-white">サポート</h4>
-              <ul className="space-y-2 text-sm">
-                <li>
-                  <a href="#" className="transition hover:text-white">
-                    ガイドライン
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="transition hover:text-white">
-                    お問い合わせ
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="transition hover:text-white">
-                    利用規約
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-          <div className="mt-10 border-t border-white/10 pt-6 text-center text-xs text-slate-500">
-            &copy; 2026 Peer Review. All rights reserved.
-          </div>
+      <footer className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] w-[100vw] bg-slate-950 text-slate-500">
+        <div className="mx-auto max-w-6xl px-6 py-8 text-center text-xs">
+          &copy; 2026 Peer Review. All rights reserved.
         </div>
       </footer>
     </div>
