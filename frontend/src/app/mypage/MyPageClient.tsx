@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Lightbulb } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import { apiEnrollCourse, apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
@@ -262,11 +261,11 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
               <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-6">
                 <RadarSkillChart skill={skill} />
               </div>
-              <div className="space-y-6">
-                <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-5">
+              <div className="flex flex-col justify-center space-y-6">
+                <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5">
                   <div className="text-sm font-medium text-slate-500">総合スコア</div>
                   <div className="mt-3 flex items-baseline gap-2">
-                    <span className="text-4xl font-semibold text-indigo-600">
+                    <span className="text-4xl font-semibold text-blue-600">
                       {formatSkill(skill.overall)}
                     </span>
                     <span className="text-sm text-slate-400">/ 5.0</span>
@@ -281,7 +280,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       <div key={axis.key} className="space-y-2">
                         <div className="flex items-center justify-between text-sm font-medium text-slate-700">
                           <span>{axis.label}</span>
-                          <span className="text-indigo-600">{formatSkill(value)}</span>
+                          <span className="text-blue-600">{formatSkill(value)}</span>
                         </div>
                         <div
                           className="h-2 rounded-full bg-slate-100"
@@ -292,7 +291,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                           aria-valuemax={5}
                         >
                           <div
-                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500"
                             style={{ width: `${percent}%` }}
                           />
                         </div>
