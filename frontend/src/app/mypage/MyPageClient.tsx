@@ -302,12 +302,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
               const isSelected = course.id === selectedCourseId;
               return (
                 <li key={course.id}>
-                  <div
-                    className={[
-                      "rounded-lg border border-border p-4 transition",
-                      isSelected ? "border-slate-900 bg-slate-50" : "hover:bg-accent",
-                    ].join(" ")}
-                  >
+                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{course.title}</div>
@@ -324,7 +319,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <Button
-                        variant={isSelected ? "outline" : "default"}
                         onClick={() => selectCourse(course.id)}
                       >
                         課題一覧へ
