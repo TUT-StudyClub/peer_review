@@ -406,7 +406,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       {user?.role === "teacher" && showCourseSelection ? (
         <Card>
           <CardHeader>
-            <CardTitle>（teacher）授業を作成</CardTitle>
+            <CardTitle>授業を作成</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="授業名">
