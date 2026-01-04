@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Lightbulb } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import { apiEnrollCourse, apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
@@ -153,7 +154,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     return assignments.filter((assignment) => assignment.course_id && enrolledIds.has(assignment.course_id));
   }, [assignments, enrolledCourses]);
 
-  const formatSkill = (value: number) => (value > 0 ? value.toFixed(2) : "-");
+  const formatSkill = (value: number) => (value > 0 ? value.toFixed(1) : "-");
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -257,17 +258,49 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           ) : skillLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col justify-center space-y-1 text-center text-sm text-slate-700">
-                {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key} className="font-medium">
-                    {axis.label}: {formatSkill(skill[axis.key])}
-                  </div>
-                ))}
-                <div className="font-semibold">総合: {formatSkill(skill.overall)}</div>
-              </div>
-              <div className="rounded-lg border bg-background p-3">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-6">
                 <RadarSkillChart skill={skill} />
+              </div>
+              <div className="space-y-6">
+                <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-violet-50 p-5">
+                  <div className="text-sm font-medium text-slate-500">総合スコア</div>
+                  <div className="mt-3 flex items-baseline gap-2">
+                    <span className="text-4xl font-semibold text-indigo-600">
+                      {formatSkill(skill.overall)}
+                    </span>
+                    <span className="text-sm text-slate-400">/ 5.0</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {REVIEWER_SKILL_AXES.map((axis) => {
+                    const value = skill[axis.key];
+                    const percent = Math.min(100, Math.max(0, (value / 5) * 100));
+                    return (
+                      <div key={axis.key} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+                          <span>{axis.label}</span>
+                          <span className="text-indigo-600">{formatSkill(value)}</span>
+                        </div>
+                        <div
+                          className="h-2 rounded-full bg-slate-100"
+                          role="progressbar"
+                          aria-label={`${axis.label} スコア`}
+                          aria-valuenow={value}
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                        >
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
               </div>
             </div>
           ) : (
