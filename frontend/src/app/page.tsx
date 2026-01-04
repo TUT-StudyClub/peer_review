@@ -13,7 +13,7 @@ export default function Home() {
       </p>
       <div className="mt-4">
         <Link
-          href="/start"
+          href="/auth/login"
           className="rounded-lg bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-sm hover:bg-indigo-700 transition-colors"
         >
           始める
