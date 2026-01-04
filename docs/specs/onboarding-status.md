@@ -22,8 +22,9 @@
 
 
 **フロントエンド (React)**
-- 初回ロード時（またはログイン後）に `has_completed_onboarding` を確認。
-- `false` の場合のみチュートリアルコンポーネント（React Joyride等）を起動。
+- 認証状態とユーザー情報は `frontend/src/app/providers.tsx` の `useAuth` コンテキストで管理しており、`useUser` というフックは現状存在しない。
+- `has_completed_onboarding` は `useAuth` が返す `user` のプロパティとして参照するか、必要なら新規に `frontend/src/lib/useOnboarding.ts` などで薄いフックを作成して `PATCH /users/me/complete-onboarding` を呼び出す。
+- 初回ロード時（またはログイン後）に `user.has_completed_onboarding` を確認し、`false` の場合のみチュートリアルコンポーネント（React Joyride等）を起動。
 - チュートリアルの `onFinish` または `onSkip` コールバックでAPIを叩き、フラグを更新する。
 
 
@@ -47,4 +48,4 @@
 
 - **DBマイグレーション:** `backend/alembic/versions/` に新リビジョンを追加し、`users` テーブルへ `has_completed_onboarding BOOLEAN NOT NULL DEFAULT FALSE` を追加。マイグレーション内で既存ユーザーを一律 `true` にバックフィルし（既存ユーザーにはチュートリアルを再表示しないため）、新規ユーザーはカラムのデフォルト `false` によりチュートリアルを表示対象とする。
 - **API実装:** `UserPublic` に新フィールドを追加し、`GET /users/me` のレスポンスへ反映。
-- **フロントエンド実装:** チュートリアルライブラリを導入し、`useUser` 等のフェッチ層で `has_completed_onboarding` を参照。`PATCH` 成功時にキャッシュを更新して再フェッチを抑制する。
+- **フロントエンド実装:** チュートリアルライブラリを導入し、`useAuth`（`frontend/src/app/providers.tsx`）が返す `user.has_completed_onboarding` を参照。専用フックが必要なら `frontend/src/lib/useOnboarding.ts` 等を新設し、`PATCH` 成功時に `useAuth.refreshMe` かローカルキャッシュ更新で再フェッチを抑制する。
