@@ -45,6 +45,6 @@
 
 ## 移行手順
 
-- **DBマイグレーション:** `backend/alembic/versions/` に新リビジョンを追加し、`users` テーブルへ `has_completed_onboarding BOOLEAN NOT NULL DEFAULT FALSE` を追加。マイグレーション内で既存ユーザーを一律 `true` にバックフィルし、（既存ユーザーにはチュートリアルを再表示しないため）、新規ユーザーはカラムのデフォルト `false` によりチュートリアルを表示対象とする。
+- **DBマイグレーション:** `backend/alembic/versions/` に新リビジョンを追加し、`users` テーブルへ `has_completed_onboarding BOOLEAN NOT NULL DEFAULT FALSE` を追加。マイグレーション内で既存ユーザーを一律 `true` にバックフィルし（既存ユーザーにはチュートリアルを再表示しないため）、新規ユーザーはカラムのデフォルト `false` によりチュートリアルを表示対象とする。
 - **API実装:** `UserPublic` に新フィールドを追加し、`GET /users/me` のレスポンスへ反映。
 - **フロントエンド実装:** チュートリアルライブラリを導入し、`useUser` 等のフェッチ層で `has_completed_onboarding` を参照。`PATCH` 成功時にキャッシュを更新して再フェッチを抑制する。
