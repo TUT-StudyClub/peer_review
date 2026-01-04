@@ -67,7 +67,7 @@ export default function Home() {
             なぜ Peer Review を選ぶのか
           </h2>
           <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
-            安全で効果的な学習環境で、お互いに成長できるサイクルをつくります。
+            安全で効果的な学習環境で、お互いに成長できるサイクルをつくります
           </p>
         </div>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
