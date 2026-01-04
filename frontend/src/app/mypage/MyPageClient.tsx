@@ -258,13 +258,13 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-muted-foreground">
+              <div className="flex flex-col justify-center space-y-1 text-center text-sm text-slate-700">
                 {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key}>
+                  <div key={axis.key} className="font-medium">
                     {axis.label}: {formatSkill(skill[axis.key])}
                   </div>
                 ))}
-                <div>総合: {formatSkill(skill.overall)}</div>
+                <div className="font-semibold">総合: {formatSkill(skill.overall)}</div>
               </div>
               <div className="rounded-lg border bg-background p-3">
                 <RadarSkillChart skill={skill} />
