@@ -201,7 +201,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">学生マイページ</h1>
-          <p className="text-sm text-muted-foreground">学習状況とレビュアースキルの確認</p>
         </div>
         <Button variant="outline" onClick={() => void refreshAll()} disabled={!token || refreshing}>
           {refreshing ? "更新中..." : "まとめて更新"}
