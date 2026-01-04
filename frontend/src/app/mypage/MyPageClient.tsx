@@ -36,10 +36,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
   const availableCourses = useMemo(() => courses.filter((course) => !course.is_enrolled), [courses]);
-  const selectedCourse = useMemo(
-    () => enrolledCourses.find((course) => course.id === selectedCourseId) ?? null,
-    [enrolledCourses, selectedCourseId]
-  );
 
   const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
@@ -96,7 +92,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     [router, token]
   );
 
-  const loadAssignments = useCallback(async (courseId: string) => {
+  const loadAssignments = useCallback(async (courseId?: string) => {
     setAssignmentsLoading(true);
     setAssignmentsError(null);
     try {
@@ -121,19 +117,19 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     if (!token) return;
     setRefreshing(true);
     try {
-      const tasks = [refreshMe(), loadSkill(), loadCourses()];
-      if (selectedCourseId) tasks.push(loadAssignments(selectedCourseId));
+      const tasks = [refreshMe(), loadSkill(), loadCourses(), loadAssignments()];
       await Promise.all(tasks);
     } finally {
       setRefreshing(false);
     }
-  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments, selectedCourseId]);
+  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments]);
 
   useEffect(() => {
     if (!token || user?.role !== "student") return;
     void loadSkill();
     void loadCourses();
-  }, [loadSkill, loadCourses, token, user?.role]);
+    void loadAssignments();
+  }, [loadSkill, loadCourses, loadAssignments, token, user?.role]);
 
   useEffect(() => {
     setSelectedCourseId(initialCourseId);
@@ -151,13 +147,11 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     setSelectedCourseId(enrolledCourses[0].id);
   }, [enrolledCourses, selectedCourseId]);
 
-  useEffect(() => {
-    if (!selectedCourseId) {
-      setAssignments([]);
-      return;
-    }
-    void loadAssignments(selectedCourseId);
-  }, [loadAssignments, selectedCourseId]);
+  const visibleAssignments = useMemo(() => {
+    if (!enrolledCourses.length) return [];
+    const enrolledIds = new Set(enrolledCourses.map((course) => course.id));
+    return assignments.filter((assignment) => assignment.course_id && enrolledIds.has(assignment.course_id));
+  }, [assignments, enrolledCourses]);
 
   const formatSkill = (value: number) => (value > 0 ? value.toFixed(2) : "-");
 
@@ -385,11 +379,11 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>課題一覧{selectedCourse ? ` / ${selectedCourse.title}` : ""}</CardTitle>
+          <CardTitle>課題一覧</CardTitle>
           <Button
             variant="outline"
-            onClick={() => selectedCourseId && loadAssignments(selectedCourseId)}
-            disabled={assignmentsLoading || !selectedCourseId}
+            onClick={() => void loadAssignments()}
+            disabled={assignmentsLoading}
           >
             {assignmentsLoading ? "読み込み中..." : "更新"}
           </Button>
@@ -403,15 +397,12 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {!selectedCourseId ? (
-            <p className="text-sm text-muted-foreground">授業を選択してください。</p>
-          ) : null}
           {assignmentsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!assignmentsLoading && selectedCourseId && assignments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">この授業にはまだ課題がありません。</p>
+          {!assignmentsLoading && !coursesLoading && visibleAssignments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">課題がありません。</p>
           ) : null}
           <ul className="space-y-2">
-            {assignments.map((assignment) => (
+            {visibleAssignments.map((assignment) => (
               <li key={assignment.id}>
                 <Link href={`/assignments/${assignment.id}`} className="block">
                   <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
