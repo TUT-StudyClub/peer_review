@@ -21,7 +21,7 @@
 
 ---
 
-## できること（実装済み）
+## できること
 
 ### 1) 課題提出（Submission）
 - `POST /submissions/assignment/{assignment_id}` で PDF/Markdown をアップロード
