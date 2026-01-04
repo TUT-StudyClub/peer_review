@@ -16,7 +16,7 @@
 
 **バックエンド API**
 - 追加先: `backend/app/api/routes/users.py` の `router` にエンドポイントを追加
-- スキーマ: `backend/app/schemas/user.py` の `UserPublic` に `has_completed_onboarding: bool` を追加
+- スキーマ: `backend/app/routes/user.py` の `UserPublic` に `has_completed_onboarding: bool` を追加
 - `GET /users/me`: 現在のフラグ状態を含めてユーザー情報を返す。
 - `PATCH /users/me/complete-onboarding`: チュートリアル完了またはスキップ時に実行。フラグを `true` に更新する（同一フラグで運用、ロール制限なし・ログイン必須）必要なら「イベントログ」で区別する。
 
