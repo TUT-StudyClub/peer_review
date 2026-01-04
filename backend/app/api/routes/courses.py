@@ -107,6 +107,47 @@ def list_courses(
     ]
 
 
+@router.get("/{course_id}", response_model=CoursePublic)
+def get_course_detail(
+    course_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CoursePublic:
+    """講義詳細ページのデータを取得"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # 受講生数を取得
+    student_count = (
+        db.query(func.count(CourseEnrollment.id))
+        .filter(CourseEnrollment.course_id == course_id)
+        .scalar()
+    ) or 0
+
+    # ユーザーが登録しているかチェック
+    is_enrolled = (
+        db.query(CourseEnrollment)
+        .filter(
+            CourseEnrollment.course_id == course_id,
+            CourseEnrollment.user_id == current_user.id,
+        )
+        .first()
+        is not None
+    )
+
+    return CoursePublic(
+        id=course.id,
+        title=course.title,
+        description=course.description,
+        teacher_id=course.teacher_id,
+        created_at=course.created_at,
+        teacher_name=course.teacher.name if course.teacher else None,
+        is_enrolled=is_enrolled,
+        student_count=student_count,
+    )
+
+
 @router.post("/{course_id}/enroll", response_model=CourseEnrollmentPublic)
 def enroll_course(
     course_id: UUID,

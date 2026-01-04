@@ -374,6 +374,10 @@ export async function apiCreateCourse(token: string, payload: CourseCreate): Pro
   );
 }
 
+export async function apiGetCourse(token: string, courseId: string): Promise<CoursePublic> {
+  return apiFetch<CoursePublic>(`/courses/${courseId}`, {}, token);
+}
+
 export async function apiEnrollCourse(token: string, courseId: string): Promise<CourseEnrollmentPublic> {
   return apiFetch<CourseEnrollmentPublic>(`/courses/${courseId}/enroll`, { method: "POST" }, token);
 }
