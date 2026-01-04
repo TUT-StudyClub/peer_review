@@ -240,7 +240,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>レビュアースキル（総合 / teacher比較）</CardTitle>
+          <CardTitle>レビュアースキル</CardTitle>
           <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
             {skillLoading ? "読み込み中..." : "更新"}
           </Button>
