@@ -2,7 +2,18 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { CheckCircle2, Download, Eye, FileText, RefreshCcw } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Download,
+  Eye,
+  FileText,
+  Filter,
+  GraduationCap,
+  RefreshCcw,
+  Search,
+  Users,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/app/providers";
@@ -11,6 +22,7 @@ import {
   apiDownloadSubmissionFile,
   apiGetMyGrade,
   apiGetMySubmission,
+  apiListCourseStudents,
   apiListEligibleTAs,
   apiGetReviewerSkill,
   apiListAssignments,
@@ -161,6 +173,13 @@ export default function AssignmentDetailPage() {
 
   const [teacherSubmissions, setTeacherSubmissions] = useState<SubmissionTeacherPublic[]>([]);
   const [teacherSubmissionsLoading, setTeacherSubmissionsLoading] = useState(false);
+  const [courseStudents, setCourseStudents] = useState<UserPublic[]>([]);
+  const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
+  const [reviewCountsLoading, setReviewCountsLoading] = useState(false);
+  const [reviewCountsLoaded, setReviewCountsLoaded] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "waiting" | "reviewing" | "graded">("all");
+  const [bulkDownloading, setBulkDownloading] = useState(false);
   const [gradeTargetId, setGradeTargetId] = useState<string | null>(null);
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
@@ -180,7 +199,6 @@ export default function AssignmentDetailPage() {
   const [paraphraseLoading, setParaphraseLoading] = useState(false);
   const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
-
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
@@ -199,6 +217,9 @@ export default function AssignmentDetailPage() {
     }
     return map;
   }, [taRequests]);
+  const studentById = useMemo(() => {
+    return new Map(courseStudents.map((student) => [student.id, student]));
+  }, [courseStudents]);
   const reviewTarget = assignment?.target_reviews_per_submission ?? 0;
   const reviewProgress = reviewTarget ? Math.min(received.length / reviewTarget, 1) : 0;
   const reviewTimeRange = useMemo(() => {
@@ -215,6 +236,59 @@ export default function AssignmentDetailPage() {
     reviewTarget > 0 && received.length >= reviewTarget && reviewTimeRange.end !== null
       ? new Date(reviewTimeRange.end).toLocaleString()
       : null;
+  const submissionCards = useMemo(() => {
+    return teacherSubmissions.map((submission) => {
+      const reviewCount = reviewCounts[submission.id] ?? 0;
+      const student = studentById.get(submission.author_id);
+      const status =
+        submission.teacher_total_score !== null
+          ? "graded"
+          : reviewCount > 0
+            ? "reviewing"
+            : "waiting";
+      return {
+        submission,
+        reviewCount,
+        studentName: student?.name ?? `受講生 ${shortId(submission.author_id)}`,
+        status,
+      };
+    });
+  }, [teacherSubmissions, reviewCounts, studentById]);
+  const filteredSubmissionCards = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    return submissionCards.filter((card) => {
+      if (statusFilter !== "all" && card.status !== statusFilter) {
+        return false;
+      }
+      if (!keyword) return true;
+      const candidates = [
+        card.studentName,
+        card.submission.author_id,
+        card.submission.original_filename,
+        card.submission.id,
+        shortId(card.submission.id),
+      ]
+        .filter(Boolean)
+        .map((value) => value.toLowerCase());
+      return candidates.some((value) => value.includes(keyword));
+    });
+  }, [searchTerm, statusFilter, submissionCards]);
+  const teacherSummary = useMemo(() => {
+    let graded = 0;
+    let reviewing = 0;
+    let waiting = 0;
+    for (const card of submissionCards) {
+      if (card.status === "graded") graded += 1;
+      else if (card.status === "reviewing") reviewing += 1;
+      else waiting += 1;
+    }
+    return {
+      total: submissionCards.length,
+      graded,
+      reviewing,
+      waiting,
+    };
+  }, [submissionCards]);
 
   const loadBase = useCallback(async () => {
     setLoadingBase(true);
@@ -310,6 +384,20 @@ export default function AssignmentDetailPage() {
     } catch (err) {
       setNotice(formatApiError(err));
     }
+  };
+
+  const downloadAllSubmissions = async () => {
+    if (!token) {
+      setNotice("ダウンロードにはログインが必要です");
+      return;
+    }
+    if (teacherSubmissions.length === 0) return;
+    setBulkDownloading(true);
+    for (const submission of teacherSubmissions) {
+      await downloadSubmission(submission.id, submission.file_type);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    setBulkDownloading(false);
   };
 
   const previewSubmission = async (submissionId: string) => {
@@ -473,10 +561,48 @@ export default function AssignmentDetailPage() {
     try {
       const list = await apiTeacherListSubmissions(token, assignmentId);
       setTeacherSubmissions(list);
+      await loadReviewCounts(list);
     } catch (err) {
       setNotice(formatApiError(err));
     } finally {
       setTeacherSubmissionsLoading(false);
+    }
+  };
+
+  const loadCourseStudents = async () => {
+    if (!token || !assignment?.course_id) return;
+    try {
+      const list = await apiListCourseStudents(token, assignment.course_id);
+      setCourseStudents(list);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    }
+  };
+
+  const loadReviewCounts = async (submissions: SubmissionTeacherPublic[]) => {
+    if (!token) return;
+    if (submissions.length === 0) {
+      setReviewCounts({});
+      setReviewCountsLoaded(true);
+      return;
+    }
+    setReviewCountsLoading(true);
+    setReviewCountsLoaded(false);
+    let succeeded = false;
+    try {
+      const entries = await Promise.all(
+        submissions.map(async (submission) => {
+          const list = await apiListReviewsForSubmission(token, submission.id);
+          return [submission.id, list.length] as const;
+        })
+      );
+      setReviewCounts(Object.fromEntries(entries));
+      succeeded = true;
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setReviewCountsLoading(false);
+      setReviewCountsLoaded(succeeded);
     }
   };
 
@@ -582,6 +708,7 @@ export default function AssignmentDetailPage() {
     if (user.role === "teacher") {
       void loadTeacherSubmissions();
       void loadTARequests();
+      void loadCourseStudents();
       return;
     }
     void loadMySubmission();
@@ -591,6 +718,11 @@ export default function AssignmentDetailPage() {
     // NOTE: 初期表示時にだけロードしたいので、意図的に dependency を最小限にしています。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user, assignmentId]);
+
+  useEffect(() => {
+    if (!token || user?.role !== "teacher" || !assignment?.course_id) return;
+    void loadCourseStudents();
+  }, [token, user?.role, assignment?.course_id]);
 
   const renderUploadArea = (options: { submitLabel: string; onCancel?: () => void }) => (
     <div className="space-y-3">
@@ -716,74 +848,214 @@ export default function AssignmentDetailPage() {
           actions={
             <Button
               variant="outline"
-              onClick={() => {
-                void loadTeacherSubmissions();
-                void loadTARequests();
-              }}
-              disabled={teacherSubmissionsLoading}
+              onClick={downloadAllSubmissions}
+              disabled={bulkDownloading || teacherSubmissions.length === 0}
+              className="gap-2"
             >
-              更新
+              <Download className="h-4 w-4" />
+              {bulkDownloading ? "ダウンロード中..." : "一括ダウンロード"}
             </Button>
           }
+          contentClassName="space-y-6"
         >
+          <div className="text-sm text-muted-foreground">
+            課題: {assignment?.title ?? "-"}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">総提出数</div>
+                <div className="text-lg font-semibold">{teacherSummary.total}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">採点済み</div>
+                <div className="text-lg font-semibold">{teacherSummary.graded}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">レビュー中</div>
+                <div className="text-lg font-semibold">
+                  {reviewCountsLoaded ? teacherSummary.reviewing : "-"}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-600">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">レビュー待ち</div>
+                <div className="text-lg font-semibold">
+                  {reviewCountsLoaded ? teacherSummary.waiting : "-"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 shadow-sm lg:flex-row lg:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="学生名、学籍番号、提出IDで検索..."
+                className="pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+                <SelectTrigger className="w-[140px] bg-white">
+                  <SelectValue placeholder="すべて" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="waiting">レビュー待ち</SelectItem>
+                  <SelectItem value="reviewing">レビュー中</SelectItem>
+                  <SelectItem value="graded">採点済み</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                フィルター
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void loadTeacherSubmissions();
+                  void loadTARequests();
+                }}
+                disabled={teacherSubmissionsLoading}
+              >
+                更新
+              </Button>
+            </div>
+          </div>
+
           {taRequestsLoading ? <p className="text-xs text-muted-foreground">TA依頼を読み込み中...</p> : null}
           {teacherSubmissionsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {teacherSubmissions.length === 0 ? (
+          {reviewCountsLoading ? <p className="text-sm text-muted-foreground">レビュー数を取得中...</p> : null}
+
+          {!teacherSubmissionsLoading && teacherSubmissions.length === 0 ? (
             <p className="text-sm text-muted-foreground">提出がまだありません</p>
+          ) : !teacherSubmissionsLoading && filteredSubmissionCards.length === 0 ? (
+            <p className="text-sm text-muted-foreground">該当する提出がありません</p>
           ) : (
-            <div className="space-y-2">
-              {teacherSubmissions.map((s) => (
-                <div key={s.id} className="rounded-lg border p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm">
-                      <div className="font-medium">submission: {shortId(s.id)}</div>
-                      <div className="text-xs text-muted-foreground">
-                        author: {shortId(s.author_id)} / {s.file_type} / {new Date(s.created_at).toLocaleString()}
+            <div className="space-y-4">
+              {filteredSubmissionCards.map((card) => {
+                const reviewLabel =
+                  reviewTarget && reviewCountsLoaded ? `${card.reviewCount}/${reviewTarget}` : "-";
+                const progressValue = reviewTarget ? Math.min(card.reviewCount / reviewTarget, 1) : 0;
+                const statusLabel =
+                  card.status === "graded" ? "採点済み" : card.status === "reviewing" ? "レビュー中" : "レビュー待ち";
+                const statusClass =
+                  card.status === "graded"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : card.status === "reviewing"
+                      ? "bg-blue-50 text-blue-700"
+                      : "bg-slate-100 text-slate-600";
+                const taRequestCount = taRequestsBySubmission[card.submission.id]?.length ?? 0;
+                return (
+                  <div key={card.submission.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                          <GraduationCap className="h-6 w-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <div className="text-base font-semibold">{card.studentName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              ({shortId(card.submission.author_id)})
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                            <FileText className="h-4 w-4" />
+                            <span className="max-w-[280px] truncate">
+                              {card.submission.original_filename ||
+                                `submission-${shortId(card.submission.id)}.${
+                                  card.submission.file_type === "pdf" ? "pdf" : "md"
+                                }`}
+                            </span>
+                            <span>・</span>
+                            <span>{card.submission.file_type === "pdf" ? "PDF" : "Markdown"}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            提出: {formatDateTime(card.submission.created_at)} ・ ID:{" "}
+                            {shortId(card.submission.id)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        teacher_total_score: {s.teacher_total_score ?? "-"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        TA依頼:{" "}
-                        {taRequestsBySubmission[s.id]?.length ? (
-                          <span className="inline-flex flex-wrap gap-1">
-                            {taRequestsBySubmission[s.id].map((r) => (
-                              <span
-                                key={r.id}
-                                className={[
-                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-                                  r.status === "offered"
-                                    ? "bg-amber-100 text-amber-900"
-                                    : r.status === "accepted"
-                                      ? "bg-emerald-100 text-emerald-900"
-                                      : "bg-slate-100 text-slate-900",
-                                ].join(" ")}
-                                title={`ta: ${shortId(r.ta_id)} / ${new Date(r.created_at).toLocaleString()}`}
-                              >
-                                {r.status} ({shortId(r.ta_id)})
-                              </span>
-                            ))}
-                          </span>
-                        ) : (
-                          "なし"
-                        )}
+                      <div className="flex flex-col items-end gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}>
+                          {statusLabel}
+                        </span>
+                        {card.submission.teacher_total_score !== null ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                            教員採点 {card.submission.teacher_total_score}点
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={() => downloadSubmission(s.id, s.file_type)}>
+
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>ピアレビュー進捗</span>
+                        <span>{reviewLabel}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted">
+                        <div
+                          className="h-2 rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${progressValue * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadSubmission(card.submission.id, card.submission.file_type)}
+                        className="w-full"
+                      >
                         DL
                       </Button>
-                      <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
-                      <Button variant="outline" onClick={() => openTeacherReviews(s.id)}>
+                      <Button size="sm" onClick={() => openTeacherGrade(card.submission.id)} className="w-full">
+                        採点
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openTeacherReviews(card.submission.id)}
+                        className="w-full"
+                      >
                         レビュー一覧
                       </Button>
-                      <Button variant="outline" onClick={() => openTARequest(s.id)}>
-                        TA依頼
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openTARequest(card.submission.id)}
+                        className="w-full"
+                      >
+                        TA依頼{taRequestCount ? ` (${taRequestCount})` : ""}
                       </Button>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
