@@ -63,6 +63,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   const [assignmentTitle, setAssignmentTitle] = useState("");
   const [assignmentDescription, setAssignmentDescription] = useState("");
   const [targetReviews, setTargetReviews] = useState(2);
+  const [assignmentDueAt, setAssignmentDueAt] = useState("");
   const [creatingAssignment, setCreatingAssignment] = useState(false);
 
   const [courseStudents, setCourseStudents] = useState<UserPublic[]>([]);
@@ -228,10 +229,12 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
         title: assignmentTitle,
         description: assignmentDescription || null,
         target_reviews_per_submission: targetReviews,
+        due_at: assignmentDueAt ? new Date(assignmentDueAt).toISOString() : null,
       });
       setAssignmentTitle("");
       setAssignmentDescription("");
       setTargetReviews(2);
+      setAssignmentDueAt("");
       await loadAssignments(activeCourseId);
     } catch (err) {
       setAssignmentsError(formatApiError(err));
@@ -462,6 +465,13 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                 />
               </Field>
             </div>
+            <Field label="提出期限">
+              <Input
+                type="datetime-local"
+                value={assignmentDueAt}
+                onChange={(e) => setAssignmentDueAt(e.target.value)}
+              />
+            </Field>
             <Field label="説明（任意）">
               <Textarea
                 value={assignmentDescription}

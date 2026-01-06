@@ -38,6 +38,7 @@ def create_assignment(
         course_id=payload.course_id,
         description=payload.description,
         target_reviews_per_submission=payload.target_reviews_per_submission,
+        due_at=payload.due_at,
     )
     db.add(assignment)
     db.flush()
