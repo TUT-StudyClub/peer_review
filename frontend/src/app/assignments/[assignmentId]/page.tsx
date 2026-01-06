@@ -1146,7 +1146,7 @@ export default function AssignmentDetailPage() {
             {taDialogSubmissionId ? (
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>TA依頼: {shortId(taDialogSubmissionId)}</DialogTitle>
+                  <DialogTitle>TA依頼</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
