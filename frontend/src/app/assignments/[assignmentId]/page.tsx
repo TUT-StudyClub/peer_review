@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { CheckCircle2, Download, Eye, FileText, RefreshCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/app/providers";
@@ -83,6 +84,13 @@ function formatScore(value: number | null, digits = 1, fallback = "-") {
   return value.toFixed(digits);
 }
 
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -134,6 +142,7 @@ export default function AssignmentDetailPage() {
     "idle"
   );
   const [uploading, setUploading] = useState(false);
+  const [resubmitMode, setResubmitMode] = useState(false);
 
   const [reviewTask, setReviewTask] = useState<ReviewAssignmentTask | null>(null);
   const [reviewComment, setReviewComment] = useState("");
@@ -190,6 +199,22 @@ export default function AssignmentDetailPage() {
     }
     return map;
   }, [taRequests]);
+  const reviewTarget = assignment?.target_reviews_per_submission ?? 0;
+  const reviewProgress = reviewTarget ? Math.min(received.length / reviewTarget, 1) : 0;
+  const reviewTimeRange = useMemo(() => {
+    if (!received.length) return { start: null, end: null };
+    const times = received
+      .map((r) => new Date(r.created_at).getTime())
+      .filter((t) => !Number.isNaN(t));
+    if (!times.length) return { start: null, end: null };
+    return { start: Math.min(...times), end: Math.max(...times) };
+  }, [received]);
+  const reviewStartAt =
+    reviewTimeRange.start === null ? null : new Date(reviewTimeRange.start).toLocaleString();
+  const reviewCompleteAt =
+    reviewTarget > 0 && received.length >= reviewTarget && reviewTimeRange.end !== null
+      ? new Date(reviewTimeRange.end).toLocaleString()
+      : null;
 
   const loadBase = useCallback(async () => {
     setLoadingBase(true);
@@ -263,6 +288,7 @@ export default function AssignmentDetailPage() {
       setMySubmission(s);
       setMySubmissionStatus("ready");
       setFile(null);
+      setResubmitMode(false);
       setNotice("提出しました");
     } catch (err) {
       setNotice(formatApiError(err));
@@ -281,6 +307,22 @@ export default function AssignmentDetailPage() {
       const blob = await apiDownloadSubmissionFile(token, submissionId);
       const ext = fileTypeHint === "pdf" ? "pdf" : fileTypeHint === "markdown" ? "md" : "bin";
       downloadBlob(blob, `submission-${shortId(submissionId)}.${ext}`);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    }
+  };
+
+  const previewSubmission = async (submissionId: string) => {
+    if (!token) {
+      setNotice("プレビューにはログインが必要です");
+      return;
+    }
+    setNotice(null);
+    try {
+      const blob = await apiDownloadSubmissionFile(token, submissionId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     } catch (err) {
       setNotice(formatApiError(err));
     }
@@ -549,6 +591,57 @@ export default function AssignmentDetailPage() {
     // NOTE: 初期表示時にだけロードしたいので、意図的に dependency を最小限にしています。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user, assignmentId]);
+
+  const renderUploadArea = (options: { submitLabel: string; onCancel?: () => void }) => (
+    <div className="space-y-3">
+      <div
+        className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 transition-colors"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.add("border-muted-foreground/60", "bg-muted/60");
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+          const droppedFile = e.dataTransfer.files?.[0];
+          if (
+            droppedFile &&
+            (droppedFile.type === "text/markdown" ||
+              droppedFile.type === "application/pdf" ||
+              droppedFile.name.endsWith(".md") ||
+              droppedFile.name.endsWith(".pdf"))
+          ) {
+            setFile(droppedFile);
+          }
+        }}
+      >
+        <label className="flex flex-col items-center justify-center gap-2 cursor-pointer">
+          <div className="text-sm font-medium">ファイルを選択またはドラッグ＆ドロップ</div>
+          <div className="text-xs text-muted-foreground">{file ? file.name : "Markdown (.md) または PDF (.pdf)"}</div>
+          <input
+            type="file"
+            accept=".md,.pdf,text/markdown,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="hidden"
+          />
+        </label>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button onClick={upload} disabled={uploading || !file} className="w-full sm:flex-1">
+          {uploading ? "提出中..." : options.submitLabel}
+        </Button>
+        {options.onCancel ? (
+          <Button variant="outline" onClick={options.onCancel} className="w-full sm:flex-1">
+            キャンセル
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
 
   if (loadingBase) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -959,59 +1052,165 @@ export default function AssignmentDetailPage() {
           ) : mySubmissionStatus === "loading" ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : mySubmissionStatus === "missing" ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 まだ提出していません。Markdown（.md）推奨（AIの「本文＋レビュー」判定が効きやすいです）。
               </p>
-              <div className="space-y-3">
-                <div
-                  className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 transition-colors"
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.add("border-muted-foreground/60", "bg-muted/60");
-                  }}
-                  onDragLeave={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
-                    const droppedFile = e.dataTransfer.files?.[0];
-                    if (droppedFile && (droppedFile.type === "text/markdown" || droppedFile.type === "application/pdf" || droppedFile.name.endsWith(".md") || droppedFile.name.endsWith(".pdf"))) {
-                      setFile(droppedFile);
-                    }
-                  }}
-                >
-                  <label className="flex flex-col items-center justify-center gap-2 cursor-pointer">
-                    <div className="text-sm font-medium">ファイルを選択またはドラッグ＆ドロップ</div>
-                    <div className="text-xs text-muted-foreground">
-                      {file ? file.name : "Markdown (.md) または PDF (.pdf)"}
-                    </div>
-                    <input
-                      type="file"
-                      accept=".md,.pdf,text/markdown,application/pdf"
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <Button onClick={upload} disabled={uploading || !file} className="w-full">
-                  {uploading ? "提出中..." : "提出"}
-                </Button>
-              </div>
+              {renderUploadArea({ submitLabel: "提出" })}
             </div>
           ) : mySubmission ? (
-            <div className="space-y-2 text-sm">
-              <div>
-                submission_id: <span className="font-mono">{mySubmission.id}</span>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-xl border bg-emerald-50/70 p-4 sm:flex-row sm:items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="text-lg font-semibold">提出完了</div>
+                  <div className="text-sm text-muted-foreground">
+                    課題が正常に提出されました。レビューをお待ちください。
+                  </div>
+                </div>
               </div>
-              <div>file_type: {mySubmission.file_type}</div>
-              <div>created_at: {new Date(mySubmission.created_at).toLocaleString()}</div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => downloadSubmission(mySubmission.id, mySubmission.file_type)}>
-                  ファイルDL
-                </Button>
+
+              <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">提出ファイル</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border bg-muted/30 p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+                          <FileText className="h-7 w-7" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">
+                            {mySubmission.original_filename ||
+                              `submission-${shortId(mySubmission.id)}.${
+                                mySubmission.file_type === "pdf" ? "pdf" : "md"
+                              }`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {mySubmission.file_type === "pdf" ? "PDF" : "Markdown"} ・{" "}
+                            {formatDateTime(mySubmission.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => downloadSubmission(mySubmission.id, mySubmission.file_type)}
+                        className="gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        ダウンロード
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => previewSubmission(mySubmission.id)}
+                        className="gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        プレビュー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setResubmitMode(true);
+                          setFile(null);
+                        }}
+                        className="gap-2"
+                      >
+                        <RefreshCcw className="h-4 w-4" />
+                        再提出
+                      </Button>
+                    </div>
+                    {resubmitMode ? (
+                      <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                        <div className="text-sm font-medium">再提出</div>
+                        <div className="text-xs text-muted-foreground">再提出すると前の提出は上書きされます。</div>
+                        {renderUploadArea({
+                          submitLabel: "再提出",
+                          onCancel: () => {
+                            setResubmitMode(false);
+                            setFile(null);
+                          },
+                        })}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">ステータス</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center gap-2 rounded-lg border bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+                      <CheckCircle2 className="h-4 w-4" />
+                      提出済み
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">レビュー進捗</span>
+                        <span className="font-medium">
+                          {receivedLoading
+                            ? "読み込み中..."
+                            : reviewTarget
+                              ? `${received.length}/${reviewTarget}`
+                              : "-"}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted">
+                        <div
+                          className="h-2 rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${reviewProgress * 100}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {reviewTarget
+                          ? `${reviewTarget}人のレビュアーが割り当てられています。`
+                          : "レビュアーがまだ割り当てられていません。"}
+                      </div>
+                    </div>
+                    <div className="border-t pt-4">
+                      <div className="text-sm font-semibold">タイムライン</div>
+                      <div className="mt-3 space-y-4">
+                        {[
+                          {
+                            label: "提出完了",
+                            time: formatDateTime(mySubmission.created_at),
+                            active: true,
+                          },
+                          {
+                            label: "レビュー開始",
+                            time: reviewStartAt ?? "待機中",
+                            active: Boolean(reviewStartAt),
+                          },
+                          {
+                            label: "レビュー完了",
+                            time: reviewCompleteAt ?? "待機中",
+                            active: Boolean(reviewCompleteAt),
+                          },
+                        ].map((item, index, items) => (
+                          <div key={item.label} className="relative pl-6">
+                            <div
+                              className={[
+                                "absolute left-0 top-1 h-3 w-3 rounded-full",
+                                item.active ? "bg-emerald-500" : "bg-muted-foreground/30",
+                              ].join(" ")}
+                            />
+                            {index < items.length - 1 ? (
+                              <div className="absolute left-[5px] top-3 h-full w-px bg-muted" />
+                            ) : null}
+                            <div className="text-sm font-medium">{item.label}</div>
+                            <div className="text-xs text-muted-foreground">{item.time}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           ) : (
