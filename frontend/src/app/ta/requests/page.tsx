@@ -375,9 +375,7 @@ export default function TARequestsPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    依頼元: {card.teacherName} ・ 依頼ID: {shortId(card.request.id)}
-                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">依頼元: {card.teacherName}</div>
 
                   <div className="mt-3 flex items-center gap-3 rounded-lg bg-slate-50 p-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-100 text-indigo-600">
@@ -464,9 +462,7 @@ export default function TARequestsPage() {
                   </div>
                   <StatusPill status={card.request.status} />
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  依頼元: {card.teacherName} ・ 依頼ID: {shortId(card.request.id)}
-                </div>
+                <div className="mt-2 text-xs text-muted-foreground">依頼元: {card.teacherName}</div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button asChild size="sm">
                     <Link href={`/assignments/${card.request.assignment_id}`}>続きを見る</Link>
@@ -498,9 +494,7 @@ export default function TARequestsPage() {
                   </div>
                   <StatusPill status={card.request.status} />
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  依頼元: {card.teacherName} ・ 依頼ID: {shortId(card.request.id)}
-                </div>
+                <div className="mt-2 text-xs text-muted-foreground">依頼元: {card.teacherName}</div>
                 <div className="mt-4 text-xs text-muted-foreground">完了した依頼です。</div>
               </div>
             ))
