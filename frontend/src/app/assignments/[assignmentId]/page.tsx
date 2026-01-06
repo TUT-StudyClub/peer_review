@@ -1031,9 +1031,14 @@ export default function AssignmentDetailPage() {
                         onClick={() => downloadSubmission(card.submission.id, card.submission.file_type)}
                         className="w-full"
                       >
-                        DL
+                        ダウンロード
                       </Button>
-                      <Button size="sm" onClick={() => openTeacherGrade(card.submission.id)} className="w-full">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openTeacherGrade(card.submission.id)}
+                        className="w-full"
+                      >
                         採点
                       </Button>
                       <Button
