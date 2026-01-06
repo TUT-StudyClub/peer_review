@@ -431,7 +431,14 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                 <CardTitle>授業を作成</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Field label="授業名">
+                <Field
+                  label={
+                    <span className="inline-flex items-center gap-1">
+                      授業名
+                      <span className="text-red-500">*</span>
+                    </span>
+                  }
+                >
                   <Select value={courseTitle || undefined} onValueChange={setCourseTitle}>
                     <SelectTrigger className="bg-slate-100">
                       <SelectValue placeholder="授業名を選択" />
@@ -487,9 +494,28 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                   </div>
                 </Field>
                 <div>
-                  <Button onClick={createCourse} disabled={courseCreating || !courseTitle.trim()}>
-                    作成
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      className="w-full sm:flex-[7]"
+                      onClick={createCourse}
+                      disabled={courseCreating || !courseTitle.trim()}
+                    >
+                      作成
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="w-full sm:flex-[3]"
+                      onClick={() => {
+                        setCourseTitle("");
+                        setCourseDescription("");
+                        setCourseTheme(COURSE_THEME_OPTIONS[0]?.value ?? "sky");
+                        setCourseView("list");
+                        router.replace("/assignments");
+                      }}
+                    >
+                      キャンセル
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
