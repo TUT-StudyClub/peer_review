@@ -370,7 +370,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       {!showCourseSelection ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle>課題一覧{activeCourse ? ` / ${activeCourse.title}` : ""}</CardTitle>
+            <CardTitle>課題一覧</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
@@ -441,7 +441,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       {user?.role === "teacher" && !showCourseSelection ? (
         <Card>
           <CardHeader>
-            <CardTitle>（teacher）課題を作成</CardTitle>
+          <CardTitle>課題を作成</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <Field label="授業">
@@ -494,7 +494,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       {user?.role === "teacher" && !showCourseSelection ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle>受講生一覧{activeCourse ? ` / ${activeCourse.title}` : ""}</CardTitle>
+            <CardTitle>受講生一覧</CardTitle>
             <Button
               variant="outline"
               onClick={() => activeCourseId && loadCourseStudents(activeCourseId)}

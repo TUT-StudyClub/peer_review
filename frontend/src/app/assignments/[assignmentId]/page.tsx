@@ -75,17 +75,12 @@ function shortId(id: string) {
 }
 
 function formatSkill(value: number) {
-  return value > 0 ? value.toFixed(2) : "-";
+  return value > 0 ? value.toFixed(1) : "-";
 }
 
 function formatScore(value: number | null, digits = 1, fallback = "-") {
   if (value === null) return fallback;
   return value.toFixed(digits);
-}
-
-function extractReviewCount(breakdown: Record<string, unknown>) {
-  const count = breakdown.reviews_count;
-  return typeof count === "number" ? count : null;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -952,7 +947,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）提出（My Submission）"
+          title="提出"
           actions={
             <Button variant="outline" onClick={loadMySubmission}>
               更新
@@ -1027,7 +1022,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）レビュー（Next Task → Submit）"
+          title="レビュー"
           actions={
             <Button variant="outline" onClick={getNextTask} disabled={!token}>
               次のレビューを取得
@@ -1149,7 +1144,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）受け取ったレビュー（Received Reviews）"
+          title="受け取ったレビュー"
           actions={
             <Button variant="outline" onClick={loadReceived} disabled={!token || receivedLoading}>
               更新
@@ -1224,7 +1219,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）成績（Grade）"
+          title="成績"
           actions={
             <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading}>
               更新
@@ -1263,17 +1258,6 @@ export default function AssignmentDetailPage() {
               <p className="text-xs text-muted-foreground">
                 ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
               </p>
-              <details className="rounded-md border bg-muted/60 p-3 text-xs">
-                <summary className="cursor-pointer font-medium">内訳（breakdown）</summary>
-                {extractReviewCount(grade.breakdown) !== null ? (
-                  <div className="mt-2 text-[11px] text-muted-foreground">
-                    レビュー数: {extractReviewCount(grade.breakdown)}
-                  </div>
-                ) : null}
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap">
-                  {JSON.stringify(grade.breakdown, null, 2)}
-                </pre>
-              </details>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
@@ -1283,7 +1267,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）レビュアースキル（この課題 / teacher比較）"
+          title="レビュアースキル"
           actions={
             <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
               更新
@@ -1295,17 +1279,49 @@ export default function AssignmentDetailPage() {
           ) : skillLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key}>
-                    {axis.label}: {formatSkill(skill[axis.key])}
-                  </div>
-                ))}
-                <div>総合: {formatSkill(skill.overall)}</div>
-              </div>
-              <div className="rounded-lg border bg-background p-3">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-6">
                 <RadarSkillChart skill={skill} />
+              </div>
+              <div className="flex flex-col justify-center space-y-6">
+                <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5">
+                  <div className="text-sm font-medium text-slate-500">総合スコア</div>
+                  <div className="mt-3 flex items-baseline gap-2">
+                    <span className="text-4xl font-semibold text-blue-600">
+                      {formatSkill(skill.overall)}
+                    </span>
+                    <span className="text-sm text-slate-400">/ 5.0</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {REVIEWER_SKILL_AXES.map((axis) => {
+                    const value = skill[axis.key];
+                    const percent = Math.min(100, Math.max(0, (value / 5) * 100));
+                    return (
+                      <div key={axis.key} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+                          <span>{axis.label}</span>
+                          <span className="text-blue-600">{formatSkill(value)}</span>
+                        </div>
+                        <div
+                          className="h-2 rounded-full bg-slate-100"
+                          role="progressbar"
+                          aria-label={`${axis.label} スコア`}
+                          aria-valuenow={value}
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                        >
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
               </div>
             </div>
           ) : (
