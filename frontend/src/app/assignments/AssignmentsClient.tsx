@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BookOpen, Calendar, ClipboardList, Search, Users } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import {
@@ -31,6 +32,7 @@ type AssignmentsClientProps = {
 export default function AssignmentsClient({ initialCourseId }: AssignmentsClientProps) {
   const { user, token } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeCourseId, setActiveCourseId] = useState<string | null>(initialCourseId);
 
   const courseTitleOptions = [
@@ -51,6 +53,11 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
   const coursesRequestId = useRef(0);
+  const [courseQuery, setCourseQuery] = useState("");
+  const [courseView, setCourseView] = useState<"list" | "create">("list");
+  const [courseAssignments, setCourseAssignments] = useState<AssignmentPublic[]>([]);
+  const [courseAssignmentsLoading, setCourseAssignmentsLoading] = useState(false);
+  const [courseAssignmentsError, setCourseAssignmentsError] = useState<string | null>(null);
 
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
@@ -75,6 +82,42 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
     [courses, activeCourseId]
   );
   const showCourseSelection = !activeCourseId;
+  const courseErrorMessage = coursesError ?? courseAssignmentsError;
+  const isCourseRefreshing = coursesLoading || courseAssignmentsLoading;
+
+  const filteredCourses = useMemo(() => {
+    const query = courseQuery.trim().toLowerCase();
+    if (!query) return courses;
+    return courses.filter((course) => {
+      const haystack = [course.title, course.description, course.teacher_name]
+        .filter((value): value is string => Boolean(value))
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [courseQuery, courses]);
+
+  const assignmentStats = useMemo(() => {
+    const counts = new Map<string, number>();
+    const latestByCourse = new Map<string, Date>();
+    for (const assignment of courseAssignments) {
+      if (!assignment.course_id) continue;
+      counts.set(assignment.course_id, (counts.get(assignment.course_id) ?? 0) + 1);
+      const createdAt = new Date(assignment.created_at);
+      if (Number.isNaN(createdAt.getTime())) continue;
+      const prev = latestByCourse.get(assignment.course_id);
+      if (!prev || createdAt > prev) {
+        latestByCourse.set(assignment.course_id, createdAt);
+      }
+    }
+    return { counts, latestByCourse };
+  }, [courseAssignments]);
+
+  const formatShortDate = (value: Date) =>
+    value
+      .toLocaleDateString("ja-JP", { year: "numeric", month: "2-digit", day: "2-digit" })
+      .replace(/\//g, "-");
+
 
   const loadCourses = useCallback(async () => {
     const requestId = ++coursesRequestId.current;
@@ -100,6 +143,19 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       }
     }
   }, [token]);
+
+  const loadCourseAssignments = useCallback(async () => {
+    setCourseAssignmentsLoading(true);
+    setCourseAssignmentsError(null);
+    try {
+      const list = await apiListAssignments();
+      setCourseAssignments(list);
+    } catch (err) {
+      setCourseAssignmentsError(formatApiError(err));
+    } finally {
+      setCourseAssignmentsLoading(false);
+    }
+  }, []);
 
   const loadAssignments = useCallback(async (courseId: string) => {
     setAssignmentsLoading(true);
@@ -134,6 +190,17 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   useEffect(() => {
     void loadCourses();
   }, [loadCourses]);
+
+  useEffect(() => {
+    if (!showCourseSelection) return;
+    const viewParam = searchParams.get("view");
+    setCourseView(viewParam === "create" ? "create" : "list");
+  }, [searchParams, showCourseSelection]);
+
+  useEffect(() => {
+    if (!token || !showCourseSelection) return;
+    void loadCourseAssignments();
+  }, [loadCourseAssignments, showCourseSelection, token]);
 
   useEffect(() => {
     setActiveCourseId(initialCourseId);
@@ -246,125 +313,186 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   return (
     <div className="space-y-6">
       {showCourseSelection ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-3">
-            <CardTitle>授業一覧</CardTitle>
-            <Button variant="outline" onClick={loadCourses} disabled={coursesLoading || !token}>
-              更新
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {coursesError ? (
-              <Alert variant="destructive">
-                <AlertTitle>エラー</AlertTitle>
-                <AlertDescription>
-                  <ErrorMessages message={coursesError} />
-                </AlertDescription>
-              </Alert>
-            ) : null}
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Input
+                  type="search"
+                  placeholder="授業を検索..."
+                  value={courseQuery}
+                  onChange={(e) => setCourseQuery(e.target.value)}
+                  disabled={!token}
+                  className="h-12 rounded-xl bg-slate-50 pl-10 text-sm"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void loadCourses();
+                  if (token) void loadCourseAssignments();
+                }}
+                disabled={!token || isCourseRefreshing}
+              >
+                {isCourseRefreshing ? "読み込み中..." : "更新"}
+              </Button>
+            </div>
+          </div>
 
-            {!token ? (
-              <p className="text-sm text-muted-foreground">ログインすると授業一覧が表示されます。</p>
-            ) : null}
-            {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-            {!coursesLoading && token && courses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                まだ授業がありません（teacherが作成してください）
-              </p>
-            ) : null}
+          {courseErrorMessage ? (
+            <Alert variant="destructive">
+              <AlertTitle>エラー</AlertTitle>
+              <AlertDescription>
+                <ErrorMessages message={courseErrorMessage} />
+              </AlertDescription>
+            </Alert>
+          ) : null}
 
-            <ul className="space-y-2">
-              {courses.map((course) => {
-                const isActive = course.id === activeCourseId;
+          {!token ? (
+            <p className="text-sm text-muted-foreground">ログインすると授業一覧が表示されます。</p>
+          ) : null}
+          {isCourseRefreshing ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
+          {!isCourseRefreshing && token && filteredCourses.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              まだ授業がありません（teacherが作成してください）
+            </p>
+          ) : null}
+
+          {user?.role === "teacher" && courseView === "create" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>授業を作成</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Field label="授業名">
+                  <Select value={courseTitle || undefined} onValueChange={setCourseTitle}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="授業名を選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courseTitleOptions.map((title) => (
+                        <SelectItem key={title} value={title}>
+                          {title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="説明（任意）">
+                  <Textarea
+                    value={courseDescription}
+                    onChange={(e) => setCourseDescription(e.target.value)}
+                    rows={3}
+                  />
+                </Field>
+                <div>
+                  <Button onClick={createCourse} disabled={courseCreating || !courseTitle.trim()}>
+                    作成
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <ul className="grid gap-4 lg:grid-cols-2">
+              {filteredCourses.map((course, index) => {
                 const canSelect = user?.role !== "student" || course.is_enrolled;
+                const isEnrolled = user?.role === "student" && course.is_enrolled;
+                const cardTone =
+                  index % 2 === 0
+                    ? "border-blue-200/70 bg-blue-50/60"
+                    : "border-violet-200/70 bg-violet-50/60";
+                const iconTone = index % 2 === 0 ? "text-blue-600" : "text-violet-600";
+                const assignmentCount = courseAssignmentsLoading
+                  ? "-"
+                  : assignmentStats.counts.get(course.id) ?? 0;
+                const latestDate =
+                  assignmentStats.latestByCourse.get(course.id) ?? new Date(course.created_at);
+
                 return (
-                  <li key={course.id}>
-                    <div
-                      className={[
-                        "rounded-lg border border-border p-4 transition",
-                        isActive ? "border-slate-900 bg-slate-50" : "hover:bg-accent",
-                      ].join(" ")}
-                    >
+                  <li
+                    key={course.id}
+                    className="rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                  >
+                    <div className={`rounded-2xl border-b border-slate-200/60 p-4 ${cardTone}`}>
                       <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="font-medium">{course.title}</div>
-                          {course.description ? (
-                            <div className="mt-1 text-sm text-muted-foreground">{course.description}</div>
-                          ) : null}
-                          <div className="mt-2 text-xs text-muted-foreground">
-                            {course.teacher_name ? `teacher: ${course.teacher_name}` : null}
-                            {user?.role === "teacher"
-                              ? ` / 受講生: ${course.student_count ?? 0}人`
-                              : null}
+                        <div className="flex items-start gap-3">
+                          <span
+                            className={`flex h-11 w-11 items-center justify-center rounded-xl bg-white/90 ${iconTone}`}
+                          >
+                            <BookOpen className="h-5 w-5" />
+                          </span>
+                          <div>
+                            <div className="text-lg font-semibold text-slate-900">{course.title}</div>
+                            {course.teacher_name ? (
+                              <div className="text-sm text-slate-500">teacher: {course.teacher_name}</div>
+                            ) : null}
                           </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        {user?.role === "student" ? (
+                          <span
+                            className={[
+                              "rounded-full px-3 py-1 text-xs font-medium",
+                              isEnrolled ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600",
+                            ].join(" ")}
+                          >
+                            {isEnrolled ? "受講中" : "未受講"}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="space-y-3 px-4 pb-4 pt-3">
+                      {course.description ? (
+                        <p className="text-sm text-slate-600">{course.description}</p>
+                      ) : null}
+                      <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
+                        {typeof course.student_count === "number" ? (
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-slate-400" />
+                            受講生: {course.student_count}人
+                          </div>
+                        ) : null}
+                        <div className="flex items-center gap-2">
+                          <ClipboardList className="h-4 w-4 text-slate-400" />
+                          課題: {assignmentCount}件
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-slate-400" />
+                          最終更新: {formatShortDate(latestDate)}
+                        </div>
+                      </div>
+                      <div className="pt-2">
+                        {user?.role === "student" && !course.is_enrolled ? (
+                          <Button
+                            className="w-full"
+                            onClick={() => enrollCourse(course.id)}
+                            disabled={enrollingCourseId === course.id}
+                          >
+                            {enrollingCourseId === course.id ? "登録中..." : "受講する"}
+                          </Button>
+                        ) : (
                           <Button
                             variant="outline"
+                            className="w-full"
                             onClick={() => {
+                              if (!canSelect) return;
                               setActiveCourseId(course.id);
                               router.push(`/assignments?course_id=${course.id}`);
                             }}
                             disabled={!canSelect}
                             title={!canSelect ? "受講してから選択できます" : undefined}
                           >
-                            {isActive ? "選択中" : "選択"}
+                            選択
                           </Button>
-                          {user?.role === "student" ? (
-                            course.is_enrolled ? (
-                              <span className="flex items-center justify-center rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-800">
-                                受講中
-                              </span>
-                            ) : (
-                              <Button
-                                onClick={() => enrollCourse(course.id)}
-                                disabled={enrollingCourseId === course.id}
-                              >
-                                {enrollingCourseId === course.id ? "登録中..." : "受講する"}
-                              </Button>
-                            )
-                          ) : null}
-                        </div>
+                        )}
                       </div>
                     </div>
                   </li>
                 );
               })}
             </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {user?.role === "teacher" && showCourseSelection ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>授業を作成</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field label="授業名">
-              <Select value={courseTitle || undefined} onValueChange={setCourseTitle}>
-                <SelectTrigger>
-                  <SelectValue placeholder="授業名を選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  {courseTitleOptions.map((title) => (
-                    <SelectItem key={title} value={title}>
-                      {title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="説明（任意）">
-              <Textarea value={courseDescription} onChange={(e) => setCourseDescription(e.target.value)} rows={3} />
-            </Field>
-            <div>
-              <Button onClick={createCourse} disabled={courseCreating || !courseTitle.trim()}>
-                作成
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       ) : null}
 
       {!showCourseSelection ? (
