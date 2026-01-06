@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiEnrollCourse, apiGetReviewerSkill, apiListCourses, formatApiError } from "@/lib/api";
+import { apiGetReviewerSkill, apiListCourses, formatApiError } from "@/lib/api";
 import type { CoursePublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
@@ -30,13 +30,9 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(initialCourseId);
-  const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
-
   const [refreshing, setRefreshing] = useState(false);
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
-  const availableCourses = useMemo(() => courses.filter((course) => !course.is_enrolled), [courses]);
-
   const loadSkill = useCallback(async () => {
     if (!token) return;
     setSkillLoading(true);
@@ -64,29 +60,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       setCoursesLoading(false);
     }
   }, [token]);
-
-  const enrollCourse = useCallback(
-    async (courseId: string) => {
-      if (!token) return;
-      setEnrollingCourseId(courseId);
-      setCoursesError(null);
-      try {
-        await apiEnrollCourse(token, courseId);
-        setCourses((prev) =>
-          prev.map((course) =>
-            course.id === courseId ? { ...course, is_enrolled: true } : course
-          )
-        );
-        setSelectedCourseId(courseId);
-        router.push(`/mypage?course_id=${courseId}`);
-      } catch (err) {
-        setCoursesError(formatApiError(err));
-      } finally {
-        setEnrollingCourseId(null);
-      }
-    },
-    [router, token]
-  );
 
   const selectCourse = useCallback(
     (courseId: string) => {
@@ -301,11 +274,15 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           ) : null}
           {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
           {!coursesLoading && enrolledCourses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
+              <Button asChild variant="outline">
+                <Link href="/assignments">授業一覧へ</Link>
+              </Button>
+            </div>
           ) : null}
           <ul className="space-y-2">
             {enrolledCourses.map((course) => {
-              const isSelected = course.id === selectedCourseId;
               return (
                 <li key={course.id}>
                   <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
@@ -334,45 +311,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                 </li>
               );
             })}
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>授業一覧（受講登録）</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!coursesLoading && availableCourses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">受講可能な授業がありません。</p>
-          ) : null}
-          <ul className="space-y-2">
-            {availableCourses.map((course) => (
-              <li key={course.id}>
-                <div className="rounded-lg border border-border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{course.title}</div>
-                      {course.description ? (
-                        <div className="mt-1 text-sm text-muted-foreground">{course.description}</div>
-                      ) : null}
-                      {course.teacher_name ? (
-                        <div className="mt-2 text-xs text-muted-foreground">teacher: {course.teacher_name}</div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => enrollCourse(course.id)}
-                        disabled={enrollingCourseId === course.id}
-                      >
-                        {enrollingCourseId === course.id ? "登録中..." : "受講する"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
           </ul>
         </CardContent>
       </Card>
