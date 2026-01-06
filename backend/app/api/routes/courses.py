@@ -119,11 +119,12 @@ def get_course_detail(
         raise HTTPException(status_code=404, detail="Course not found")
 
     # 受講生数を取得
-    student_count = (
+    student_count_raw: int | None = (
         db.query(func.count(CourseEnrollment.id))
         .filter(CourseEnrollment.course_id == course_id)
-        .scalar()
-    ) or 0
+        .scalar_one_or_none()
+    )
+    student_count: int = student_count_raw or 0
 
     # ユーザーが登録しているかチェック
     is_enrolled = (

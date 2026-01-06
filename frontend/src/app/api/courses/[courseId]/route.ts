@@ -45,8 +45,6 @@ export async function GET(
         assignmentsResponse.status,
         errorText
       );
-      // 仕様を変えないため、ここでは空配列を返し続ける
-      assignments = [];
     }
 
     return NextResponse.json({
