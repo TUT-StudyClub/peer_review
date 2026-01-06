@@ -52,6 +52,7 @@ export type AssignmentPublic = {
   description?: string | null;
   target_reviews_per_submission: number;
   created_at: string;
+  due_at?: string | null;
 };
 
 export type AssignmentCreate = {
@@ -59,6 +60,7 @@ export type AssignmentCreate = {
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
+  due_at?: string | null;
 };
 
 export type CoursePublic = {

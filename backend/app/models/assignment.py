@@ -25,6 +25,11 @@ class Assignment(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
+    due_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        default=None,
+        nullable=True,
+    )
 
     course = relationship("Course", back_populates="assignments")
     rubric_criteria = relationship(
