@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiEnrollCourse, apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
-import type { AssignmentPublic, CoursePublic, ReviewerSkill } from "@/lib/types";
+import { apiEnrollCourse, apiGetReviewerSkill, apiListCourses, formatApiError } from "@/lib/api";
+import type { CoursePublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { ErrorMessages } from "@/components/ErrorMessages";
@@ -36,10 +36,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
   const availableCourses = useMemo(() => courses.filter((course) => !course.is_enrolled), [courses]);
-
-  const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
-  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
-  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
 
   const loadSkill = useCallback(async () => {
     if (!token) return;
@@ -92,19 +88,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     [router, token]
   );
 
-  const loadAssignments = useCallback(async (courseId?: string) => {
-    setAssignmentsLoading(true);
-    setAssignmentsError(null);
-    try {
-      const list = await apiListAssignments(courseId);
-      setAssignments(list);
-    } catch (err) {
-      setAssignmentsError(formatApiError(err));
-    } finally {
-      setAssignmentsLoading(false);
-    }
-  }, []);
-
   const selectCourse = useCallback(
     (courseId: string) => {
       setSelectedCourseId(courseId);
@@ -117,19 +100,18 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     if (!token) return;
     setRefreshing(true);
     try {
-      const tasks = [refreshMe(), loadSkill(), loadCourses(), loadAssignments()];
+      const tasks = [refreshMe(), loadSkill(), loadCourses()];
       await Promise.all(tasks);
     } finally {
       setRefreshing(false);
     }
-  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments]);
+  }, [token, refreshMe, loadSkill, loadCourses]);
 
   useEffect(() => {
     if (!token || user?.role !== "student") return;
     void loadSkill();
     void loadCourses();
-    void loadAssignments();
-  }, [loadSkill, loadCourses, loadAssignments, token, user?.role]);
+  }, [loadSkill, loadCourses, token, user?.role]);
 
   useEffect(() => {
     setSelectedCourseId(initialCourseId);
@@ -138,7 +120,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   useEffect(() => {
     if (!enrolledCourses.length) {
       setSelectedCourseId(null);
-      setAssignments([]);
       return;
     }
     if (selectedCourseId && enrolledCourses.some((course) => course.id === selectedCourseId)) {
@@ -146,12 +127,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     }
     setSelectedCourseId(enrolledCourses[0].id);
   }, [enrolledCourses, selectedCourseId]);
-
-  const visibleAssignments = useMemo(() => {
-    if (!enrolledCourses.length) return [];
-    const enrolledIds = new Set(enrolledCourses.map((course) => course.id));
-    return assignments.filter((assignment) => assignment.course_id && enrolledIds.has(assignment.course_id));
-  }, [assignments, enrolledCourses]);
 
   const formatSkill = (value: number) => (value > 0 ? value.toFixed(1) : "-");
 
@@ -402,54 +377,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>課題一覧</CardTitle>
-          <Button
-            variant="outline"
-            onClick={() => void loadAssignments()}
-            disabled={assignmentsLoading}
-          >
-            {assignmentsLoading ? "読み込み中..." : "更新"}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {assignmentsError ? (
-            <Alert variant="destructive">
-              <AlertTitle>エラー</AlertTitle>
-              <AlertDescription>
-                <ErrorMessages message={assignmentsError} />
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {assignmentsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!assignmentsLoading && !coursesLoading && visibleAssignments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">課題がありません。</p>
-          ) : null}
-          <ul className="space-y-2">
-            {visibleAssignments.map((assignment) => (
-              <li key={assignment.id}>
-                <Link href={`/assignments/${assignment.id}`} className="block">
-                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{assignment.title}</div>
-                        {assignment.description ? (
-                          <div className="mt-1 text-sm text-muted-foreground">{assignment.description}</div>
-                        ) : null}
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <div>reviews/submission: {assignment.target_reviews_per_submission}</div>
-                        <div>{new Date(assignment.created_at).toLocaleString()}</div>
-                      </div>
-                    </div>
-                  </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
     </div>
   );
 }
