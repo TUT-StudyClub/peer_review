@@ -717,7 +717,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "teacher" ? (
         <SectionCard
-          title="（teacher）提出一覧 & 採点"
+          title="提出一覧"
           actions={
             <Button
               variant="outline"
