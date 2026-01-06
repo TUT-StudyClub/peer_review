@@ -578,9 +578,13 @@ export default function AssignmentDetailPage() {
     <div className="space-y-6">
       <SectionCard title={assignment ? assignment.title : `課題 ${assignmentId}`} contentClassName="space-y-2">
         {assignment?.description ? <p className="text-sm text-muted-foreground">{assignment.description}</p> : null}
-        <div className="text-xs text-muted-foreground">
-          reviews/submission: {assignment?.target_reviews_per_submission ?? "-"} / created:{" "}
-          {assignment?.created_at ? new Date(assignment.created_at).toLocaleString() : "-"}
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+            必要レビュー数: {assignment?.target_reviews_per_submission ?? "-"}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+            作成日: {assignment?.created_at ? new Date(assignment.created_at).toLocaleString() : "-"}
+          </span>
         </div>
       </SectionCard>
 

@@ -417,9 +417,13 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                             <div className="mt-1 text-sm text-muted-foreground">{a.description}</div>
                           ) : null}
                         </div>
-                        <div className="text-right text-xs text-muted-foreground">
-                          <div>reviews/submission: {a.target_reviews_per_submission}</div>
-                          <div>{new Date(a.created_at).toLocaleString()}</div>
+                        <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
+                          <div className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                            必要レビュー数: {a.target_reviews_per_submission}
+                          </div>
+                          <div className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                            作成日: {new Date(a.created_at).toLocaleString()}
+                          </div>
                         </div>
                       </div>
                     </div>
