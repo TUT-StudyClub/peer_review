@@ -29,6 +29,67 @@ type AssignmentsClientProps = {
   initialCourseId: string | null;
 };
 
+type CourseThemeOption = {
+  value: string;
+  label: string;
+  cardTone: string;
+  iconTone: string;
+  dotTone: string;
+};
+
+const COURSE_THEME_OPTIONS: CourseThemeOption[] = [
+  {
+    value: "sky",
+    label: "スカイ",
+    cardTone: "border-sky-200/70 bg-sky-50/60",
+    iconTone: "text-sky-600",
+    dotTone: "bg-sky-500",
+  },
+  {
+    value: "emerald",
+    label: "エメラルド",
+    cardTone: "border-emerald-200/70 bg-emerald-50/60",
+    iconTone: "text-emerald-600",
+    dotTone: "bg-emerald-500",
+  },
+  {
+    value: "amber",
+    label: "アンバー",
+    cardTone: "border-amber-200/70 bg-amber-50/60",
+    iconTone: "text-amber-600",
+    dotTone: "bg-amber-500",
+  },
+  {
+    value: "rose",
+    label: "ローズ",
+    cardTone: "border-rose-200/70 bg-rose-50/60",
+    iconTone: "text-rose-600",
+    dotTone: "bg-rose-500",
+  },
+  {
+    value: "slate",
+    label: "スレート",
+    cardTone: "border-slate-200/70 bg-slate-50/60",
+    iconTone: "text-slate-600",
+    dotTone: "bg-slate-500",
+  },
+  {
+    value: "violet",
+    label: "バイオレット",
+    cardTone: "border-violet-200/70 bg-violet-50/60",
+    iconTone: "text-violet-600",
+    dotTone: "bg-violet-500",
+  },
+];
+
+const COURSE_THEME_BY_VALUE = COURSE_THEME_OPTIONS.reduce<Record<string, CourseThemeOption>>(
+  (acc, option) => {
+    acc[option.value] = option;
+    return acc;
+  },
+  {}
+);
+
 export default function AssignmentsClient({ initialCourseId }: AssignmentsClientProps) {
   const { user, token } = useAuth();
   const router = useRouter();
@@ -61,6 +122,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
 
   const [courseTitle, setCourseTitle] = useState("");
   const [courseDescription, setCourseDescription] = useState("");
+  const [courseTheme, setCourseTheme] = useState(COURSE_THEME_OPTIONS[0]?.value ?? "sky");
   const [courseCreating, setCourseCreating] = useState(false);
 
   const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
@@ -243,9 +305,11 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
       const course = await apiCreateCourse(token, {
         title: courseTitle,
         description: courseDescription || null,
+        theme: courseTheme || null,
       });
       setCourseTitle("");
       setCourseDescription("");
+      setCourseTheme(COURSE_THEME_OPTIONS[0]?.value ?? "sky");
       await loadCourses();
       setActiveCourseId(course.id);
       router.push(`/assignments?course_id=${course.id}`);
@@ -314,31 +378,33 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
     <div className="space-y-6">
       {showCourseSelection ? (
         <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  type="search"
-                  placeholder="授業を検索..."
-                  value={courseQuery}
-                  onChange={(e) => setCourseQuery(e.target.value)}
-                  disabled={!token}
-                  className="h-12 rounded-xl bg-slate-50 pl-10 text-sm"
-                />
+          {courseView === "list" ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Input
+                    type="search"
+                    placeholder="授業を検索..."
+                    value={courseQuery}
+                    onChange={(e) => setCourseQuery(e.target.value)}
+                    disabled={!token}
+                    className="h-12 rounded-xl bg-slate-50 pl-10 text-sm"
+                  />
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    void loadCourses();
+                    if (token) void loadCourseAssignments();
+                  }}
+                  disabled={!token || isCourseRefreshing}
+                >
+                  {isCourseRefreshing ? "読み込み中..." : "更新"}
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void loadCourses();
-                  if (token) void loadCourseAssignments();
-                }}
-                disabled={!token || isCourseRefreshing}
-              >
-                {isCourseRefreshing ? "読み込み中..." : "更新"}
-              </Button>
             </div>
-          </div>
+          ) : null}
 
           {courseErrorMessage ? (
             <Alert variant="destructive">
@@ -367,7 +433,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
               <CardContent className="space-y-4">
                 <Field label="授業名">
                   <Select value={courseTitle || undefined} onValueChange={setCourseTitle}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-slate-100">
                       <SelectValue placeholder="授業名を選択" />
                     </SelectTrigger>
                     <SelectContent>
@@ -384,7 +450,41 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                     value={courseDescription}
                     onChange={(e) => setCourseDescription(e.target.value)}
                     rows={3}
+                    className="bg-slate-100"
                   />
+                </Field>
+                <Field label="カラーテーマ">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {COURSE_THEME_OPTIONS.map((theme) => {
+                      const isActive = courseTheme === theme.value;
+                      return (
+                        <button
+                          key={theme.value}
+                          type="button"
+                          onClick={() => setCourseTheme(theme.value)}
+                          className={[
+                            "group rounded-xl border p-3 text-left transition",
+                            theme.cardTone,
+                            isActive
+                              ? "border-slate-900 ring-2 ring-slate-900/20"
+                              : "hover:-translate-y-0.5 hover:shadow-sm",
+                          ].join(" ")}
+                          aria-pressed={isActive}
+                        >
+                          <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                            <span className={`h-2.5 w-2.5 rounded-full ${theme.dotTone}`} />
+                            {theme.label}
+                          </div>
+                          <div className="mt-3 flex items-center gap-2 text-xs text-slate-600">
+                            <span className={`inline-flex h-6 w-10 items-center justify-center rounded-md bg-white/80 ${theme.iconTone}`}>
+                              <BookOpen className="h-4 w-4" />
+                            </span>
+                            プレビュー
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Field>
                 <div>
                   <Button onClick={createCourse} disabled={courseCreating || !courseTitle.trim()}>
@@ -398,11 +498,12 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
               {filteredCourses.map((course, index) => {
                 const canSelect = user?.role !== "student" || course.is_enrolled;
                 const isEnrolled = user?.role === "student" && course.is_enrolled;
-                const cardTone =
-                  index % 2 === 0
-                    ? "border-blue-200/70 bg-blue-50/60"
-                    : "border-violet-200/70 bg-violet-50/60";
-                const iconTone = index % 2 === 0 ? "text-blue-600" : "text-violet-600";
+                const fallbackThemeKey = index % 2 === 0 ? "sky" : "violet";
+                const theme =
+                  COURSE_THEME_BY_VALUE[course.theme ?? fallbackThemeKey] ??
+                  COURSE_THEME_BY_VALUE.sky;
+                const cardTone = theme.cardTone;
+                const iconTone = theme.iconTone;
                 const assignmentCount = courseAssignmentsLoading
                   ? "-"
                   : assignmentStats.counts.get(course.id) ?? 0;

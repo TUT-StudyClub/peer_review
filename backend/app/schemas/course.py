@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class CourseCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     description: str | None = None
+    theme: str | None = None
 
 
 class CoursePublic(BaseModel):
@@ -15,6 +16,7 @@ class CoursePublic(BaseModel):
     id: UUID
     title: str
     description: str | None
+    theme: str | None = None
     teacher_id: UUID
     created_at: datetime
     teacher_name: str | None = None
