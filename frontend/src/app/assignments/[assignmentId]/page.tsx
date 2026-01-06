@@ -708,11 +708,6 @@ export default function AssignmentDetailPage() {
           </ul>
         )}
 
-        {user?.role === "teacher" ? (
-          <div className="rounded-lg border bg-muted p-4 text-xs text-muted-foreground">
-            固定ルーブリックは自動で設定されます。
-          </div>
-        ) : null}
       </SectionCard>
 
       {user?.role === "teacher" ? (
