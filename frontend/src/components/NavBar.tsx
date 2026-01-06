@@ -25,6 +25,8 @@ function NavLink({ href, label }: { href: string; label: string }) {
 export function NavBar() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const showAssignments = user?.role === "teacher" || user?.role === "student";
+  const assignmentsLabel = user?.role === "student" ? "授業一覧" : "課題";
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -43,7 +45,7 @@ export function NavBar() {
             Peer Review
           </Link>
           <nav className="flex items-center gap-1">
-            {user?.role === "teacher" ? <NavLink href="/assignments" label="課題" /> : null}
+            {showAssignments ? <NavLink href="/assignments" label={assignmentsLabel} /> : null}
             {user?.role === "student" ? <NavLink href="/mypage" label="マイページ" /> : null}
             {user?.is_ta ? <NavLink href="/ta/requests" label="TAリクエスト" /> : null}
           </nav>

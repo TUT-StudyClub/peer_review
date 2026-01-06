@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { Award, ShieldCheck, TrendingUp, Users } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { HomeStartButton } from "@/components/HomeStartButton";
 
 const features = [
   {
@@ -49,13 +48,7 @@ export default function Home() {
               安心して学び合える場を、あなたのペースで
             </p>
             <div className="mt-10 flex justify-center motion-safe:animate-[fade-up_0.6s_ease-out_both] motion-safe:[animation-delay:280ms]">
-              <Button
-                asChild
-                size="lg"
-                className="h-12 rounded-full bg-slate-900 px-10 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800"
-              >
-                <Link href="/auth/login">始める</Link>
-              </Button>
+              <HomeStartButton className="h-12 rounded-full bg-slate-900 px-10 text-white shadow-lg shadow-slate-900/20 hover:bg-slate-800" />
             </div>
           </div>
         </div>
