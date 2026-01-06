@@ -67,6 +67,7 @@ export type CoursePublic = {
   id: string;
   title: string;
   description?: string | null;
+  theme?: string | null;
   teacher_id: string;
   created_at: string;
   teacher_name?: string | null;
@@ -77,6 +78,7 @@ export type CoursePublic = {
 export type CourseCreate = {
   title: string;
   description?: string | null;
+  theme?: string | null;
 };
 
 export type CourseEnrollmentPublic = {
