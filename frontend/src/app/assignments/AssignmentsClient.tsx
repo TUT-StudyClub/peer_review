@@ -569,9 +569,9 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
                       </div>
                     </div>
                     <div className="space-y-3 px-4 pb-4 pt-3">
-                      {course.description ? (
-                        <p className="text-sm text-slate-600">{course.description}</p>
-                      ) : null}
+                      <p className="min-h-[2.5rem] text-sm text-slate-600 line-clamp-2">
+                        {course.description ?? ""}
+                      </p>
                       <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-2">
                         {typeof course.student_count === "number" ? (
                           <div className="flex items-center gap-2">
