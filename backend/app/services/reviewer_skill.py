@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import REVIEWER_SKILL_TEMPLATE
 from app.models.assignment import RubricCriterion
-from app.models.review import Review, ReviewAssignment, ReviewRubricScore
+from app.models.review import Review
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewRubricScore
 from app.models.submission import SubmissionRubricScore
 from app.schemas.user import ReviewerSkill
 from app.services.rubric import normalize_rubric_name
@@ -64,21 +66,11 @@ def calculate_reviewer_skill(
     submission_ids = [ra.submission_id for ra, _ in rows]
     assignment_ids = {ra.assignment_id for ra, _ in rows}
 
-    review_scores = (
-        db.query(ReviewRubricScore)
-        .filter(ReviewRubricScore.review_id.in_(review_ids))
-        .all()
-    )
+    review_scores = db.query(ReviewRubricScore).filter(ReviewRubricScore.review_id.in_(review_ids)).all()
     teacher_scores = (
-        db.query(SubmissionRubricScore)
-        .filter(SubmissionRubricScore.submission_id.in_(submission_ids))
-        .all()
+        db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id.in_(submission_ids)).all()
     )
-    criteria = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id.in_(list(assignment_ids)))
-        .all()
-    )
+    criteria = db.query(RubricCriterion).filter(RubricCriterion.assignment_id.in_(list(assignment_ids))).all()
 
     review_by_review_id: dict[UUID, dict[UUID, int]] = defaultdict(dict)
     for score in review_scores:
@@ -88,9 +80,7 @@ def calculate_reviewer_skill(
     for score in teacher_scores:
         teacher_by_submission_id[score.submission_id][score.criterion_id] = score.score
 
-    template_by_norm = {
-        normalize_rubric_name(item["name"]): item["key"] for item in REVIEWER_SKILL_TEMPLATE
-    }
+    template_by_norm = {normalize_rubric_name(item["name"]): item["key"] for item in REVIEWER_SKILL_TEMPLATE}
     criterion_axis: dict[UUID, str] = {}
     criterion_max: dict[UUID, int] = {}
     for criterion in criteria:

@@ -120,6 +120,27 @@ npm run dev
 
 ---
 
+## Taskfile（任意）
+
+`Taskfile.yml` を用意しています。`go-task` をインストール済みなら、以下のように実行できます。
+
+```bash
+task --list
+```
+
+代表的なタスク例:
+```bash
+task install
+task backend:dev
+task frontend:dev
+task test
+task check
+```
+
+`task check` は backend の ruff/ty と frontend の eslint をまとめて実行します。
+
+---
+
 ## PostgreSQL（推奨）で動かす
 
 ### 1. DB起動（Docker）

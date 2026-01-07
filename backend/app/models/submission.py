@@ -1,12 +1,21 @@
 import enum
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
-from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import Text
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.base import UUIDType
 
 
 class SubmissionFileType(str, enum.Enum):
@@ -17,13 +26,9 @@ class SubmissionFileType(str, enum.Enum):
 class Submission(Base):
     __tablename__ = "submissions"
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
-    assignment_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), index=True
-    )
-    author_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
+    assignment_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
+    author_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     file_type: Mapped[SubmissionFileType] = mapped_column(Enum(SubmissionFileType))
     original_filename: Mapped[str] = mapped_column(String(255))
@@ -33,9 +38,7 @@ class Submission(Base):
 
     teacher_total_score: Mapped[int | None] = mapped_column(Integer, default=None)
     teacher_feedback: Mapped[str | None] = mapped_column(Text, default=None)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     assignment = relationship("Assignment", back_populates="submissions")
     author = relationship("User", back_populates="submissions")
@@ -48,12 +51,10 @@ class Submission(Base):
 class SubmissionRubricScore(Base):
     __tablename__ = "submission_rubric_scores"
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
-    submission_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
+    submission_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("submissions.id", ondelete="CASCADE"), index=True)
     criterion_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("rubric_criteria.id", ondelete="CASCADE"), index=True
+        UUIDType, ForeignKey("rubric_criteria.id", ondelete="CASCADE"), index=True
     )
     score: Mapped[int] = mapped_column(Integer)
 

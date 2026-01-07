@@ -1,22 +1,30 @@
 import enum
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.review import Review, ReviewAssignment
+from app.models.review import Review
+from app.models.review import ReviewAssignment
 from app.models.user import User
-from app.schemas.user import ReviewerSkill, UserPublic, UserRankingEntry
+from app.schemas.user import ReviewerSkill
+from app.schemas.user import UserPublic
+from app.schemas.user import UserRankingEntry
 from app.services.auth import get_current_user
 from app.services.credits import calculate_review_credit_gain
 from app.services.rank import get_user_rank
 from app.services.reviewer_skill import calculate_reviewer_skill
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+current_user_dependency = Depends(get_current_user)
 
 
 class RankingPeriod(str, enum.Enum):
@@ -26,14 +34,17 @@ class RankingPeriod(str, enum.Enum):
 
 
 def _period_start(period: RankingPeriod) -> datetime:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if period == RankingPeriod.weekly:
         return now - timedelta(days=7)
     return now - timedelta(days=30)
 
 
 @router.get("/me", response_model=UserPublic)
-def me(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+def me(
+    current_user: User = current_user_dependency,
+    db: Session = db_dependency,
+) -> User:
     return current_user
 
 
@@ -41,7 +52,7 @@ def me(current_user: User = Depends(get_current_user), db: Session = Depends(get
 def user_ranking(
     limit: int = 5,
     period: RankingPeriod = RankingPeriod.total,
-    db: Session = Depends(get_db),
+    db: Session = db_dependency,
 ) -> list[UserRankingEntry]:
     safe_limit = max(1, min(limit, 50))
     if period == RankingPeriod.total:
@@ -116,8 +127,8 @@ def user_ranking(
 @router.get("/me/reviewer-skill", response_model=ReviewerSkill)
 def my_reviewer_skill(
     assignment_id: UUID | None = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: User = current_user_dependency,
+    db: Session = db_dependency,
 ) -> ReviewerSkill:
     return calculate_reviewer_skill(
         db,
