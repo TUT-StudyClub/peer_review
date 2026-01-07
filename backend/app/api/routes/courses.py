@@ -1,33 +1,41 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import COURSE_TITLE_CANDIDATES
 from app.db.session import get_db
-from app.models.course import Course, CourseEnrollment
-from app.models.user import User, UserRole
-from app.schemas.course import CourseCreate, CourseEnrollmentPublic, CoursePublic
+from app.models.course import Course
+from app.models.course import CourseEnrollment
+from app.models.user import User
+from app.models.user import UserRole
+from app.schemas.course import CourseCreate
+from app.schemas.course import CourseEnrollmentPublic
+from app.schemas.course import CoursePublic
 from app.schemas.user import UserPublic
-from app.services.auth import get_current_user, require_teacher
+from app.services.auth import get_current_user
+from app.services.auth import require_teacher
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+current_user_dependency = Depends(get_current_user)
+teacher_dependency = Depends(require_teacher)
 
 
 @router.post("", response_model=CoursePublic)
 def create_course(
     payload: CourseCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher),
+    db: Session = db_dependency,
+    current_user: User = teacher_dependency,
 ) -> CoursePublic:
     if payload.title not in COURSE_TITLE_CANDIDATES:
         raise HTTPException(status_code=400, detail="Course title is not allowed")
 
     existing_course = (
-        db.query(Course)
-        .filter(Course.teacher_id == current_user.id, Course.title == payload.title)
-        .first()
+        db.query(Course).filter(Course.teacher_id == current_user.id, Course.title == payload.title).first()
     )
     if existing_course:
         raise HTTPException(status_code=400, detail="同じ授業名の授業はすでに作成されています")
@@ -53,16 +61,11 @@ def create_course(
 
 @router.get("", response_model=list[CoursePublic])
 def list_courses(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> list[CoursePublic]:
     if current_user.role == UserRole.teacher:
-        courses = (
-            db.query(Course)
-            .filter(Course.teacher_id == current_user.id)
-            .order_by(Course.created_at.desc())
-            .all()
-        )
+        courses = db.query(Course).filter(Course.teacher_id == current_user.id).order_by(Course.created_at.desc()).all()
         counts: dict[UUID, int] = {}
         if courses:
             rows = (
@@ -88,10 +91,7 @@ def list_courses(
 
     courses = db.query(Course).order_by(Course.created_at.desc()).all()
     enrolled_ids = {
-        row[0]
-        for row in db.query(CourseEnrollment.course_id)
-        .filter(CourseEnrollment.user_id == current_user.id)
-        .all()
+        row[0] for row in db.query(CourseEnrollment.course_id).filter(CourseEnrollment.user_id == current_user.id).all()
     }
     return [
         CoursePublic(
@@ -110,8 +110,8 @@ def list_courses(
 @router.post("/{course_id}/enroll", response_model=CourseEnrollmentPublic)
 def enroll_course(
     course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> CourseEnrollment:
     if current_user.role != UserRole.student:
         raise HTTPException(status_code=403, detail="Student role required")
@@ -137,8 +137,8 @@ def enroll_course(
 @router.get("/{course_id}/students", response_model=list[UserPublic])
 def list_course_students(
     course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_teacher),
+    db: Session = db_dependency,
+    current_user: User = teacher_dependency,
 ) -> list[User]:
     course = db.query(Course).filter(Course.id == course_id).first()
     if course is None:

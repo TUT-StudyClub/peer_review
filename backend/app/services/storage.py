@@ -3,15 +3,17 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from fastapi import HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import HTTPException
+from fastapi import UploadFile
+from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
 from app.core.config import settings

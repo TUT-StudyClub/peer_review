@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.review import Review, ReviewAssignment
+from app.models.review import Review
+from app.models.review import ReviewAssignment
 from app.models.user import User
 from app.services.scoring import _rubric_alignment_score
 
@@ -73,9 +74,7 @@ def calculate_review_credit_gain(
     if trust_score is not None:
         trust_score = max(0.0, min(1.0, trust_score))
 
-    alignment_bonus = max(0.0, float(settings.review_credit_alignment_bonus_max)) * (
-        trust_score or 0.0
-    )
+    alignment_bonus = max(0.0, float(settings.review_credit_alignment_bonus_max)) * (trust_score or 0.0)
 
     is_ta = reviewer.is_ta
     multiplier = float(settings.ta_credit_multiplier if is_ta else 1.0)

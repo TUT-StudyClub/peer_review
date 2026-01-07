@@ -1,9 +1,17 @@
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import DateTime
+from sqlalchemy import ForeignKey
+from sqlalchemy import String
+from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
@@ -17,14 +25,10 @@ class Course(Base):
     teacher_id: Mapped[UUID] = mapped_column(
         SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     teacher = relationship("User", back_populates="courses_taught")
-    enrollments = relationship(
-        "CourseEnrollment", back_populates="course", cascade="all, delete-orphan"
-    )
+    enrollments = relationship("CourseEnrollment", back_populates="course", cascade="all, delete-orphan")
     assignments = relationship("Assignment", back_populates="course")
 
 
@@ -36,12 +40,8 @@ class CourseEnrollment(Base):
     course_id: Mapped[UUID] = mapped_column(
         SAUuid(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), index=True
     )
-    user_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    user_id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     course = relationship("Course", back_populates="enrollments")
     user = relationship("User", back_populates="course_enrollments")

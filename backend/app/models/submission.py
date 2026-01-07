@@ -1,10 +1,19 @@
 import enum
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import Text
 from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
@@ -33,9 +42,7 @@ class Submission(Base):
 
     teacher_total_score: Mapped[int | None] = mapped_column(Integer, default=None)
     teacher_feedback: Mapped[str | None] = mapped_column(Text, default=None)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     assignment = relationship("Assignment", back_populates="submissions")
     author = relationship("User", back_populates="submissions")

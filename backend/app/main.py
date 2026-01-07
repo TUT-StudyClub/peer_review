@@ -14,7 +14,7 @@ def create_app() -> FastAPI:
     origin_regex = (settings.cors_allow_origin_regex or "").strip() or None
     if origins or origin_regex:
         app.add_middleware(
-            CORSMiddleware,
+            CORSMiddleware,  # type: ignore[arg-type]
             allow_origins=origins or [],
             allow_origin_regex=origin_regex,
             allow_credentials=False,
