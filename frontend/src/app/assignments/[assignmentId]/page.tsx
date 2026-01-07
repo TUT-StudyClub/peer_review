@@ -203,6 +203,10 @@ export default function AssignmentDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, ScoreInput>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
+  const [reviewPreviewText, setReviewPreviewText] = useState<string | null>(null);
+  const [reviewPreviewLoading, setReviewPreviewLoading] = useState(false);
+  const [reviewPreviewError, setReviewPreviewError] = useState<string | null>(null);
   const templateClicks = useRef<Record<string, number>>({});
 
   const [received, setReceived] = useState<ReviewReceived[]>([]);
@@ -807,6 +811,37 @@ export default function AssignmentDetailPage() {
     } catch {
     }
   }, [assignmentId, reviewTask]);
+
+  useEffect(() => {
+    if (!token || !reviewTask) return;
+    let canceled = false;
+    let previewUrl: string | null = null;
+    setReviewPreviewLoading(true);
+    setReviewPreviewError(null);
+    setReviewPreviewText(null);
+    setReviewPreviewUrl(null);
+    const loadPreview = async () => {
+      try {
+        const blob = await apiDownloadSubmissionFile(token, reviewTask.submission_id);
+        if (reviewTask.file_type === "markdown") {
+          const text = await blob.text();
+          if (!canceled) setReviewPreviewText(text);
+        } else {
+          previewUrl = URL.createObjectURL(blob);
+          if (!canceled) setReviewPreviewUrl(previewUrl);
+        }
+      } catch (err) {
+        if (!canceled) setReviewPreviewError(formatApiError(err));
+      } finally {
+        if (!canceled) setReviewPreviewLoading(false);
+      }
+    };
+    void loadPreview();
+    return () => {
+      canceled = true;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [reviewTask, token]);
 
   const renderUploadArea = (options: { submitLabel: string; onCancel?: () => void }) => (
     <div className="space-y-3">
@@ -1595,19 +1630,43 @@ export default function AssignmentDetailPage() {
               <div className="grid gap-4 lg:grid-cols-[1.15fr,1fr]">
                 <div className="rounded-xl border bg-white p-4 shadow-sm">
                   <div className="text-base font-semibold">ファイルプレビュー</div>
-                  <div className="mt-4 flex min-h-[420px] flex-col items-center justify-center rounded-lg border border-dashed bg-slate-50 px-4 py-6 text-center">
-                    <FileText className="h-10 w-10 text-slate-400" />
-                    <div className="mt-4 text-sm font-semibold">{reviewFileLabel}</div>
-                    <div className="text-xs text-muted-foreground">{reviewFileName}</div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="mt-4 gap-2"
-                      onClick={() => previewSubmission(reviewTask.submission_id)}
-                    >
-                      <Eye className="h-4 w-4" />
-                      別ウィンドウで開く
-                    </Button>
+                  <div className="mt-4 min-h-[420px] rounded-lg border border-dashed bg-slate-50 p-4">
+                    {reviewPreviewLoading ? (
+                      <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-muted-foreground">
+                        プレビューを読み込み中...
+                      </div>
+                    ) : reviewPreviewError ? (
+                      <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-red-500">
+                        プレビューの読み込みに失敗しました
+                      </div>
+                    ) : reviewPreviewUrl ? (
+                      <iframe
+                        title="submission preview"
+                        src={reviewPreviewUrl}
+                        className="h-[360px] w-full rounded-md bg-white"
+                      />
+                    ) : reviewPreviewText ? (
+                      <pre className="h-[360px] w-full overflow-auto rounded-md bg-white p-3 text-xs text-slate-700">
+                        {reviewPreviewText}
+                      </pre>
+                    ) : (
+                      <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
+                        <FileText className="h-10 w-10 text-slate-400" />
+                        <div className="mt-4 text-sm font-semibold">{reviewFileLabel}</div>
+                        <div className="text-xs text-muted-foreground">{reviewFileName}</div>
+                      </div>
+                    )}
+                    <div className="mt-4 flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => previewSubmission(reviewTask.submission_id)}
+                      >
+                        <Eye className="h-4 w-4" />
+                        別ウィンドウで開く
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
@@ -1636,7 +1695,7 @@ export default function AssignmentDetailPage() {
 
                   <div className="rounded-xl border bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-base font-semibold">レビューコメント（具体的に）</div>
+                      <div className="text-base font-semibold">レビューコメント</div>
                       <div className="text-xs text-muted-foreground">{reviewCharCount} 文字</div>
                     </div>
                     <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
@@ -1803,54 +1862,6 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="成績"
-          actions={
-            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading}>
-              更新
-            </Button>
-          }
-        >
-          {!token ? (
-            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
-          ) : gradeLoading ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : grade ? (
-            <div className="space-y-3 text-sm">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="text-xs text-muted-foreground">課題スコア</div>
-                  <div className="text-lg font-semibold">
-                    {formatScore(grade.assignment_score, 1, "採点待ち")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">/100</div>
-                </div>
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="text-xs text-muted-foreground">レビュー貢献</div>
-                  <div className="text-lg font-semibold">
-                    +{formatScore(grade.review_contribution, 2)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">加点</div>
-                </div>
-                <div className="rounded-lg border bg-primary/10 p-3">
-                  <div className="text-xs text-muted-foreground">最終スコア</div>
-                  <div className="text-2xl font-semibold text-primary">
-                    {formatScore(grade.final_score, 1, "未確定")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">max 100</div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
-              </p>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
-          )}
-        </SectionCard>
-      ) : null}
-
-      {user?.role === "student" ? (
-        <SectionCard
           title="レビュアースキル"
           actions={
             <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
@@ -1907,6 +1918,54 @@ export default function AssignmentDetailPage() {
                 </div>
 
               </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
+          )}
+        </SectionCard>
+      ) : null}
+
+      {user?.role === "student" ? (
+        <SectionCard
+          title="成績"
+          actions={
+            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading}>
+              更新
+            </Button>
+          }
+        >
+          {!token ? (
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
+          ) : gradeLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : grade ? (
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">課題スコア</div>
+                  <div className="text-lg font-semibold">
+                    {formatScore(grade.assignment_score, 1, "採点待ち")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">/100</div>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">レビュー貢献</div>
+                  <div className="text-lg font-semibold">
+                    +{formatScore(grade.review_contribution, 2)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">加点</div>
+                </div>
+                <div className="rounded-lg border bg-primary/10 p-3">
+                  <div className="text-xs text-muted-foreground">最終スコア</div>
+                  <div className="text-2xl font-semibold text-primary">
+                    {formatScore(grade.final_score, 1, "未確定")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">max 100</div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+              </p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
