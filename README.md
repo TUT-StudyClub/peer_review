@@ -23,45 +23,33 @@
 
 ## できること
 
-### 1) 課題提出（Submission）
-- `POST /submissions/assignment/{assignment_id}` で PDF/Markdown をアップロード
-- ファイルは `backend/storage/` 配下へ保存（ファイル名は匿名化され、元のファイル名はDBにだけ保持）
+### 1) 課題提出
+- PDF / Markdown のレポートを提出できます
+- ファイル名は匿名化して保存し、元の名前は提出情報として保持します
 
-### 2) 匿名マッチング（Blind Matching）
-- `GET /assignments/{assignment_id}/reviews/next` で「次にレビューすべき提出物」をシステムが返します
+### 2) 匿名レビュー割り当て
+- 次にレビューする提出物を自動で提示します
 - **自分自身の提出物は割り当てられません**
-- 1提出物あたりの割当数は `Assignment.target_reviews_per_submission`（1〜3）で設定
-- 取り出し優先順位（重要→後）
-  1. まだ割当/レビュー数が少ない提出物
-  2. 提出者の `credits`（徳）が高い提出物（＝よく他人をレビューした人が優先される）
-  3. ランダム（同条件のタイブレーク）
+- レビューが少ない提出物を優先し、必要に応じてランダムに割り当てます
 
-### 3) ピアレビュー（Peer Review）
-- `POST /review-assignments/{review_assignment_id}/submit` でレビュー提出
-- ルーブリックスコアは **全項目必須**
+### 3) ピアレビュー
+- ルーブリックに沿って採点・コメントを投稿できます
+- ルーブリック項目の採点は **全項目必須** です
 
-### 4) メタ評価（Meta-Review）
-- （ピアレビュー受領後の段階）提出者が `POST /reviews/{review_id}/meta` で、受け取ったレビューの有用性を5段階評価（レビューへのレビュー）
-- メタ評価できるのは **その提出物の提出者のみ** で、各レビューにつき1回までです
-- このメタ評価は `review_contribution`（レビュー貢献点）の算出に利用されます
+### 4) 受け取ったレビューの確認と評価
+- 自分の提出に対するレビュー一覧を確認できます
+- レビューの有用性を5段階で評価できます（各レビュー1回）
 
-### 5) スコア算出（Grade）
-- `GET /assignments/{assignment_id}/grades/me` で自分のスコアを取得
-  - `assignment_score`: 先生の点数（設定されていればそれ） / 未設定ならピアの平均点（0〜100換算）
-  - `review_contribution`: レビュー貢献点（メタ評価・rubric一致・AI品質を簡易的に合成し、レビュー1本あたり最大10点）
-  - `final_score`: `min(100, assignment_score + review_contribution)`
+### 5) 成績・貢献度の確認
+- 課題スコア／レビュー貢献度／最終スコアを確認できます
+- 先生の採点がある場合は、その点数が優先されます
 
-#### 補足: 教師基準の信頼度スコア（新）
-- teacher rubric との一致度（信頼度スコア）と、teacher レビュー文との意味一致度を合成し、レビュー提出時の `credits` に反映します。
-- 詳細は `teacher-baseline/README.md` を参照してください。
+### 6) レビュアースキルの可視化
+- 論理性・具体性・構成・根拠の4軸でスキルを表示します
 
-### 6) レビュアースキル可視化（レーダーチャート用データ）
-- `GET /users/me/reviewer-skill` で、AI（または簡易判定）による4軸の平均値を返します
-  - `logic`, `specificity`, `empathy`, `insight`
-
-### 7) レビュー推敲（Review Polish）
-- `POST /reviews/polish` で、AIがレビュー文を「丁寧で建設的」な表現に書き換えます。
-- **安全性の担保**: 変換後の文章が入力時よりも攻撃的（禁止語の増加など）になった場合は、エラー（422）を返して変換を拒否します。
+### 7) レビュー文の推敲
+- レビュー文を丁寧で建設的な表現に言い換えできます
+- 不適切な表現はブロックされます
 
 ---
 
@@ -153,20 +141,14 @@ task frontend:dev
 動作確認手順:
 1. `POST /review-assignments/{review_assignment_id}/submit` でレビューを提出
 2. 類似レビューが存在する場合、`reviews` テーブルに `similarity_score`, `similar_review_id`, `similarity_warning`, `similarity_penalty_rate` が保存されます
-3. 採点時のレビュー貢献点に減点が反映されます（`GET /assignments/{assignment_id}/grades/me` を確認）
+3. 採点時のレビュー貢献度に減点が反映されます（`GET /assignments/{assignment_id}/grades/me` を確認）
 
 マイグレーション: `backend/docs/migration_add_review_similarity.md` を参照してください。
-
-      {"criterion_id":"'"$CRIT_LOGIC_ID"'","score":4},
-      {"criterion_id":"'"$CRIT_SPEC_ID"'","score":4}
-    ]
-  }' | jq
-```
 
 ## レビュー重複検知（新機能）
 
 - 同一ユーザーが同一課題で本文をコピペすると、正規化ハッシュの一致で重複を検知します。
-- `duplicate_warning` や `duplicate_of_review_id` をレスポンス/DBに保存し、AI品質スコアを1pt減点、レビュー貢献点を `DUPLICATE_PENALTY_RATE` で減算します。
+- `duplicate_warning` や `duplicate_of_review_id` をレスポンス/DBに保存し、AI品質スコアを1pt減点、レビュー貢献度を `DUPLICATE_PENALTY_RATE` で減算します。
 - 判定基準・正規化手順の詳細: `docs/Issue/review-duplicate-detection.md`
 
 ### 7)（任意）レビュアースキル（レーダーチャート用）
@@ -190,7 +172,7 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 
 ---
 
-## 重要な設計メモ（初学者向け）
+## 重要な設計メモ
 
 ### 匿名性（Anonymity）
 - DBでは `users.id` と `submissions.author_id` で当然紐づきます
