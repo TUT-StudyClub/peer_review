@@ -10,8 +10,11 @@ import {
   FileText,
   Filter,
   GraduationCap,
+  Lightbulb,
   RefreshCcw,
+  Save,
   Search,
+  Star,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -101,6 +104,46 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString();
+}
+
+function StarRatingInput({
+  value,
+  max,
+  onChange,
+}: {
+  value: ScoreInput;
+  max: number;
+  onChange: (value: ScoreInput) => void;
+}) {
+  const safeMax = Math.max(1, max);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-1">
+        {Array.from({ length: safeMax }, (_, index) => {
+          const starValue = index + 1;
+          const active = typeof value === "number" && value >= starValue;
+          return (
+            <button
+              key={starValue}
+              type="button"
+              onClick={() => onChange(value === starValue ? "" : starValue)}
+              className="rounded-sm p-0.5 transition hover:scale-105"
+              aria-label={`${starValue}点`}
+            >
+              <Star className={active ? "h-5 w-5 fill-amber-400 text-amber-400" : "h-5 w-5 text-slate-300"} />
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-xs text-muted-foreground">
+        {typeof value === "number" ? `${value}/${safeMax}` : "未評価"}
+      </span>
+    </div>
+  );
+}
+
+function reviewDraftStorageKey(assignmentId: string, submissionId: string) {
+  return `review-draft:${assignmentId}:${submissionId}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -236,6 +279,15 @@ export default function AssignmentDetailPage() {
     reviewTarget > 0 && received.length >= reviewTarget && reviewTimeRange.end !== null
       ? new Date(reviewTimeRange.end).toLocaleString()
       : null;
+  const reviewFileLabel = reviewTask
+    ? reviewTask.file_type === "pdf"
+      ? "PDFプレビュー"
+      : "Markdownプレビュー"
+    : "";
+  const reviewFileName = reviewTask
+    ? `submission-${shortId(reviewTask.submission_id)}.${reviewTask.file_type === "pdf" ? "pdf" : "md"}`
+    : "";
+  const reviewCharCount = reviewComment.trim().length;
   const submissionCards = useMemo(() => {
     return teacherSubmissions.map((submission) => {
       const reviewCount = reviewCounts[submission.id] ?? 0;
@@ -453,6 +505,22 @@ export default function AssignmentDetailPage() {
     console.info("review template used", { key: tpl.key, label: tpl.label, count: nextCount });
   };
 
+  const saveReviewDraft = () => {
+    if (!reviewTask) return;
+    try {
+      const key = reviewDraftStorageKey(assignmentId, reviewTask.submission_id);
+      const payload = {
+        comment: reviewComment,
+        scores: reviewScores,
+        saved_at: new Date().toISOString(),
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
+      setNotice("下書きを保存しました");
+    } catch {
+      setNotice("下書きの保存に失敗しました");
+    }
+  };
+
   const submitReview = async () => {
     if (!token || !reviewTask) return;
     setReviewSubmitting(true);
@@ -466,6 +534,7 @@ export default function AssignmentDetailPage() {
         })),
       };
       const res = await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
+      localStorage.removeItem(reviewDraftStorageKey(assignmentId, reviewTask.submission_id));
       setReviewTask(null);
       setReviewComment("");
       const creditLabel = res.credit_awarded ? `credits +${res.credit_awarded}` : "credits 加算";
@@ -723,6 +792,21 @@ export default function AssignmentDetailPage() {
     if (!token || user?.role !== "teacher" || !assignment?.course_id) return;
     void loadCourseStudents();
   }, [token, user?.role, assignment?.course_id]);
+
+  useEffect(() => {
+    if (!reviewTask) return;
+    const key = reviewDraftStorageKey(assignmentId, reviewTask.submission_id);
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { comment?: string; scores?: Record<string, ScoreInput> };
+      if (parsed.comment) setReviewComment(parsed.comment);
+      if (parsed.scores) {
+        setReviewScores((prev) => ({ ...prev, ...parsed.scores }));
+      }
+    } catch {
+    }
+  }, [assignmentId, reviewTask]);
 
   const renderUploadArea = (options: { submitLabel: string; onCancel?: () => void }) => (
     <div className="space-y-3">
@@ -1507,68 +1591,87 @@ export default function AssignmentDetailPage() {
               「次のレビューを取得」を押してください（未提出タスクがある場合は同じタスクが出続けます）
             </p>
           ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-muted p-3 text-sm">
-                <div>author_alias: {reviewTask.author_alias}</div>
-                <div>submission_id: {shortId(reviewTask.submission_id)}</div>
-                <div>file_type: {reviewTask.file_type}</div>
-                <div className="mt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => downloadSubmission(reviewTask.submission_id, reviewTask.file_type)}
-                  >
-                    提出物をDL
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {reviewTask.rubric.map((c) => (
-                  <div key={c.id} className="grid gap-2 sm:grid-cols-2">
-                    <div className="text-sm">
-                      {c.name}（max {c.max_score}）
-                    </div>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={c.max_score}
-                      value={reviewScores[c.id] ?? ""}
-                      onChange={(e) =>
-                        setReviewScores((prev) => ({ ...prev, [c.id]: parseScoreInput(e.target.value) }))
-                      }
-                    />
+            <div className="space-y-6">
+              <div className="grid gap-4 lg:grid-cols-[1.15fr,1fr]">
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="text-base font-semibold">ファイルプレビュー</div>
+                  <div className="mt-4 flex min-h-[420px] flex-col items-center justify-center rounded-lg border border-dashed bg-slate-50 px-4 py-6 text-center">
+                    <FileText className="h-10 w-10 text-slate-400" />
+                    <div className="mt-4 text-sm font-semibold">{reviewFileLabel}</div>
+                    <div className="text-xs text-muted-foreground">{reviewFileName}</div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 gap-2"
+                      onClick={() => previewSubmission(reviewTask.submission_id)}
+                    >
+                      <Eye className="h-4 w-4" />
+                      別ウィンドウで開く
+                    </Button>
                   </div>
-                ))}
-              </div>
+                </div>
 
-              <Field label="レビューコメント（具体的に）" hint="短すぎるとAI/簡易判定で低評価になります">
-                <div className="space-y-2">
-                  <div className="space-y-2 rounded-md border bg-muted/70 p-3">
-                    <div className="text-xs font-medium text-muted-foreground">定型文を挿入</div>
-                    <div className="flex flex-wrap gap-2">
+                <div className="space-y-4">
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="text-base font-semibold">評価項目</div>
+                    <div className="mt-4 space-y-4">
+                      {reviewTask.rubric.map((c) => (
+                        <div key={c.id} className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold">
+                            {c.name}
+                            <span className="text-xs text-muted-foreground">（max {c.max_score}）</span>
+                          </div>
+                          {c.description ? (
+                            <div className="text-xs text-muted-foreground">{c.description}</div>
+                          ) : null}
+                          <StarRatingInput
+                            value={reviewScores[c.id] ?? ""}
+                            max={c.max_score}
+                            onChange={(value) => setReviewScores((prev) => ({ ...prev, [c.id]: value }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-base font-semibold">レビューコメント（具体的に）</div>
+                      <div className="text-xs text-muted-foreground">{reviewCharCount} 文字</div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      テンプレート
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
                       {REVIEW_TEMPLATES.map((tpl) => (
                         <Button key={tpl.key} size="sm" variant="outline" onClick={() => insertTemplate(tpl)}>
                           {tpl.label}
                         </Button>
                       ))}
                     </div>
-                  </div>
-                  <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
-                  <div className="space-y-2">
-                    <div className="">
+                    <Textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={8}
+                      placeholder="具体的なフィードバックを記入してください。良い点や改善点を明確に伝えることで、提出者の学習に役立ちます。"
+                      className="mt-4 min-h-[200px]"
+                    />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>短すぎるとAI/簡易判定で低評価になります</span>
                       <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
                         言い換え
                       </Button>
-                      {paraphraseLoading ? <span className="ml-2 text-sm text-muted-foreground">変換中...</span> : null}
                     </div>
+                    {paraphraseLoading ? <span className="text-sm text-muted-foreground">変換中...</span> : null}
                     {paraphraseError ? (
-                      <Alert variant="destructive">
+                      <Alert variant="destructive" className="mt-2">
                         <AlertTitle>エラー</AlertTitle>
                         <AlertDescription className="text-sm">{paraphraseError}</AlertDescription>
                       </Alert>
                     ) : null}
                     {paraphrasePreview ? (
-                      <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                      <div className="mt-3 rounded-lg border bg-muted/50 p-3 space-y-2">
                         <div>
                           <div className="text-xs font-medium text-muted-foreground">変換結果</div>
                           <div className="mt-1 whitespace-pre-wrap text-sm">{paraphrasePreview.rephrased}</div>
@@ -1598,15 +1701,25 @@ export default function AssignmentDetailPage() {
                     ) : null}
                   </div>
                 </div>
-              </Field>
+              </div>
 
-              <div className="flex gap-2">
-                <Button onClick={submitReview} disabled={reviewSubmitting || !reviewComment.trim()}>
-                  レビュー提出
-                </Button>
-                <Button variant="outline" onClick={() => setReviewTask(null)}>
-                  キャンセル
-                </Button>
+              <div className="rounded-xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button variant="outline" className="w-full sm:w-1/3 gap-2" onClick={saveReviewDraft}>
+                    <Save className="h-4 w-4" />
+                    下書き保存
+                  </Button>
+                  <Button
+                    className="w-full sm:flex-1 bg-slate-900 text-white hover:bg-slate-800"
+                    onClick={submitReview}
+                    disabled={reviewSubmitting || !reviewComment.trim()}
+                  >
+                    レビュー提出
+                  </Button>
+                </div>
+                <div className="mt-2 text-center text-xs text-muted-foreground">
+                  提出前に、すべての評価項目とコメントを確認してください
+                </div>
               </div>
             </div>
           )}
