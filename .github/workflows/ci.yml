@@ -47,7 +47,7 @@ jobs:
         run: task check
 
   backend:
-    name: backend (lint/compile)
+    name: backend (compile)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,20 +64,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen --python 3.12
 
-      - name: Ruff
-        run: uv run ruff check .
-
-      - name: Ruff format
-        run: uv run ruff format --check .
-
-      - name: Ty
-        run: uv run ty check .
-
       - name: Compile
         run: uv run python -m compileall app
 
   frontend:
-    name: frontend (lint/build)
+    name: frontend (build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -94,9 +85,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: ESLint
-        run: npm run lint
 
       - name: Build
         run: npm run build
