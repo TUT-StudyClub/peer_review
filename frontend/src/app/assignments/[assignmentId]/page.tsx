@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Award,
   CheckCircle2,
+  ClipboardList,
   Clock,
   Download,
   Eye,
@@ -206,6 +207,7 @@ export default function AssignmentDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, ScoreInput>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState<"idle" | "loading" | "ready" | "none" | "submitted">("idle");
   const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
   const [reviewPreviewText, setReviewPreviewText] = useState<string | null>(null);
   const [reviewPreviewLoading, setReviewPreviewLoading] = useState(false);
@@ -481,9 +483,16 @@ export default function AssignmentDetailPage() {
       return;
     }
     setNotice(null);
+    setReviewStatus("loading");
     try {
       const task = await apiNextReviewTask(token, assignmentId);
+      if (!task) {
+        setReviewTask(null);
+        setReviewStatus("none");
+        return;
+      }
       setReviewTask(task);
+      setReviewStatus("ready");
       setReviewComment("");
       const init: Record<string, ScoreInput> = {};
       for (const c of task.rubric) init[c.id] = "";
@@ -491,9 +500,10 @@ export default function AssignmentDetailPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setReviewTask(null);
-        setNotice("今はレビュー対象がありません（全てレビュー済み等）");
+        setReviewStatus("none");
         return;
       }
+      setReviewStatus("idle");
       setNotice(formatApiError(err));
     }
   };
@@ -544,6 +554,7 @@ export default function AssignmentDetailPage() {
       localStorage.removeItem(reviewDraftStorageKey(assignmentId, reviewTask.submission_id));
       setReviewTask(null);
       setReviewComment("");
+      setReviewStatus("submitted");
       const creditLabel = res.credit_awarded ? `credits +${res.credit_awarded}` : "credits 加算";
       setNotice(`レビューを提出しました（${creditLabel}）`);
       await refreshMe();
@@ -1624,6 +1635,34 @@ export default function AssignmentDetailPage() {
         >
           {!token ? (
             <p className="text-sm text-muted-foreground">ログインするとレビューできます</p>
+          ) : reviewStatus === "loading" ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : reviewStatus === "submitted" ? (
+            <div className="rounded-xl border bg-emerald-50/70 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-semibold">レビューを提出しました</div>
+                  <div className="text-sm text-muted-foreground">次のレビューがあれば取得できます。</div>
+                </div>
+              </div>
+            </div>
+          ) : reviewStatus === "none" ? (
+            <div className="flex min-h-[220px] items-center justify-center rounded-xl border bg-white p-8 text-center">
+              <div className="space-y-3">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <ClipboardList className="h-7 w-7" />
+                </div>
+                <div className="text-lg font-semibold">レビューする課題がありません</div>
+                <div className="text-sm text-muted-foreground">
+                  現在、レビュー待ちの課題はありません。
+                  <br />
+                  上の「次のレビューを取得」ボタンをクリックして、新しい課題を取得してください。
+                </div>
+              </div>
+            </div>
           ) : !reviewTask ? (
             <p className="text-sm text-muted-foreground">
               「次のレビューを取得」を押してください（未提出タスクがある場合は同じタスクが出続けます）

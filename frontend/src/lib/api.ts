@@ -423,8 +423,11 @@ export async function apiDownloadSubmissionFile(token: string, submissionId: str
   return await res.blob();
 }
 
-export async function apiNextReviewTask(token: string, assignmentId: string): Promise<ReviewAssignmentTask> {
-  return apiFetch<ReviewAssignmentTask>(`/assignments/${assignmentId}/reviews/next`, {}, token);
+export async function apiNextReviewTask(
+  token: string,
+  assignmentId: string
+): Promise<ReviewAssignmentTask | null> {
+  return apiFetch<ReviewAssignmentTask | null>(`/assignments/${assignmentId}/reviews/next`, {}, token);
 }
 
 export async function apiSubmitReview(

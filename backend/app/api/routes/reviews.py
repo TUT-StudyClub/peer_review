@@ -65,19 +65,19 @@ def _evaluation_fields(credit: object | None) -> dict:
     }
 
 
-@router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask)
+@router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask | None)
 def next_review_task(
     assignment_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> ReviewAssignmentTask:
+) -> ReviewAssignmentTask | None:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
     review_assignment = get_or_assign_review_assignment(db, assignment, current_user)
     if review_assignment is None:
-        raise HTTPException(status_code=404, detail="No submissions need review right now")
+        return None
 
     submission = db.query(Submission).filter(Submission.id == review_assignment.submission_id).first()
     if submission is None:
@@ -340,13 +340,17 @@ def received_reviews(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> list[ReviewReceived]:
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
     submission = (
         db.query(Submission)
         .filter(Submission.assignment_id == assignment_id, Submission.author_id == current_user.id)
         .first()
     )
     if submission is None:
-        raise HTTPException(status_code=404, detail="Submission not found")
+        return []
 
     review_assignments = (
         db.query(ReviewAssignment)
