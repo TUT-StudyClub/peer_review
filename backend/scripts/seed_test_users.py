@@ -17,12 +17,20 @@ def _ensure_app_path() -> None:
 def main() -> int:
     load_dotenv()
     _ensure_app_path()
+<<<<<<< HEAD
     from app.core.config import COURSE_TITLE_CANDIDATES, settings
     from app.core.security import get_password_hash
     from app.db.session import SessionLocal
     from app.models.assignment import Assignment
     from app.models.course import Course
     from app.models.user import User, UserRole
+=======
+    from app.core.config import settings  # noqa: PLC0415
+    from app.core.security import get_password_hash  # noqa: PLC0415
+    from app.db.session import SessionLocal  # noqa: PLC0415
+    from app.models.user import User  # noqa: PLC0415
+    from app.models.user import UserRole  # noqa: PLC0415
+>>>>>>> main
 
     password = os.getenv("TEST_USER_PASSWORD")
     if not password:
@@ -38,6 +46,7 @@ def main() -> int:
         {"email": "teacher1@example.com", "name": "Teacher 1", "role": UserRole.teacher},
         {"email": "teacher2@example.com", "name": "Teacher 2", "role": UserRole.teacher},
         {"email": "teacher3@example.com", "name": "Teacher 3", "role": UserRole.teacher},
+<<<<<<< HEAD
         {"email": "ta1@example.com", "name": "TA 1", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta2@example.com", "name": "TA 2", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta3@example.com", "name": "TA 3", "role": UserRole.student, "credits": ta_credits},
@@ -45,6 +54,9 @@ def main() -> int:
             {"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student}
             for i in range(1, 11)
         ],
+=======
+        *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
+>>>>>>> main
     ]
 
     created_users = 0
