@@ -176,20 +176,6 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 
 ---
 
-## Swagger UI（/docs）で操作する場合のコツ
-- `503 Service Unavailable`
-  - OpenAI 連携機能（推敲など）を呼び出しましたが、サーバー側で `ENABLE_OPENAI` が `false` になっているか、APIキーが設定されていません。
-- `422 Unprocessable Entity`
-  - レビュー推敲の結果、文章の攻撃性が高まったと判定され、出力がブロックされました。
-- 
-1. ブラウザで `http://127.0.0.1:8000/docs` を開く
-2. まず `POST /auth/register` でアカウント作成
-3. `POST /auth/token` でログイン（フォーム入力）
-4. 右上の「Authorize」ボタンを押して、`Bearer <token>` を貼り付けて認証
-5. 以降のAPIは「Try it out」→ 実行でOK
-
----
-
 ## AI機能（任意）
 
 `.env` に `OPENAI_API_KEY` を設定し、`ENABLE_OPENAI=true` にすると、以下の機能が有効になります。
@@ -235,10 +221,3 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 - 週間/月間は直近7日/30日（UTC）を集計し、`period_credits` に獲得creditsを返します。
 - 対象は **TA要件（`TA_QUALIFICATION_THRESHOLD`）を満たすユーザーのみ** です。
 - フロントの `/start` にランキング表を表示しています。
-
----
-
-## 開発メモ
-
-- 依存関係は `pyproject.toml` と `uv.lock` で管理しています
-- ファイル保存先はデフォルトで `storage/`（`.gitignore` 済み）
