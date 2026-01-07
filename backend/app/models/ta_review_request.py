@@ -1,10 +1,17 @@
 import enum
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import ForeignKey
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
@@ -29,9 +36,7 @@ class TAReviewRequest(Base):
     teacher_id: Mapped[UUID] = mapped_column(
         SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
-    ta_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    ta_id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     status: Mapped[TAReviewRequestStatus] = mapped_column(
         Enum(TAReviewRequestStatus), default=TAReviewRequestStatus.offered
     )
@@ -41,9 +46,7 @@ class TAReviewRequest(Base):
         default=None,
         index=True,
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     responded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     submission = relationship("Submission")

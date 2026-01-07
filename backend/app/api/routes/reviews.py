@@ -1,54 +1,58 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.assignment import Assignment
-from app.models.review import (
-    MetaReview,
-    Review,
-    ReviewAssignment,
-    ReviewAssignmentStatus,
-    ReviewRubricScore,
-)
+from app.models.review import MetaReview
+from app.models.review import Review
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewAssignmentStatus
+from app.models.review import ReviewRubricScore
 from app.models.submission import Submission
-from app.models.ta_review_request import TAReviewRequest, TAReviewRequestStatus
+from app.models.ta_review_request import TAReviewRequest
+from app.models.ta_review_request import TAReviewRequestStatus
 from app.models.user import User
-from app.schemas.review import (
-    MetaReviewCreate,
-    MetaReviewPublic,
-    PolishRequest,
-    PolishResponse,
-    RephraseRequest,
-    RephraseResponse,
-    ReviewAssignmentTask,
-    ReviewPublic,
-    ReviewReceived,
-    ReviewSubmit,
-    TeacherReviewPublic,
-)
-from app.services.ai import (
-    FeatureDisabledError,
-    ModerationError,
-    OpenAIEmptyChoiceError,
-    OpenAIRequestError,
-    OpenAIResponseParseError,
-    OpenAIUnavailableError,
-    analyze_review,
-    analyze_review_alignment,
-    polish_review,
-)
+from app.schemas.review import MetaReviewCreate
+from app.schemas.review import MetaReviewPublic
+from app.schemas.review import PolishRequest
+from app.schemas.review import PolishResponse
+from app.schemas.review import RephraseRequest
+from app.schemas.review import RephraseResponse
+from app.schemas.review import ReviewAssignmentTask
+from app.schemas.review import ReviewPublic
+from app.schemas.review import ReviewReceived
+from app.schemas.review import ReviewSubmit
+from app.schemas.review import RubricCriterionPublic
+from app.schemas.review import TeacherReviewPublic
+from app.services.ai import FeatureDisabledError
+from app.services.ai import ModerationError
+from app.services.ai import OpenAIEmptyChoiceError
+from app.services.ai import OpenAIRequestError
+from app.services.ai import OpenAIResponseParseError
+from app.services.ai import OpenAIUnavailableError
+from app.services.ai import analyze_review
+from app.services.ai import analyze_review_alignment
+from app.services.ai import polish_review
 from app.services.anonymize import alias_for_user
-from app.services.auth import get_current_user, require_teacher
-from app.services.credits import calculate_review_credit_gain, score_1_to_5_from_norm
-from app.services.duplicate import detect_duplicate_review, hash_comment
+from app.services.auth import get_current_user
+from app.services.auth import require_teacher
+from app.services.credits import calculate_review_credit_gain
+from app.services.credits import score_1_to_5_from_norm
+from app.services.duplicate import detect_duplicate_review
+from app.services.duplicate import hash_comment
 from app.services.matching import get_or_assign_review_assignment
 from app.services.rubric import ensure_fixed_rubric
 from app.services.similarity import check_similarity
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+current_user_dependency = Depends(get_current_user)
+teacher_dependency = Depends(require_teacher)
 
 
 def _evaluation_fields(credit: object | None) -> dict:
@@ -68,8 +72,8 @@ def _evaluation_fields(credit: object | None) -> dict:
 @router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask)
 def next_review_task(
     assignment_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> ReviewAssignmentTask:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
@@ -84,6 +88,7 @@ def next_review_task(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     rubric = ensure_fixed_rubric(db, assignment_id)
+    rubric_public = [RubricCriterionPublic.model_validate(item) for item in rubric]
     author_alias = alias_for_user(
         user_id=submission.author_id,
         assignment_id=assignment_id,
@@ -95,35 +100,40 @@ def next_review_task(
         submission_id=submission.id,
         author_alias=author_alias,
         file_type=submission.file_type,
-        rubric=rubric,
+        rubric=rubric_public,
     )
 
 
 @router.post("/reviews/polish", response_model=PolishResponse)
-def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_current_user)):
+def api_polish_review(
+    payload: PolishRequest,
+    current_user: User = current_user_dependency,
+):
     try:
         polished_text, notes = polish_review(payload.text)
-        
+
     except FeatureDisabledError as e:
         raise HTTPException(status_code=503, detail="OpenAI not configured") from e
-    
+
     except OpenAIUnavailableError as e:
         raise HTTPException(status_code=503, detail="OpenAI temporarily unavailable") from e
-    
+
     except OpenAIRequestError as e:
         status = 504 if e.reason == "timeout" else 502
         raise HTTPException(
             status_code=status,
             detail={"message": "OpenAI request failed", "reason": e.reason, "status_code": e.status_code},
         ) from e
-    
+
     except (OpenAIResponseParseError, OpenAIEmptyChoiceError) as e:
-        raise HTTPException(status_code=502, detail={"message": "OpenAI response parse failed", "reason": str(e)}) from e
-    
+        raise HTTPException(
+            status_code=502,
+            detail={"message": "OpenAI response parse failed", "reason": str(e)},
+        ) from e
+
     except ModerationError as e:
         raise HTTPException(
-            status_code=422, 
-            detail={"message": "Polish blocked by moderation", "details": e.args[0]}
+            status_code=422, detail={"message": "Polish blocked by moderation", "details": e.args[0]}
         ) from e
 
     return PolishResponse(polished_text=polished_text, notes=notes)
@@ -133,12 +143,10 @@ def api_polish_review(payload: PolishRequest, current_user: User = Depends(get_c
 def submit_review(
     review_assignment_id: UUID,
     payload: ReviewSubmit,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> Review:
-    review_assignment = (
-        db.query(ReviewAssignment).filter(ReviewAssignment.id == review_assignment_id).first()
-    )
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
+) -> ReviewPublic:
+    review_assignment = db.query(ReviewAssignment).filter(ReviewAssignment.id == review_assignment_id).first()
     if review_assignment is None:
         raise HTTPException(status_code=404, detail="Review assignment not found")
     if review_assignment.reviewer_id != current_user.id:
@@ -310,7 +318,7 @@ def _simple_rephrase(text: str) -> RephraseResponse:
 @router.post("/reviews/paraphrase", response_model=RephraseResponse)
 def paraphrase(
     payload: RephraseRequest,
-    _current_user: User = Depends(get_current_user),
+    _current_user: User = current_user_dependency,
 ) -> RephraseResponse:
     # OpenAIが利用可能なら polish_review を使用、そうでなければ簡易変換にフォールバック
     try:
@@ -337,8 +345,8 @@ def paraphrase(
 @router.get("/assignments/{assignment_id}/reviews/received", response_model=list[ReviewReceived])
 def received_reviews(
     assignment_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> list[ReviewReceived]:
     submission = (
         db.query(Submission)
@@ -348,11 +356,7 @@ def received_reviews(
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    review_assignments = (
-        db.query(ReviewAssignment)
-        .filter(ReviewAssignment.submission_id == submission.id)
-        .all()
-    )
+    review_assignments = db.query(ReviewAssignment).filter(ReviewAssignment.submission_id == submission.id).all()
     assignment_by_id = {ra.id: ra for ra in review_assignments}
     reviewer_ids = {ra.reviewer_id for ra in review_assignments}
     reviewers = db.query(User).filter(User.id.in_(list(reviewer_ids))).all() if reviewer_ids else []
@@ -381,15 +385,9 @@ def received_reviews(
             if reviewer_user
             else None
         )
-        reviewer_alias = alias_for_user(
-            user_id=ra.reviewer_id, assignment_id=assignment_id, prefix="Reviewer"
-        )
+        reviewer_alias = alias_for_user(user_id=ra.reviewer_id, assignment_id=assignment_id, prefix="Reviewer")
 
-        scores = (
-            db.query(ReviewRubricScore)
-            .filter(ReviewRubricScore.review_id == r.id)
-            .all()
-        )
+        scores = db.query(ReviewRubricScore).filter(ReviewRubricScore.review_id == r.id).all()
         meta = db.query(MetaReview).filter(MetaReview.review_id == r.id).first()
         results.append(
             ReviewReceived(
@@ -421,16 +419,14 @@ def received_reviews(
 def create_meta_review(
     review_id: UUID,
     payload: MetaReviewCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> MetaReview:
     review = db.query(Review).filter(Review.id == review_id).first()
     if review is None:
         raise HTTPException(status_code=404, detail="Review not found")
 
-    review_assignment = (
-        db.query(ReviewAssignment).filter(ReviewAssignment.id == review.review_assignment_id).first()
-    )
+    review_assignment = db.query(ReviewAssignment).filter(ReviewAssignment.id == review.review_assignment_id).first()
     if review_assignment is None:
         raise HTTPException(status_code=404, detail="Review assignment not found")
 
@@ -459,25 +455,17 @@ def create_meta_review(
 @router.get("/submissions/{submission_id}/reviews", response_model=list[TeacherReviewPublic])
 def list_reviews_for_submission(
     submission_id: UUID,
-    db: Session = Depends(get_db),
-    _teacher: User = Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher: User = teacher_dependency,
 ) -> list[TeacherReviewPublic]:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    review_assignments = (
-        db.query(ReviewAssignment)
-        .filter(ReviewAssignment.submission_id == submission_id)
-        .all()
-    )
+    review_assignments = db.query(ReviewAssignment).filter(ReviewAssignment.submission_id == submission_id).all()
     ra_by_id = {ra.id: ra for ra in review_assignments}
     reviewer_by_id = {ra.reviewer_id for ra in review_assignments}
-    reviewers = (
-        db.query(User)
-        .filter(User.id.in_(list(reviewer_by_id)))
-        .all()
-    )
+    reviewers = db.query(User).filter(User.id.in_(list(reviewer_by_id))).all()
     reviewer_map = {u.id: u for u in reviewers}
     accepted_ta_ids = {
         req.ta_id
@@ -514,17 +502,17 @@ def list_reviews_for_submission(
         reviewer_alias = alias_for_user(
             user_id=ra.reviewer_id, assignment_id=submission.assignment_id, prefix="Reviewer"
         )
-        scores = (
-            db.query(ReviewRubricScore)
-            .filter(ReviewRubricScore.review_id == r.id)
-            .all()
-        )
+        scores = db.query(ReviewRubricScore).filter(ReviewRubricScore.review_id == r.id).all()
         meta = db.query(MetaReview).filter(MetaReview.review_id == r.id).first()
         results.append(
             TeacherReviewPublic(
                 id=r.id,
                 reviewer_alias=reviewer_alias,
-                is_ta=bool(reviewer_user.is_ta) if (reviewer_user and reviewer_user.is_ta) else ra.reviewer_id in accepted_ta_ids,
+                is_ta=(
+                    bool(reviewer_user.is_ta)
+                    if (reviewer_user and reviewer_user.is_ta)
+                    else ra.reviewer_id in accepted_ta_ids
+                ),
                 comment=r.comment,
                 created_at=r.created_at,
                 rubric_scores=scores,

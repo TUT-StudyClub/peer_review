@@ -4,9 +4,14 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.assignment import Assignment, RubricCriterion
-from app.models.review import MetaReview, Review, ReviewAssignment, ReviewRubricScore
-from app.models.submission import Submission, SubmissionRubricScore
+from app.models.assignment import Assignment
+from app.models.assignment import RubricCriterion
+from app.models.review import MetaReview
+from app.models.review import Review
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewRubricScore
+from app.models.submission import Submission
+from app.models.submission import SubmissionRubricScore
 from app.models.user import User
 from app.schemas.grade import GradeMe
 
@@ -27,11 +32,7 @@ def _submission_score_from_peers(db: Session, submission: Submission) -> float |
     if not reviews:
         return None
 
-    criteria = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == submission.assignment_id)
-        .all()
-    )
+    criteria = db.query(RubricCriterion).filter(RubricCriterion.assignment_id == submission.assignment_id).all()
     total_max = sum(c.max_score for c in criteria) or 0
     if total_max <= 0:
         return None
@@ -46,14 +47,8 @@ def _submission_score_from_peers(db: Session, submission: Submission) -> float |
     return _avg(totals)
 
 
-def _rubric_alignment_score(
-    db: Session, *, submission_id: UUID, review_id: UUID, assignment_id: UUID
-) -> float | None:
-    teacher_scores = (
-        db.query(SubmissionRubricScore)
-        .filter(SubmissionRubricScore.submission_id == submission_id)
-        .all()
-    )
+def _rubric_alignment_score(db: Session, *, submission_id: UUID, review_id: UUID, assignment_id: UUID) -> float | None:
+    teacher_scores = db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id == submission_id).all()
     if not teacher_scores:
         return None
 
@@ -100,9 +95,7 @@ def _norm_1_to_5(score: int | None) -> float | None:
 
 def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) -> GradeMe:
     submission = (
-        db.query(Submission)
-        .filter(Submission.assignment_id == assignment.id, Submission.author_id == user.id)
-        .first()
+        db.query(Submission).filter(Submission.assignment_id == assignment.id, Submission.author_id == user.id).first()
     )
 
     assignment_score: float | None = None
@@ -139,9 +132,7 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
         quality_raw = r.ai_quality_score if r.ai_quality_score is not None else None
         quality_norm = _norm_1_to_5(quality_raw)
         toxic = bool(r.ai_toxic)
-        comment_alignment_raw = (
-            r.ai_comment_alignment_score if r.ai_comment_alignment_score is not None else None
-        )
+        comment_alignment_raw = r.ai_comment_alignment_score if r.ai_comment_alignment_score is not None else None
         comment_alignment_norm = _norm_1_to_5(comment_alignment_raw)
 
         available = {
@@ -149,9 +140,7 @@ def calculate_grade_for_user(db: Session, assignment: Assignment, user: User) ->
             "alignment": alignment_norm is not None,
             "quality": quality_norm is not None,
         }
-        available_weight_sum = sum(
-            _REVIEW_POINTS_BASE_WEIGHTS[key] for key, ok in available.items() if ok
-        )
+        available_weight_sum = sum(_REVIEW_POINTS_BASE_WEIGHTS[key] for key, ok in available.items() if ok)
         weights = {
             key: (_REVIEW_POINTS_BASE_WEIGHTS[key] / available_weight_sum)
             if (available_weight_sum > 0 and available[key])

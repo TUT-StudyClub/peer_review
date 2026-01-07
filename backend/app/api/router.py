@@ -1,16 +1,14 @@
 from fastapi import APIRouter
 
-from app.api.routes import (
-    assignments,
-    auth,
-    courses,
-    grades,
-    health,
-    reviews,
-    submissions,
-    ta,
-    users,
-)
+from app.api.routes import assignments
+from app.api.routes import auth
+from app.api.routes import courses
+from app.api.routes import grades
+from app.api.routes import health
+from app.api.routes import reviews
+from app.api.routes import submissions
+from app.api.routes import ta
+from app.api.routes import users
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])

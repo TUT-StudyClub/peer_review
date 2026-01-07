@@ -1,4 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import TypedDict
+
+from pydantic_settings import BaseSettings
+from pydantic_settings import SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -40,7 +43,7 @@ class Settings(BaseSettings):
     duplicate_quality_penalty_points: int = 1
 
     # OpenAI依存の機能を有効にするためのフラグ
-    enable_openai: bool = False #defaultでは無効
+    enable_openai: bool = False  # defaultでは無効
 
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
@@ -50,6 +53,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+class ReviewerSkillTemplateItem(TypedDict):
+    key: str
+    label: str
+    name: str
+    description: str
+    max_score: int
+    order_index: int
+
 
 # ユーザーランク（クレジット）
 USER_RANK_DEFINITIONS = [
@@ -61,7 +74,7 @@ USER_RANK_DEFINITIONS = [
     {"key": "diamond", "min_credits": 80, "title": "ダイヤモンドレビュアー"},
 ]
 
-REVIEWER_SKILL_TEMPLATE = [
+REVIEWER_SKILL_TEMPLATE: list[ReviewerSkillTemplateItem] = [
     {
         "key": "logic",
         "label": "論理性",

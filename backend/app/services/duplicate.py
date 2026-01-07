@@ -7,7 +7,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.review import Review, ReviewAssignment
+from app.models.review import Review
+from app.models.review import ReviewAssignment
 from app.services.similarity import normalize_text
 
 

@@ -1,20 +1,22 @@
 import enum
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
 
-from sqlalchemy import (
-    Boolean,
-    DateTime,
-    Enum,
-    Float,
-    ForeignKey,
-    Integer,
-    String,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import Boolean
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import Integer
+from sqlalchemy import String
+from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
 from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 
@@ -42,9 +44,7 @@ class ReviewAssignment(Base):
     status: Mapped[ReviewAssignmentStatus] = mapped_column(
         Enum(ReviewAssignmentStatus), default=ReviewAssignmentStatus.assigned
     )
-    assigned_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     submission = relationship("Submission", back_populates="review_assignments")
@@ -64,9 +64,7 @@ class Review(Base):
     )
 
     comment: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     ai_quality_score: Mapped[int | None] = mapped_column(Integer, default=None)
     ai_quality_reason: Mapped[str | None] = mapped_column(Text, default=None)
@@ -97,9 +95,7 @@ class Review(Base):
     similarity_penalty_rate: Mapped[float | None] = mapped_column(Float, default=None)
 
     review_assignment = relationship("ReviewAssignment", back_populates="review")
-    rubric_scores = relationship(
-        "ReviewRubricScore", back_populates="review", cascade="all, delete-orphan"
-    )
+    rubric_scores = relationship("ReviewRubricScore", back_populates="review", cascade="all, delete-orphan")
     meta_review = relationship("MetaReview", back_populates="review", uselist=False)
 
 
@@ -127,13 +123,9 @@ class MetaReview(Base):
     review_id: Mapped[UUID] = mapped_column(
         SAUuid(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), index=True
     )
-    rater_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    rater_id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     helpfulness: Mapped[int] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(Text, default=None)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     review = relationship("Review", back_populates="meta_review")

@@ -1,10 +1,17 @@
 import enum
-from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from datetime import UTC
+from datetime import datetime
+from uuid import UUID
+from uuid import uuid4
 
-from sqlalchemy import DateTime, Enum, Integer, String
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import Integer
+from sqlalchemy import String
 from sqlalchemy import Uuid as SAUuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
 
 from app.core.config import settings
 from app.db.base import Base
@@ -25,9 +32,7 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.student)
     password_hash: Mapped[str] = mapped_column(String(255))
     credits: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     submissions = relationship("Submission", back_populates="author")
     review_assignments = relationship("ReviewAssignment", back_populates="reviewer")
