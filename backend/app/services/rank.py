@@ -32,10 +32,9 @@ def _load_rank_definitions() -> tuple[UserRank, ...]:
     return tuple(ranks)
 
 
-def get_user_rank(credits: int | None) -> UserRank:
-    safe_credits = int(credits or 0)
-    if safe_credits < 0:
-        safe_credits = 0
+def get_user_rank(credit_value: int | None) -> UserRank:
+    safe_credits = int(credit_value or 0)
+    safe_credits = max(safe_credits, 0)
 
     ranks = _load_rank_definitions()
     current = ranks[0]

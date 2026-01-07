@@ -16,10 +16,11 @@ def _ensure_app_path() -> None:
 def main() -> int:
     load_dotenv()
     _ensure_app_path()
-    from app.core.config import settings
-    from app.core.security import get_password_hash
-    from app.db.session import SessionLocal
-    from app.models.user import User, UserRole
+    from app.core.config import settings  # noqa: PLC0415
+    from app.core.security import get_password_hash  # noqa: PLC0415
+    from app.db.session import SessionLocal  # noqa: PLC0415
+    from app.models.user import User  # noqa: PLC0415
+    from app.models.user import UserRole  # noqa: PLC0415
 
     password = os.getenv("TEST_USER_PASSWORD")
     if not password:
@@ -34,10 +35,7 @@ def main() -> int:
         {"email": "teacher1@example.com", "name": "Teacher 1", "role": UserRole.teacher},
         {"email": "teacher2@example.com", "name": "Teacher 2", "role": UserRole.teacher},
         {"email": "teacher3@example.com", "name": "Teacher 3", "role": UserRole.teacher},
-        *[
-            {"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student}
-            for i in range(1, 11)
-        ],
+        *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
     ]
 
     created = 0

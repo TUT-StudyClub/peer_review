@@ -1,7 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import EmailStr
+from pydantic import Field
 
 from app.models.user import UserRole
 

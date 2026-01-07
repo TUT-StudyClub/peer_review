@@ -7,7 +7,8 @@ from dataclasses import dataclass
 import httpx
 
 from app.core.config import settings
-from app.services.similarity import jaccard_similarity, tokenize
+from app.services.similarity import jaccard_similarity
+from app.services.similarity import tokenize
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ class OpenAIUnavailableError(Exception):
 def detect_toxic_hits(text: str) -> list[str]:
     return [p for p in _BANNED_PATTERNS if re.search(p, text)]
 
+
 def _openai_polish(text: str) -> dict:
     if not settings.openai_api_key or not settings.enable_openai:
         raise FeatureDisabledError("OpenAI not configured")
@@ -89,7 +91,7 @@ def _openai_polish(text: str) -> dict:
         "instructions": [
             "Rewrite to be polite and constructive.",
             "Keep original meaning; do not add new facts.",
-            "Return strict JSON: {\"polished_text\": \"...\", \"notes\": \"...\"}.",
+            'Return strict JSON: {"polished_text": "...", "notes": "..."}.',
         ],
     }
 
@@ -97,9 +99,7 @@ def _openai_polish(text: str) -> dict:
         with httpx.Client(timeout=15.0) as client:
             res = client.post(
                 "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}"
-                },
+                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
                 json={
                     "model": "gpt-4o-mini",
                     "messages": [
@@ -164,9 +164,7 @@ def _clamp_1_5(value: int) -> int:
     return max(1, min(5, int(value)))
 
 
-def _heuristic_review_alignment(
-    teacher_review_text: str, student_review_text: str
-) -> ReviewAlignmentResult:
+def _heuristic_review_alignment(teacher_review_text: str, student_review_text: str) -> ReviewAlignmentResult:
     teacher_tokens = tokenize(teacher_review_text)
     student_tokens = tokenize(student_review_text)
     similarity = jaccard_similarity(teacher_tokens, student_tokens)
@@ -247,9 +245,7 @@ def _heuristic_analyze(review_text: str) -> ReviewAIResult:
     )
 
 
-def _openai_review_alignment(
-    teacher_review_text: str, student_review_text: str
-) -> ReviewAlignmentResult | None:
+def _openai_review_alignment(teacher_review_text: str, student_review_text: str) -> ReviewAlignmentResult | None:
     if not settings.openai_api_key:
         return None
 
@@ -298,9 +294,7 @@ def _openai_analyze(submission_text: str, review_text: str) -> ReviewAIResult | 
         return None
 
     system = (
-        "You are an assistant that evaluates peer-review quality and toxicity. "
-        "Return JSON only."
-        "Return Japanese text."
+        "You are an assistant that evaluates peer-review quality and toxicity. Return JSON only.Return Japanese text."
     )
     user = {
         "submission": submission_text,
@@ -309,7 +303,10 @@ def _openai_analyze(submission_text: str, review_text: str) -> ReviewAIResult | 
             "Rate review quality from 1 to 5 and explain why.",
             "Detect if the review contains toxic/abusive/discriminatory language (true/false) and explain.",
             "Also rate 4 axes from 1 to 5: logic, specificity, empathy, insight.",
-            "Return strict JSON with keys: quality_score, quality_reason, toxic, toxic_reason, logic, specificity, empathy, insight.",
+            (
+                "Return strict JSON with keys: quality_score, quality_reason, toxic, toxic_reason, "
+                "logic, specificity, empathy, insight."
+            ),
         ],
     }
 
