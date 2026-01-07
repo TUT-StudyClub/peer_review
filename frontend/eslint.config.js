@@ -1,19 +1,17 @@
-import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+// フラット構成用の ESLint 設定。
+// ESLint 9 でこのファイルをメイン設定として利用することを想定している。
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
+import tseslint from "typescript-eslint";
+
+export default tseslint.config({
+  // 共通の除外パターン
+  ignores: [
     ".next/**",
     "out/**",
     "build/**",
-    "next-env.d.ts",
-    "tailwind.config.cjs",
-  ]),
-]);
+    "node_modules/**",
+    "*.config.*",
+  ],
+});
 
-export default eslintConfig;
+// TypeScript ESLint の推奨設定をベースとして利用
