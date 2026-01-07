@@ -12,12 +12,12 @@
 
 ## ディレクトリ構成
 
+- `.github/` … CI workflows / Issue・PRテンプレート
 - `backend/` … FastAPI + DB + マッチング/採点ロジック
-- `frontend/` … UI（ブラウザで操作）
-- チーム運用ルール: `CONTRIBUTING.md`
-- ブランチ保護: `docs/branch-protection.md`
-- Issue運用（タスク管理）: `docs/issue-management.md`
-- UI方針（shadcn/ui）: `docs/frontend-ui.md`
+- `frontend/` … UI（Next.js）
+- `docs/` … 開発/運用ドキュメント（branch-protection, issue-management, frontend-ui など）
+- `scripts/` / `teacher-baseline/` … 補助スクリプト / 教師基準ロジック
+- `Taskfile.yml` / `.pre-commit-config.yaml` / `CONTRIBUTING.md` … task runner / pre-commit 設定 / 運用ルール
 
 ---
 
@@ -70,26 +70,27 @@
 ### 前提
 - Python 3.12 以上
 - `uv` がインストール済み（未インストールなら https://github.com/astral-sh/uv の手順に従ってください）
+- `go-task` がインストール済み（インストール方法: https://taskfile.dev/installation/）
 
-> 以降、バックエンド作業は `backend/` で行います。
+> 以降、リポジトリルートで `task` を実行します。
 
 ### 1. 依存関係インストール（uvで仮想環境作成）
 ```bash
-cd backend
-uv sync --python 3.12
+task install
 ```
-- `.venv/` が作成され、依存関係がインストールされます
+- backend / frontend の依存関係がインストールされます
+- backend だけなら `task backend:install` も利用できます
 
 ### 2. 環境変数（任意）
 ```bash
-cp .env.example .env
+cp backend/.env.example backend/.env
 ```
 SQLiteで動かすだけなら `.env` は不要です（デフォルトは `sqlite:///./dev.db`）。
 
-### 3. 起動
+### 3. 起動（backend / frontend）
 ```bash
-cd backend
-uv run uvicorn app.main:app --reload
+task backend:dev
+task frontend:dev
 ```
 
 ### 4. 動作確認
@@ -98,29 +99,7 @@ uv run uvicorn app.main:app --reload
 
 ---
 
-## フロントエンド（UI）を起動する
-
-バックエンド起動（別ターミナル）：
-```bash
-cd backend
-uv run uvicorn app.main:app --reload
-```
-
-フロントエンド起動：
-```bash
-cd frontend
-cp .env.local.example .env.local
-npm run dev
-```
-
-- UI: `http://localhost:3000`
-- API（FastAPI）: `http://127.0.0.1:8000`
-
-> フロントは `NEXT_PUBLIC_API_BASE_URL`（`frontend/.env.local`）でバックエンドURLを参照します。
-
----
-
-## Taskfile（任意）
+## Taskfile
 
 `Taskfile.yml` を用意しています。`go-task` をインストール済みなら、以下のように実行できます。
 
@@ -145,20 +124,20 @@ task check
 
 ### 1. DB起動（Docker）
 ```bash
-cd backend
-docker compose up -d
+task backend:db-up
 ```
 
 ### 2. `.env` に `DATABASE_URL` を設定
-`.env` の `DATABASE_URL` を有効化して、以下を設定します：
+`backend/.env` の `DATABASE_URL` を有効化して、以下を設定します：
 ```env
 DATABASE_URL=postgresql+psycopg://pure_review:pure_review@localhost:5432/pure_review
 ```
 
-### 3. 起動
+### 3. 起動（backend / frontend）
 ```bash
-cd backend
-uv run uvicorn app.main:app --reload
+task backend:dev
+cp frontend/.env.local.example frontend/.env.local
+task frontend:dev
 ```
 
 ---
