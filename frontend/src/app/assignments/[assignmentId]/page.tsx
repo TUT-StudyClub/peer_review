@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import {
+  Award,
   CheckCircle2,
   Clock,
   Download,
@@ -15,6 +16,8 @@ import {
   Save,
   Search,
   Star,
+  Target,
+  TrendingUp,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1927,9 +1930,17 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="成績"
+          title={
+            <div className="space-y-1">
+              <div>成績</div>
+              <div className="text-xs font-normal text-muted-foreground">
+                課題の評価とレビュー貢献度を確認できます
+              </div>
+            </div>
+          }
           actions={
-            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading}>
+            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading} className="gap-2">
+              <RefreshCcw className="h-4 w-4" />
               更新
             </Button>
           }
@@ -1939,28 +1950,75 @@ export default function AssignmentDetailPage() {
           ) : gradeLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : grade ? (
-            <div className="space-y-3 text-sm">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="text-xs text-muted-foreground">課題スコア</div>
-                  <div className="text-lg font-semibold">
-                    {formatScore(grade.assignment_score, 1, "採点待ち")}
+            <div className="space-y-4 text-sm">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">課題スコア</div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                      <Target className="h-4 w-4" />
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">/100</div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <div className="text-3xl font-semibold">
+                      {grade.assignment_score == null ? "採点待ち" : formatScore(grade.assignment_score, 1)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">/100</div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                      {grade.assignment_score == null ? "採点待ち" : "確定"}
+                    </span>
+                  </div>
+                  <div className="mt-4 h-2 rounded-full bg-slate-100">
+                    <div
+                      className="h-2 rounded-full bg-blue-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (grade.assignment_score ?? 0)))}%`,
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="text-xs text-muted-foreground">レビュー貢献</div>
-                  <div className="text-lg font-semibold">
-                    +{formatScore(grade.review_contribution, 2)}
+
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">レビュー貢献</div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                      <Award className="h-4 w-4" />
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">加点</div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <div className="text-3xl font-semibold">+{formatScore(grade.review_contribution, 2)}</div>
+                    <div className="text-xs text-muted-foreground">加点</div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                      確定
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="mt-3 px-0 text-xs text-blue-600">
+                    詳細を見る
+                  </Button>
                 </div>
-                <div className="rounded-lg border bg-primary/10 p-3">
-                  <div className="text-xs text-muted-foreground">最終スコア</div>
-                  <div className="text-2xl font-semibold text-primary">
-                    {formatScore(grade.final_score, 1, "未確定")}
+
+                <div className="rounded-xl border bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-sky-50 via-white to-emerald-50 p-4 text-slate-900 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-500">最終スコア</div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-slate-700">
+                      <TrendingUp className="h-4 w-4" />
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">max 100</div>
+                  <div className="mt-2 text-3xl font-semibold">
+                    {grade.final_score == null ? "未確定" : formatScore(grade.final_score, 1)}
+                  </div>
+                  <div className="mt-2">
+                    <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">
+                      {grade.final_score == null ? "未確定" : "確定"}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-xs text-slate-600">
+                    課題スコア確定後に最終スコアが計算されます
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
