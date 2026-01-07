@@ -13,12 +13,12 @@ from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
 from sqlalchemy import UniqueConstraint
-from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.base import UUIDType
 
 
 class ReviewAssignmentStatus(str, enum.Enum):
@@ -30,16 +30,10 @@ class ReviewAssignment(Base):
     __tablename__ = "review_assignments"
     __table_args__ = (UniqueConstraint("submission_id", "reviewer_id", name="uq_submission_reviewer"),)
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
-    assignment_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), index=True
-    )
-    submission_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("submissions.id", ondelete="CASCADE"), index=True
-    )
-    reviewer_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
+    assignment_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("assignments.id", ondelete="CASCADE"), index=True)
+    submission_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("submissions.id", ondelete="CASCADE"), index=True)
+    reviewer_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     status: Mapped[ReviewAssignmentStatus] = mapped_column(
         Enum(ReviewAssignmentStatus), default=ReviewAssignmentStatus.assigned
@@ -55,9 +49,9 @@ class ReviewAssignment(Base):
 class Review(Base):
     __tablename__ = "reviews"
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     review_assignment_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True),
+        UUIDType,
         ForeignKey("review_assignments.id", ondelete="CASCADE"),
         unique=True,
         index=True,
@@ -81,7 +75,7 @@ class Review(Base):
     # 重複検知関連
     normalized_comment_hash: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
     duplicate_of_review_id: Mapped[UUID | None] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("reviews.id", ondelete="SET NULL"), default=None, index=True
+        UUIDType, ForeignKey("reviews.id", ondelete="SET NULL"), default=None, index=True
     )
     duplicate_warning: Mapped[str | None] = mapped_column(Text, default=None)
     duplicate_penalty_rate: Mapped[float | None] = mapped_column(Float, default=None)
@@ -89,7 +83,7 @@ class Review(Base):
     # 類似検知関連
     similarity_score: Mapped[float | None] = mapped_column(Float, default=None)
     similar_review_id: Mapped[UUID | None] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("reviews.id", ondelete="SET NULL"), default=None, index=True
+        UUIDType, ForeignKey("reviews.id", ondelete="SET NULL"), default=None, index=True
     )
     similarity_warning: Mapped[str | None] = mapped_column(Text, default=None)
     similarity_penalty_rate: Mapped[float | None] = mapped_column(Float, default=None)
@@ -103,12 +97,10 @@ class ReviewRubricScore(Base):
     __tablename__ = "review_rubric_scores"
     __table_args__ = (UniqueConstraint("review_id", "criterion_id", name="uq_review_criterion"),)
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
-    review_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
+    review_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("reviews.id", ondelete="CASCADE"), index=True)
     criterion_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("rubric_criteria.id", ondelete="CASCADE"), index=True
+        UUIDType, ForeignKey("rubric_criteria.id", ondelete="CASCADE"), index=True
     )
     score: Mapped[int] = mapped_column(Integer)
 
@@ -119,11 +111,9 @@ class MetaReview(Base):
     __tablename__ = "meta_reviews"
     __table_args__ = (UniqueConstraint("review_id", name="uq_meta_review_review"),)
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
-    review_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), index=True
-    )
-    rater_id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
+    review_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("reviews.id", ondelete="CASCADE"), index=True)
+    rater_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     helpfulness: Mapped[int] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
