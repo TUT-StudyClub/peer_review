@@ -15,14 +15,8 @@ def normalize_rubric_name(name: str) -> str:
 
 
 def ensure_fixed_rubric(db: Session, assignment_id) -> list[RubricCriterion]:
-    criteria = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == assignment_id)
-        .all()
-    )
-    by_norm: dict[str, RubricCriterion] = {
-        normalize_rubric_name(c.name): c for c in criteria
-    }
+    criteria = db.query(RubricCriterion).filter(RubricCriterion.assignment_id == assignment_id).all()
+    by_norm: dict[str, RubricCriterion] = {normalize_rubric_name(c.name): c for c in criteria}
 
     fixed: list[RubricCriterion] = []
     created = False

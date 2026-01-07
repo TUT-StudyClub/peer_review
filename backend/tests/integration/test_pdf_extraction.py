@@ -53,7 +53,7 @@ def test_pdf_extraction():
         # テスト5: ページごとのテキスト抽出詳細
         logging.info("[5] ページごとのテキスト抽出概要")
         pages = service.extract_text_by_page(test_pdf)
- 
+
         page_lengths = {page_num: len(text) for page_num, text in pages.items()}
         logging.info("✓ ページごと抽出成功: %s", page_lengths)
 

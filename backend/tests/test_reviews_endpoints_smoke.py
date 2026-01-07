@@ -1,14 +1,17 @@
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.routes.reviews import received_reviews, submit_review
+from app.api.routes.reviews import received_reviews
+from app.api.routes.reviews import submit_review
 from app.db.base import Base
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
+from app.models.assignment import RubricCriterion
 from app.models.review import ReviewAssignment
-from app.models.submission import Submission, SubmissionRubricScore
+from app.models.submission import Submission
+from app.models.submission import SubmissionRubricScore
 from app.models.user import User
-from app.schemas.review import ReviewSubmit, RubricScore
+from app.schemas.review import ReviewSubmit
+from app.schemas.review import RubricScore
 
 
 def _make_session():

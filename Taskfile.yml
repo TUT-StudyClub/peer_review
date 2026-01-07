@@ -1,0 +1,80 @@
+version: "3"
+
+tasks:
+    default:
+        desc: "Default task"
+        cmds:
+            - task --list
+
+    install:
+        desc: "Install dependencies"
+        deps:
+            - backend:install
+            - frontend:install
+
+    test:
+        desc: "Run tests"
+        deps:
+            - backend:test
+
+    check:
+        desc: "Run static analysis"
+        deps:
+            - backend:check
+            - frontend:check
+
+    backend:install:
+        desc: "Install backend dependencies"
+        dir: backend
+        cmds:
+            - uv sync --python 3.12
+
+    backend:test:
+        desc: "Run backend tests"
+        dir: backend
+        cmds:
+            - uv run pytest
+
+    backend:check:
+        desc: "Run backend static analysis"
+        dir: backend
+        cmds:
+            - uv run ruff check .
+            - uv run ruff format --check .
+            - uv run ty check .
+
+    backend:dev:
+        desc: "Run backend dev server"
+        dir: backend
+        cmds:
+            - uv run uvicorn app.main:app --reload
+
+    backend:db-up:
+        desc: "Start backend DB (docker compose)"
+        dir: backend
+        cmds:
+            - docker compose up -d
+
+    backend:db-down:
+        desc: "Stop backend DB (docker compose)"
+        dir: backend
+        cmds:
+            - docker compose down -v
+
+    frontend:install:
+        desc: "Install frontend dependencies"
+        dir: frontend
+        cmds:
+            - npm install
+
+    frontend:check:
+        desc: "Run frontend lint"
+        dir: frontend
+        cmds:
+            - npm run lint
+
+    frontend:dev:
+        desc: "Run frontend dev server"
+        dir: frontend
+        cmds:
+            - npm run dev
