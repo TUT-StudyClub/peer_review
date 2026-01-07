@@ -119,6 +119,11 @@ class PDFExtractionService:
         return out.getvalue().rstrip()
 
     @staticmethod
+    def extract_markdown(pdf_path: str | Path) -> str:
+        """PDFからMarkdown用の文字列を抽出する（現状はテキスト抽出の結果を返す）。"""
+        return PDFExtractionService.extract_text(pdf_path)
+
+    @staticmethod
     def extract_text_iter(pdf_path: str | Path) -> Iterator[str]:
         """
         PDFテキストをページ単位でストリーミング抽出するジェネレータ。

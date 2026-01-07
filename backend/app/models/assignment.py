@@ -8,20 +8,20 @@ from sqlalchemy import ForeignKey
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy import Text
-from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.base import UUIDType
 
 
 class Assignment(Base):
     __tablename__ = "assignments"
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     course_id: Mapped[UUID | None] = mapped_column(
-        SAUuid(as_uuid=True),
+        UUIDType,
         ForeignKey("courses.id", ondelete="CASCADE"),
         index=True,
         nullable=True,
@@ -40,9 +40,11 @@ class Assignment(Base):
 class RubricCriterion(Base):
     __tablename__ = "rubric_criteria"
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     assignment_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("assignments.id", ondelete="CASCADE"), index=True
+        UUIDType,
+        ForeignKey("assignments.id", ondelete="CASCADE"),
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, default=None)
