@@ -1,13 +1,18 @@
-"use client";
-
-import { useSearchParams } from "next/navigation";
-
 import MyPageClient from "./MyPageClient";
 
-export default function MyPagePage() {
-  const searchParams = useSearchParams();
-  const courseIdParam = searchParams.get("course_id");
-  const initialCourseId = courseIdParam ?? null;
+type MyPageProps = {
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+const getFirstParam = (value: string | string[] | undefined): string | null => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
+};
+
+export default function MyPagePage({ searchParams }: MyPageProps) {
+  const initialCourseId = getFirstParam(searchParams?.course_id);
 
   return <MyPageClient initialCourseId={initialCourseId} />;
 }
