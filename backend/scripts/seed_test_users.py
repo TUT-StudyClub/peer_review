@@ -1,9 +1,38 @@
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import timedelta
+from datetime import timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+from typing import NotRequired
+from typing import TypedDict
 
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from app.models.user import UserRole
+
+
+class UserSeed(TypedDict):
+    email: str
+    name: str
+    role: "UserRole"
+    credits: NotRequired[int]
+
+
+class CourseSeed(TypedDict):
+    title: str
+    description: str
+    teacher_email: str
+
+
+class AssignmentSeed(TypedDict):
+    course_title: str
+    title: str
+    description: str
+    days_from_now: int
+
 
 # Ensure project root (backend/) is on sys.path when running as a script
 ROOT = Path(__file__).resolve().parent.parent
@@ -14,23 +43,17 @@ def _ensure_app_path() -> None:
         sys.path.insert(0, str(ROOT))
 
 
-def main() -> int:
+def main() -> int:  # noqa: PLR0915
     load_dotenv()
     _ensure_app_path()
-<<<<<<< HEAD
-    from app.core.config import COURSE_TITLE_CANDIDATES, settings
-    from app.core.security import get_password_hash
-    from app.db.session import SessionLocal
-    from app.models.assignment import Assignment
-    from app.models.course import Course
-    from app.models.user import User, UserRole
-=======
+    from app.core.config import COURSE_TITLE_CANDIDATES  # noqa: PLC0415
     from app.core.config import settings  # noqa: PLC0415
     from app.core.security import get_password_hash  # noqa: PLC0415
     from app.db.session import SessionLocal  # noqa: PLC0415
+    from app.models.assignment import Assignment  # noqa: PLC0415
+    from app.models.course import Course  # noqa: PLC0415
     from app.models.user import User  # noqa: PLC0415
     from app.models.user import UserRole  # noqa: PLC0415
->>>>>>> main
 
     password = os.getenv("TEST_USER_PASSWORD")
     if not password:
@@ -42,21 +65,14 @@ def main() -> int:
         return 1
 
     ta_credits = settings.ta_qualification_threshold + 5
-    users = [
+    users: list[UserSeed] = [
         {"email": "teacher1@example.com", "name": "Teacher 1", "role": UserRole.teacher},
         {"email": "teacher2@example.com", "name": "Teacher 2", "role": UserRole.teacher},
         {"email": "teacher3@example.com", "name": "Teacher 3", "role": UserRole.teacher},
-<<<<<<< HEAD
         {"email": "ta1@example.com", "name": "TA 1", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta2@example.com", "name": "TA 2", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta3@example.com", "name": "TA 3", "role": UserRole.student, "credits": ta_credits},
-        *[
-            {"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student}
-            for i in range(1, 11)
-        ],
-=======
         *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
->>>>>>> main
     ]
 
     created_users = 0
@@ -70,21 +86,21 @@ def main() -> int:
         for u in users:
             existing = db.query(User).filter_by(email=u["email"]).first()
             if existing:
-                desired_credits = u.get("credits")
-                if desired_credits is not None and existing.credits < desired_credits:
-                    existing.credits = desired_credits
+                if "credits" in u and existing.credits < u["credits"]:
+                    existing.credits = u["credits"]
                     updated_users += 1
                 print(f"skip (exists) {u['email']}")
                 skipped_users += 1
                 continue
 
+            user_credits = u["credits"] if "credits" in u else 0
             db.add(
                 User(
                     email=u["email"],
                     name=u["name"],
                     role=u["role"],
                     password_hash=get_password_hash(password),
-                    credits=u.get("credits", 0),
+                    credits=user_credits,
                 )
             )
             created_users += 1
@@ -96,7 +112,7 @@ def main() -> int:
             for user in db.query(User).filter(User.email.in_(["teacher1@example.com", "teacher2@example.com"])).all()
         }
 
-        course_specs = [
+        course_specs: list[CourseSeed] = [
             {
                 "title": COURSE_TITLE_CANDIDATES[0],
                 "description": "アルゴリズムの基礎とレビュー実践",
@@ -115,9 +131,7 @@ def main() -> int:
             if not teacher:
                 continue
             existing_course = (
-                db.query(Course)
-                .filter(Course.title == spec["title"], Course.teacher_id == teacher.id)
-                .first()
+                db.query(Course).filter(Course.title == spec["title"], Course.teacher_id == teacher.id).first()
             )
             if existing_course:
                 courses_by_title[spec["title"]] = existing_course
@@ -134,7 +148,7 @@ def main() -> int:
             created_courses += 1
 
         now = datetime.now(timezone(timedelta(hours=9)))
-        assignment_specs = [
+        assignment_specs: list[AssignmentSeed] = [
             {
                 "course_title": COURSE_TITLE_CANDIDATES[0],
                 "title": "レビュー演習 1",

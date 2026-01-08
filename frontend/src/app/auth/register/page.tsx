@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useState } from "react";
-import { ArrowRight, ChevronDown, Eye, EyeOff, Lightbulb, Lock, Mail, User, Users } from "lucide-react";
+import { ArrowRight, ChevronDown, Eye, EyeOff, Lock, Mail, User, Users } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import { ErrorMessages } from "@/components/ErrorMessages";
