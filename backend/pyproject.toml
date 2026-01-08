@@ -1,5 +1,5 @@
 [project]
-name = "pure-review"
+name = "peer_review"
 version = "0.1.0"
 description = "Anonymous peer-review platform (FastAPI backend)"
 readme = "README.md"
