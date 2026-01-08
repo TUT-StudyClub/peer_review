@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Calendar, ClipboardList, Search, Users } from "lucide-react";
 
@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 type AssignmentsClientProps = {
   initialCourseId: string | null;
+  initialCourseView: "list" | "create";
 };
 
 type CourseThemeOption = {
@@ -90,10 +91,9 @@ const COURSE_THEME_BY_VALUE = COURSE_THEME_OPTIONS.reduce<Record<string, CourseT
   {}
 );
 
-export default function AssignmentsClient({ initialCourseId }: AssignmentsClientProps) {
+export default function AssignmentsClient({ initialCourseId, initialCourseView }: AssignmentsClientProps) {
   const { user, token } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [activeCourseId, setActiveCourseId] = useState<string | null>(initialCourseId);
 
   const courseTitleOptions = [
@@ -115,7 +115,7 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
   const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
   const coursesRequestId = useRef(0);
   const [courseQuery, setCourseQuery] = useState("");
-  const [courseView, setCourseView] = useState<"list" | "create">("list");
+  const [courseView, setCourseView] = useState<"list" | "create">(initialCourseView);
   const [courseAssignments, setCourseAssignments] = useState<AssignmentPublic[]>([]);
   const [courseAssignmentsLoading, setCourseAssignmentsLoading] = useState(false);
   const [courseAssignmentsError, setCourseAssignmentsError] = useState<string | null>(null);
@@ -255,9 +255,8 @@ export default function AssignmentsClient({ initialCourseId }: AssignmentsClient
 
   useEffect(() => {
     if (!showCourseSelection) return;
-    const viewParam = searchParams.get("view");
-    setCourseView(viewParam === "create" ? "create" : "list");
-  }, [searchParams, showCourseSelection]);
+    setCourseView(initialCourseView);
+  }, [initialCourseView, showCourseSelection]);
 
   useEffect(() => {
     if (!token || !showCourseSelection) return;
