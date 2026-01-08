@@ -22,18 +22,9 @@ class Course(Base):
     id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, default=None)
-<<<<<<< HEAD
     theme: Mapped[str | None] = mapped_column(String(40), default=None)
-    teacher_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
-=======
     teacher_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
->>>>>>> main
 
     teacher = relationship("User", back_populates="courses_taught")
     enrollments = relationship("CourseEnrollment", back_populates="course", cascade="all, delete-orphan")

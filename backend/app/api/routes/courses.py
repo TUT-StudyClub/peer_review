@@ -20,13 +20,10 @@ from app.services.auth import get_current_user
 from app.services.auth import require_teacher
 
 router = APIRouter()
-<<<<<<< HEAD
 COURSE_THEME_OPTIONS = {"sky", "emerald", "amber", "rose", "slate", "violet"}
-=======
 db_dependency = Depends(get_db)
 current_user_dependency = Depends(get_current_user)
 teacher_dependency = Depends(require_teacher)
->>>>>>> main
 
 
 @router.post("", response_model=CoursePublic)

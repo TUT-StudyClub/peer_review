@@ -72,15 +72,9 @@ def _evaluation_fields(credit: object | None) -> dict:
 @router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask | None)
 def next_review_task(
     assignment_id: UUID,
-<<<<<<< HEAD
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> ReviewAssignmentTask | None:
-=======
     db: Session = db_dependency,
     current_user: User = current_user_dependency,
-) -> ReviewAssignmentTask:
->>>>>>> main
+) -> ReviewAssignmentTask | None:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")

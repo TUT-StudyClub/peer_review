@@ -30,18 +30,12 @@ class Assignment(Base):
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, default=None)
     target_reviews_per_submission: Mapped[int] = mapped_column(Integer, default=2)
-<<<<<<< HEAD
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     due_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         default=None,
         nullable=True,
     )
-=======
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
->>>>>>> main
 
     course = relationship("Course", back_populates="assignments")
     rubric_criteria = relationship("RubricCriterion", back_populates="assignment", cascade="all, delete-orphan")

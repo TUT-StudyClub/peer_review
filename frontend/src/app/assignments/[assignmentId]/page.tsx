@@ -656,7 +656,7 @@ export default function AssignmentDetailPage() {
     }
   };
 
-  const loadCourseStudents = async () => {
+  const loadCourseStudents = useCallback(async () => {
     if (!token || !assignment?.course_id) return;
     try {
       const list = await apiListCourseStudents(token, assignment.course_id);
@@ -664,7 +664,7 @@ export default function AssignmentDetailPage() {
     } catch (err) {
       setNotice(formatApiError(err));
     }
-  };
+  }, [assignment?.course_id, token]);
 
   const loadReviewCounts = async (submissions: SubmissionTeacherPublic[]) => {
     if (!token) return;
@@ -809,7 +809,7 @@ export default function AssignmentDetailPage() {
   useEffect(() => {
     if (!token || user?.role !== "teacher" || !assignment?.course_id) return;
     void loadCourseStudents();
-  }, [token, user?.role, assignment?.course_id]);
+  }, [assignment?.course_id, loadCourseStudents, token, user?.role]);
 
   useEffect(() => {
     if (!reviewTask) return;
