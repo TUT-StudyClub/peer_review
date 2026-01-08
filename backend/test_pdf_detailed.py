@@ -4,6 +4,7 @@
   cd backend
   uv run python test_pdf_detailed.py
 """
+
 from pathlib import Path
 
 from app.services.ai import analyze_review

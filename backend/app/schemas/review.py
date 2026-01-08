@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
 
 from app.models.submission import SubmissionFileType
 from app.models.ta_review_request import TAReviewRequestStatus
@@ -163,8 +165,11 @@ class TAReviewRequestPublic(BaseModel):
     review_assignment_id: UUID | None
     created_at: datetime
     responded_at: datetime | None
+
+
 class PolishRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2048)
+
 
 class PolishResponse(BaseModel):
     polished_text: str
