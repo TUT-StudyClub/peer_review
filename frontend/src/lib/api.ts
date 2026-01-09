@@ -374,6 +374,20 @@ export async function apiCreateCourse(token: string, payload: CourseCreate): Pro
   );
 }
 
+export async function apiGetCoursePage(
+  token: string,
+  courseId: string
+): Promise<{ course: CoursePublic; assignments: AssignmentPublic[] }> {
+  const response = await fetch(`/api/courses/${courseId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    const { message } = await parseErrorDetail(response);
+    throw new ApiError(message, response.status);
+  }
+  return response.json();
+}
+
 export async function apiEnrollCourse(token: string, courseId: string): Promise<CourseEnrollmentPublic> {
   return apiFetch<CourseEnrollmentPublic>(`/courses/${courseId}/enroll`, { method: "POST" }, token);
 }
