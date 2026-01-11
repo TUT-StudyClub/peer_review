@@ -159,6 +159,7 @@ export default function TARequestsPage() {
   const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c])), [courses]);
   const requestCards = useMemo(() => {
     return requests.map((request) => {
+      const displayStatus: TAReviewRequestStatus = request.review_submitted ? "declined" : request.status;
       const assignment = assignmentById.get(request.assignment_id);
       const course = assignment?.course_id ? courseById.get(assignment.course_id) : undefined;
       const title = assignment?.title ?? `課題 ${shortId(request.assignment_id)}`;
@@ -167,6 +168,7 @@ export default function TARequestsPage() {
       const deadline = getDeadlineLabel(assignment?.due_at ?? null);
       return {
         request,
+        displayStatus,
         assignment,
         course,
         title,
@@ -180,7 +182,7 @@ export default function TARequestsPage() {
   const filteredCards = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
     return requestCards.filter((card) => {
-      if (filter !== "all" && card.request.status !== filter) return false;
+      if (filter !== "all" && card.displayStatus !== filter) return false;
       if (!keyword) return true;
       const haystack = [
         card.title,
@@ -194,17 +196,24 @@ export default function TARequestsPage() {
       return haystack.some((value) => value.includes(keyword));
     });
   }, [filter, requestCards, searchTerm]);
-  const offered = filteredCards.filter((card) => card.request.status === "offered");
-  const accepted = filteredCards.filter((card) => card.request.status === "accepted");
-  const declined = filteredCards.filter((card) => card.request.status === "declined");
+  const offered = filteredCards.filter((card) => card.displayStatus === "offered");
+  const accepted = filteredCards.filter((card) => card.displayStatus === "accepted");
+  const declined = filteredCards.filter((card) => card.displayStatus === "declined");
   const summary = useMemo(() => {
+    const byStatus = requestCards.reduce(
+      (acc, card) => {
+        acc[card.displayStatus] += 1;
+        return acc;
+      },
+      { offered: 0, accepted: 0, declined: 0 }
+    );
     return {
       total: requests.length,
-      offered: requests.filter((r) => r.status === "offered").length,
-      accepted: requests.filter((r) => r.status === "accepted").length,
-      declined: requests.filter((r) => r.status === "declined").length,
+      offered: byStatus.offered,
+      accepted: byStatus.accepted,
+      declined: byStatus.declined,
     };
-  }, [requests]);
+  }, [requestCards, requests.length]);
 
   if (!token) {
     return (
@@ -357,7 +366,7 @@ export default function TARequestsPage() {
                       ) : null}
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <StatusPill status={card.request.status} />
+                      <StatusPill status={card.displayStatus} />
                       {card.deadline.urgent ? (
                         <span className="rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-600">
                           優先度: 高
@@ -460,7 +469,7 @@ export default function TARequestsPage() {
                       ) : null}
                     </div>
                   </div>
-                  <StatusPill status={card.request.status} />
+                  <StatusPill status={card.displayStatus} />
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">依頼元: {card.teacherName}</div>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -492,7 +501,7 @@ export default function TARequestsPage() {
                       ) : null}
                     </div>
                   </div>
-                  <StatusPill status={card.request.status} />
+                  <StatusPill status={card.displayStatus} />
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">依頼元: {card.teacherName}</div>
                 <div className="mt-4 text-xs text-muted-foreground">完了した依頼です。</div>

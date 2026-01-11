@@ -41,6 +41,7 @@ export type TAReviewRequestPublic = {
   ta_id: string;
   status: TAReviewRequestStatus;
   review_assignment_id: string | null;
+  review_submitted: boolean;
   created_at: string;
   responded_at: string | null;
 };
