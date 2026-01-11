@@ -1,7 +1,7 @@
 import MyPageClient from "./MyPageClient";
 
 type MyPageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 const getFirstParam = (value: string | string[] | undefined): string | null => {
@@ -11,8 +11,9 @@ const getFirstParam = (value: string | string[] | undefined): string | null => {
   return value ?? null;
 };
 
-export default function MyPagePage({ searchParams }: MyPageProps) {
-  const initialCourseId = getFirstParam(searchParams?.course_id);
+export default async function MyPagePage({ searchParams }: MyPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const initialCourseId = getFirstParam(resolvedSearchParams?.course_id);
 
   return <MyPageClient initialCourseId={initialCourseId} />;
 }
