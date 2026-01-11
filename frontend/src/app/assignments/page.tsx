@@ -1,7 +1,7 @@
 import AssignmentsClient from "./AssignmentsClient";
 
 type AssignmentsPageProps = {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
 const getFirstParam = (value: string | string[] | undefined): string | null => {
@@ -11,9 +11,10 @@ const getFirstParam = (value: string | string[] | undefined): string | null => {
   return value ?? null;
 };
 
-export default function AssignmentsPage({ searchParams }: AssignmentsPageProps) {
-  const initialCourseId = getFirstParam(searchParams?.course_id);
-  const viewParam = getFirstParam(searchParams?.view);
+export default async function AssignmentsPage({ searchParams }: AssignmentsPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const initialCourseId = getFirstParam(resolvedSearchParams?.course_id);
+  const viewParam = getFirstParam(resolvedSearchParams?.view);
   const initialCourseView = viewParam === "create" ? "create" : "list";
 
   return <AssignmentsClient initialCourseId={initialCourseId} initialCourseView={initialCourseView} />;
