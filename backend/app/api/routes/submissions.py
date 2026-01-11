@@ -11,6 +11,7 @@ from fastapi import UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.assignment import Assignment
 from app.models.review import Review
@@ -25,6 +26,7 @@ from app.schemas.submission import TeacherGradeSubmit
 from app.services.ai import analyze_review_alignment
 from app.services.auth import get_current_user
 from app.services.auth import require_teacher
+from app.services.credits import calculate_review_credit_gain
 from app.services.pdf import PDFExtractionService
 from app.services.rubric import ensure_fixed_rubric
 from app.services.storage import build_download_response
@@ -200,6 +202,7 @@ def set_teacher_grade(
         if not (0 <= s.score <= criterion.max_score):
             raise HTTPException(status_code=400, detail="Rubric score out of range")
 
+    was_graded = submission.teacher_total_score is not None
     submission.teacher_total_score = payload.teacher_total_score
     submission.teacher_feedback = payload.teacher_feedback
 
@@ -213,14 +216,15 @@ def set_teacher_grade(
             )
         )
 
-    if payload.teacher_feedback and payload.teacher_feedback.strip():
-        reviews = (
-            db.query(Review)
-            .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
-            .filter(ReviewAssignment.submission_id == submission.id)
-            .all()
-        )
-        for review in reviews:
+    reviews = (
+        db.query(Review, ReviewAssignment, User)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .join(User, User.id == ReviewAssignment.reviewer_id)
+        .filter(ReviewAssignment.submission_id == submission.id)
+        .all()
+    )
+    for review, review_assignment, reviewer in reviews:
+        if payload.teacher_feedback and payload.teacher_feedback.strip():
             alignment = analyze_review_alignment(
                 teacher_review_text=payload.teacher_feedback,
                 student_review_text=review.comment,
@@ -231,6 +235,25 @@ def set_teacher_grade(
             else:
                 review.ai_comment_alignment_score = alignment.alignment_score
                 review.ai_comment_alignment_reason = alignment.alignment_reason
+
+        new_credit = calculate_review_credit_gain(
+            db,
+            review_assignment=review_assignment,
+            review=review,
+            reviewer=reviewer,
+        )
+        old_awarded = review.credit_awarded
+        if old_awarded is None:
+            if was_graded:
+                old_awarded = new_credit.added
+            else:
+                base = max(0.0, float(settings.review_credit_base))
+                multiplier = float(settings.ta_credit_multiplier if reviewer.is_ta else 1.0)
+                old_awarded = max(1, int(round(base * multiplier)))
+        delta = new_credit.added - old_awarded
+        if delta != 0:
+            reviewer.credits = max(0, reviewer.credits + delta)
+        review.credit_awarded = new_credit.added
 
     db.commit()
     db.refresh(submission)

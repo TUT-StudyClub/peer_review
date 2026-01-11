@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Calendar, ClipboardList, Search, Users } from "lucide-react";
+import { BookOpen, Calendar, ClipboardList, Users } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import {
@@ -114,7 +114,6 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
   const coursesRequestId = useRef(0);
-  const [courseQuery, setCourseQuery] = useState("");
   const [courseView, setCourseView] = useState<"list" | "create">(initialCourseView);
   const [courseAssignments, setCourseAssignments] = useState<AssignmentPublic[]>([]);
   const [courseAssignmentsLoading, setCourseAssignmentsLoading] = useState(false);
@@ -147,17 +146,7 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
   const courseErrorMessage = coursesError ?? courseAssignmentsError;
   const isCourseRefreshing = coursesLoading || courseAssignmentsLoading;
 
-  const filteredCourses = useMemo(() => {
-    const query = courseQuery.trim().toLowerCase();
-    if (!query) return courses;
-    return courses.filter((course) => {
-      const haystack = [course.title, course.description, course.teacher_name]
-        .filter((value): value is string => Boolean(value))
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [courseQuery, courses]);
+  const filteredCourses = courses;
 
   const assignmentStats = useMemo(() => {
     const counts = new Map<string, number>();
@@ -377,34 +366,6 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
     <div className="space-y-6">
       {showCourseSelection ? (
         <div className="space-y-6">
-          {courseView === "list" ? (
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    type="search"
-                    placeholder="授業を検索..."
-                    value={courseQuery}
-                    onChange={(e) => setCourseQuery(e.target.value)}
-                    disabled={!token}
-                    className="h-12 rounded-xl bg-slate-50 pl-10 text-sm"
-                  />
-                </div>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void loadCourses();
-                    if (token) void loadCourseAssignments();
-                  }}
-                  disabled={!token || isCourseRefreshing}
-                >
-                  {isCourseRefreshing ? "読み込み中..." : "更新"}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
           {courseErrorMessage ? (
             <Alert variant="destructive">
               <AlertTitle>エラー</AlertTitle>
