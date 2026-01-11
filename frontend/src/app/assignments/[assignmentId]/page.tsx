@@ -19,6 +19,7 @@ import {
   Star,
   Target,
   TrendingUp,
+  X,
   Users,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -67,7 +68,7 @@ import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -2218,21 +2219,49 @@ export default function AssignmentDetailPage() {
       ) : null}
 
       <Dialog open={reviewContributionOpen} onOpenChange={setReviewContributionOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>レビュー貢献の内訳</DialogTitle>
-          </DialogHeader>
-          {reviewContributionItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">表示できるレビューがありません。</p>
-          ) : (
-            <div className="space-y-4 text-sm">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span>レビュー数: {reviewContributionCount}</span>
-                <span>重み: 有用性 {reviewContributionWeights.helpfulness ?? "-"}</span>
-                <span>ルーブリック一致 {reviewContributionWeights.alignment ?? "-"}</span>
-                <span>AI品質 {reviewContributionWeights.quality ?? "-"}</span>
+        <DialogContent className="sm:max-w-3xl gap-0 overflow-hidden p-0 [&>button]:hidden">
+          <div className="bg-gradient-to-r from-blue-600 via-sky-600 to-cyan-500 px-6 py-5 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="text-lg font-semibold text-white">レビュー貢献の内訳</DialogTitle>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-blue-100">
+                  <span>レビュー数: {reviewContributionCount}</span>
+                  <span>
+                    有用性:{" "}
+                    {typeof reviewContributionWeights.helpfulness === "number"
+                      ? formatScore(reviewContributionWeights.helpfulness, 2)
+                      : "-"}
+                  </span>
+                  <span>
+                    ルーブリック一致:{" "}
+                    {typeof reviewContributionWeights.alignment === "number"
+                      ? formatScore(reviewContributionWeights.alignment, 2)
+                      : "-"}
+                  </span>
+                  <span>
+                    AI品質:{" "}
+                    {typeof reviewContributionWeights.quality === "number"
+                      ? formatScore(reviewContributionWeights.quality, 2)
+                      : "-"}
+                  </span>
+                </div>
               </div>
-              <div className="space-y-3">
+              <DialogClose asChild>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/30 bg-white/10 p-2 text-white transition hover:bg-white/20"
+                  aria-label="閉じる"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </DialogClose>
+            </div>
+          </div>
+          <div className="space-y-6 bg-slate-50 px-6 py-6">
+            {reviewContributionItems.length === 0 ? (
+              <p className="text-sm text-slate-500">表示できるレビューがありません。</p>
+            ) : (
+              <div className="space-y-6 text-sm">
                 {reviewContributionItems.map((item, index) => {
                   const metrics = item.metrics ?? {};
                   const helpfulness = metrics.helpfulness ?? {};
@@ -2244,67 +2273,174 @@ export default function AssignmentDetailPage() {
                     typeof item.duplicate_penalty === "number" ? Math.round(item.duplicate_penalty * 100) : null;
                   const similarityPenalty =
                     typeof item.similarity_penalty === "number" ? Math.round(item.similarity_penalty * 100) : null;
+                  const helpfulnessWeight =
+                    typeof helpfulness.weight === "number" ? Math.min(1, Math.max(0, helpfulness.weight)) : null;
+                  const alignmentWeight =
+                    typeof alignment.weight === "number" ? Math.min(1, Math.max(0, alignment.weight)) : null;
+                  const qualityWeight =
+                    typeof quality.weight === "number" ? Math.min(1, Math.max(0, quality.weight)) : null;
+                  const commentAlignmentNorm =
+                    typeof commentAlignment.norm === "number" ? Math.min(1, Math.max(0, commentAlignment.norm)) : null;
+                  const helpfulnessScoreDisplay =
+                    typeof helpfulness.raw === "number" ? `${formatScore(helpfulness.raw, 1)} 点` : "-";
+                  const alignmentScoreDisplay =
+                    typeof alignment.norm === "number" ? `${formatScore(alignment.norm * 5, 1)} 点` : "-";
+                  const qualityScoreDisplay =
+                    typeof quality.raw === "number" ? `${formatScore(quality.raw, 1)} 点` : "-";
+                  const commentAlignmentScoreDisplay =
+                    typeof commentAlignment.raw === "number"
+                      ? `${formatScore(commentAlignment.raw, 1)} 点`
+                      : typeof commentAlignment.norm === "number"
+                        ? `${formatScore(commentAlignment.norm * 5, 1)} 点`
+                        : "-";
                   return (
-                    <div key={`${item.review_id ?? index}`} className="rounded-xl border bg-white p-4 shadow-sm">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm font-semibold">レビュー {reviewId}</div>
-                        <div className="text-sm font-semibold">+{formatScore(item.points ?? 0, 2)} 点</div>
+                    <div key={`${item.review_id ?? index}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-xs font-semibold text-slate-600">評価メトリクス</div>
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              ※ レビュー文一致はクレジット付与の計算にのみ使用
+                            </div>
+                          </div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-sky-100 bg-sky-50 text-xs font-semibold text-sky-700">
+                            +{formatScore(item.points ?? 0, 2)}
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">有用性</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{helpfulnessScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: {helpfulness.raw ?? "-"}</div>
+                              <div>norm: {formatScore(helpfulness.norm ?? null, 2)}</div>
+                              <div>weight: {formatScore(helpfulness.weight ?? null, 2)}</div>
+                            </div>
+                            {helpfulnessWeight !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-sky-500"
+                                  style={{ width: `${Math.round(helpfulnessWeight * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">ルーブリック一致</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{alignmentScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: -</div>
+                              <div>norm: {formatScore(alignment.norm ?? null, 2)}</div>
+                              <div>weight: {formatScore(alignment.weight ?? null, 2)}</div>
+                            </div>
+                            {alignmentWeight !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-emerald-500"
+                                  style={{ width: `${Math.round(alignmentWeight * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">AI品質</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{qualityScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: {quality.raw ?? "-"}</div>
+                              <div>norm: {formatScore(quality.norm ?? null, 2)}</div>
+                              <div>weight: {formatScore(quality.weight ?? null, 2)}</div>
+                            </div>
+                            {qualityWeight !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-amber-500"
+                                  style={{ width: `${Math.round(qualityWeight * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">レビュー文一致（クレジット）</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{commentAlignmentScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: {commentAlignment.raw ?? "-"}</div>
+                              <div>norm: {formatScore(commentAlignment.norm ?? null, 2)}</div>
+                              <div>weight: -</div>
+                            </div>
+                            {commentAlignmentNorm !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-slate-500"
+                                  style={{ width: `${Math.round(commentAlignmentNorm * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
-                          <div className="font-semibold text-slate-700">有用性</div>
-                          <div className="mt-1 text-slate-600">
-                            raw: {helpfulness.raw ?? "-"} / norm: {formatScore(helpfulness.norm ?? null, 2)} / weight:{" "}
-                            {formatScore(helpfulness.weight ?? null, 2)}
+                      <div className="mt-4">
+                        <div className="text-xs font-semibold text-slate-600">ペナルティ</div>
+                        {item.toxic ? (
+                          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
+                            有害表現検知
                           </div>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
-                          <div className="font-semibold text-slate-700">ルーブリック一致</div>
-                          <div className="mt-1 text-slate-600">
-                            norm: {formatScore(alignment.norm ?? null, 2)} / weight:{" "}
-                            {formatScore(alignment.weight ?? null, 2)}
+                        ) : null}
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-700">重複ペナルティ</span>
+                              {duplicatePenalty === null ? (
+                                <span className="flex items-center gap-1 text-emerald-600">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  なし
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-amber-600">-{duplicatePenalty}%</span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
-                          <div className="font-semibold text-slate-700">AI品質</div>
-                          <div className="mt-1 text-slate-600">
-                            raw: {quality.raw ?? "-"} / norm: {formatScore(quality.norm ?? null, 2)} / weight:{" "}
-                            {formatScore(quality.weight ?? null, 2)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
-                          <div className="font-semibold text-slate-700">レビュー文一致</div>
-                          <div className="mt-1 text-slate-600">
-                            raw: {commentAlignment.raw ?? "-"} / norm: {formatScore(commentAlignment.norm ?? null, 2)}
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-700">類似ペナルティ</span>
+                              {similarityPenalty === null ? (
+                                <span className="flex items-center gap-1 text-emerald-600">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  なし
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-amber-600">-{similarityPenalty}%</span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                      {(duplicatePenalty !== null || similarityPenalty !== null || item.toxic) && (
-                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                          {item.toxic ? <span className="rounded-full bg-rose-100 px-2 py-1 text-rose-700">有害</span> : null}
-                          {duplicatePenalty !== null ? (
-                            <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">
-                              重複ペナルティ -{duplicatePenalty}%
-                            </span>
-                          ) : null}
-                          {similarityPenalty !== null ? (
-                            <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">
-                              類似ペナルティ -{similarityPenalty}%
-                            </span>
-                          ) : null}
-                        </div>
-                      )}
                     </div>
                   );
                 })}
               </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setReviewContributionOpen(false)}>
-              閉じる
-            </Button>
-          </DialogFooter>
+            )}
+            <DialogFooter className="border-t border-slate-200 pt-4">
+              <Button variant="outline" onClick={() => setReviewContributionOpen(false)} className="bg-white">
+                閉じる
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
