@@ -269,6 +269,11 @@ export default function AssignmentDetailPage() {
     }
     return map;
   }, [taRequests]);
+  const taRequestByUserId = useMemo(() => {
+    if (!taDialogSubmissionId) return new Map<string, TAReviewRequestPublic>();
+    const list = taRequestsBySubmission[taDialogSubmissionId] ?? [];
+    return new Map(list.map((request) => [request.ta_id, request]));
+  }, [taDialogSubmissionId, taRequestsBySubmission]);
   const studentById = useMemo(() => {
     return new Map(courseStudents.map((student) => [student.id, student]));
   }, [courseStudents]);
@@ -1282,9 +1287,6 @@ export default function AssignmentDetailPage() {
                   <DialogTitle>TA依頼</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    TA資格のある学生に依頼します。受諾されると、その学生がこの提出物をレビューできます。
-                  </p>
                   <Field label="TAを選択">
                     <Select
                       value={taSelectedUserId ?? undefined}
@@ -1302,11 +1304,27 @@ export default function AssignmentDetailPage() {
                             {taCandidatesLoading ? "読み込み中..." : "TA資格の学生がいません"}
                           </div>
                         ) : (
-                          taCandidates.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name} / {u.title} / ランク: {u.rank} / credits: {u.credits}
-                            </SelectItem>
-                          ))
+                          taCandidates.map((u) => {
+                            const existing = taRequestByUserId.get(u.id);
+                            const statusLabel = existing
+                              ? existing.review_submitted
+                                ? "レビュー済み"
+                                : existing.status === "offered"
+                                  ? "依頼中"
+                                  : existing.status === "accepted"
+                                    ? "受諾済み"
+                                    : "辞退済み"
+                              : null;
+                            const isDisabled = Boolean(
+                              existing && (existing.review_submitted || existing.status !== "declined")
+                            );
+                            return (
+                              <SelectItem key={u.id} value={u.id} disabled={isDisabled}>
+                                {u.name} / {u.title} / ランク: {u.rank} / credits: {u.credits}
+                                {statusLabel ? `（${statusLabel}）` : ""}
+                              </SelectItem>
+                            );
+                          })
                         )}
                       </SelectContent>
                     </Select>
