@@ -258,6 +258,7 @@ export default function AssignmentDetailPage() {
     if (totalRubricMax <= 0) return 0;
     return Math.round((teacherRubricTotal / totalRubricMax) * 100);
   }, [teacherRubricTotal, totalRubricMax]);
+  const rubricMetaById = useMemo(() => new Map(rubric.map((c) => [c.id, c])), [rubric]);
   const reviewContributionBreakdown = useMemo(() => {
     if (!grade?.breakdown || typeof grade.breakdown !== "object") return null;
     return grade.breakdown as {
@@ -1421,56 +1422,150 @@ export default function AssignmentDetailPage() {
                             <p className="text-xs text-muted-foreground">なし</p>
                           ) : (
                             <div className="space-y-3">
-                              {list.map((r) => (
-                                <div key={r.id} className="rounded-lg border p-3 space-y-2">
-                                  <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                      <div className="font-medium">Reviewer: {r.reviewer_alias}</div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {new Date(r.created_at).toLocaleString()}
+                              {list.map((r) => {
+                                const rubricScores = [...r.rubric_scores].sort((a, b) => {
+                                  const aOrder = rubricMetaById.get(a.criterion_id)?.order_index ?? 0;
+                                  const bOrder = rubricMetaById.get(b.criterion_id)?.order_index ?? 0;
+                                  return aOrder - bOrder;
+                                });
+                                const creditValue = r.credit_awarded ?? null;
+                                const creditClass =
+                                  creditValue && creditValue > 0
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-white text-slate-700";
+                                if (group !== "TA") {
+                                  return (
+                                    <div key={r.id} className="rounded-lg border p-3 space-y-2">
+                                      <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div>
+                                          <div className="font-medium">Reviewer: {r.reviewer_alias}</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {new Date(r.created_at).toLocaleString()}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          AI品質: {r.ai_quality_score ?? "-"}
+                                        </div>
                                       </div>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      AI品質: {r.ai_quality_score ?? "-"}
-                                    </div>
-                                  </div>
-                                  <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
-                                  <div className="space-y-1 rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
-                                    <div className="font-semibold">Rubric</div>
-                                    {r.rubric_scores.map((s) => (
-                                      <div key={s.criterion_id}>
-                                        {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
+                                      <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
+                                      <div className="space-y-1 rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
+                                        <div className="font-semibold">Rubric</div>
+                                        {r.rubric_scores.map((s) => (
+                                          <div key={s.criterion_id}>
+                                            {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
-                                  </div>
-                                  {r.meta_review ? (
-                                    <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
-                                      メタ評価: {r.meta_review.helpfulness}/5
-                                      {r.meta_review.comment ? ` / ${r.meta_review.comment}` : ""}
-                                    </div>
-                                  ) : null}
-                                  {r.ai_quality_reason ? (
-                                    <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                                      {r.ai_quality_reason}
-                                    </div>
-                                  ) : null}
-                                  {r.rubric_alignment_score !== null ||
-                                  r.ai_comment_alignment_score !== null ||
-                                  r.total_alignment_score !== null ||
-                                  r.credit_awarded !== null ||
-                                  r.ai_comment_alignment_reason ? (
-                                    <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
-                                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
-                                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
-                                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
-                                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
-                                      {r.ai_comment_alignment_reason ? (
-                                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                                      {r.meta_review ? (
+                                        <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                                          メタ評価: {r.meta_review.helpfulness}/5
+                                          {r.meta_review.comment ? ` / ${r.meta_review.comment}` : ""}
+                                        </div>
+                                      ) : null}
+                                      {r.ai_quality_reason ? (
+                                        <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                                          {r.ai_quality_reason}
+                                        </div>
+                                      ) : null}
+                                      {r.rubric_alignment_score !== null ||
+                                      r.ai_comment_alignment_score !== null ||
+                                      r.total_alignment_score !== null ||
+                                      r.credit_awarded !== null ||
+                                      r.ai_comment_alignment_reason ? (
+                                        <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
+                                          <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
+                                          <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
+                                          <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
+                                          <div>付与credits: {r.credit_awarded ?? "-"}</div>
+                                          {r.ai_comment_alignment_reason ? (
+                                            <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                                          ) : null}
+                                        </div>
                                       ) : null}
                                     </div>
-                                  ) : null}
-                                </div>
-                              ))}
+                                  );
+                                }
+                                return (
+                                  <div key={r.id} className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold">Reviewer: {r.reviewer_alias}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {new Date(r.created_at).toLocaleString()}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                                        AI品質: {r.ai_quality_score ?? "-"}
+                                      </div>
+                                    </div>
+                                    <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
+                                    <div className="rounded-lg bg-slate-50 p-3 space-y-3">
+                                      <div className="text-xs font-semibold text-slate-700">Rubric</div>
+                                      {rubricScores.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground">ルーブリック未入力</div>
+                                      ) : (
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          {rubricScores.map((s) => {
+                                            const meta = rubricMetaById.get(s.criterion_id);
+                                            const label = meta?.name ?? shortId(s.criterion_id);
+                                            const maxScore = meta?.max_score ?? 5;
+                                            const percent =
+                                              maxScore > 0 ? Math.min(100, Math.max(0, (s.score / maxScore) * 100)) : 0;
+                                            return (
+                                              <div key={s.criterion_id} className="space-y-1">
+                                                <div className="flex items-center justify-between text-xs text-slate-600">
+                                                  <span>{label}</span>
+                                                  <span className="font-semibold text-slate-800">{s.score}</span>
+                                                </div>
+                                                <div className="h-2 rounded-full bg-white">
+                                                  <div
+                                                    className="h-2 rounded-full bg-blue-600"
+                                                    style={{ width: `${percent}%` }}
+                                                  />
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {r.ai_quality_reason ? (
+                                      <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
+                                        {r.ai_quality_reason}
+                                      </div>
+                                    ) : null}
+                                    <div className="grid gap-2 sm:grid-cols-4">
+                                      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div>ルーブリック一致</div>
+                                        <div className="mt-1 text-base font-semibold text-slate-900">
+                                          {r.rubric_alignment_score ?? "-"}
+                                          {r.rubric_alignment_score !== null ? "/5" : ""}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div>レビュー一致</div>
+                                        <div className="mt-1 text-base font-semibold text-slate-900">
+                                          {r.ai_comment_alignment_score ?? "-"}
+                                          {r.ai_comment_alignment_score !== null ? "/5" : ""}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div>総合評価</div>
+                                        <div className="mt-1 text-base font-semibold text-slate-900">
+                                          {r.total_alignment_score ?? "-"}
+                                          {r.total_alignment_score !== null ? "/5" : ""}
+                                        </div>
+                                      </div>
+                                      <div className={`rounded-lg border p-3 text-xs ${creditClass}`}>
+                                        <div>付与credits</div>
+                                        <div className="mt-1 text-base font-semibold">
+                                          {creditValue !== null ? creditValue : "-"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>

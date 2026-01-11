@@ -650,6 +650,7 @@ dependencies = [
     { name = "email-validator" },
     { name = "fastapi" },
     { name = "httpx" },
+    { name = "jose" },
     { name = "pdfplumber" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
@@ -672,6 +673,7 @@ requires-dist = [
     { name = "email-validator", specifier = ">=2.2.0" },
     { name = "fastapi", specifier = ">=0.115.6" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jose", specifier = ">=1.0.0" },
     { name = "pdfplumber", specifier = ">=0.11.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2.3" },
     { name = "pydantic-settings", specifier = ">=2.6.1" },
@@ -820,55 +822,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fa/d0/c20f4e668e89494972e551c31be2a0016e3f50d552d7ae9ac07086407599/psycopg_binary-3.3.2-cp314-cp314-musllinux_1_2_riscv64.whl", hash = "sha256:1586e220be05547c77afc326741dd41cc7fba38a81f9931f616ae98865439678", size = 3928660, upload-time = "2025-12-06T17:34:46.757Z" },
     { url = "https://files.pythonhosted.org/packages/0f/e1/99746c171de22539fd5eb1c9ca21dc805b54cfae502d7451d237d1dbc349/psycopg_binary-3.3.2-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:458696a5fa5dad5b6fb5d5862c22454434ce4fe1cf66ca6c0de5f904cbc1ae3e", size = 4239169, upload-time = "2025-12-06T17:34:49.751Z" },
     { url = "https://files.pythonhosted.org/packages/72/f7/212343c1c9cfac35fd943c527af85e9091d633176e2a407a0797856ff7b9/psycopg_binary-3.3.2-cp314-cp314-win_amd64.whl", hash = "sha256:04bb2de4ba69d6f8395b446ede795e8884c040ec71d01dd07ac2b2d18d4153d1", size = 3642122, upload-time = "2025-12-06T17:34:52.506Z" },
-]
-
-[[package]]
-name = "pure-review"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "alembic" },
-    { name = "bcrypt" },
-    { name = "boto3" },
-    { name = "email-validator" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "jose" },
-    { name = "pdfplumber" },
-    { name = "psycopg", extra = ["binary"] },
-    { name = "pydantic-settings" },
-    { name = "pytest" },
-    { name = "python-dotenv" },
-    { name = "python-jose", extra = ["cryptography"] },
-    { name = "python-multipart" },
-    { name = "reportlab" },
-    { name = "ruff" },
-    { name = "sqlalchemy" },
-    { name = "ty" },
-    { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.14.0" },
-    { name = "bcrypt", specifier = ">=4.2.0" },
-    { name = "boto3", specifier = ">=1.34.0" },
-    { name = "email-validator", specifier = ">=2.2.0" },
-    { name = "fastapi", specifier = ">=0.115.6" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "jose", specifier = ">=1.0.0" },
-    { name = "pdfplumber", specifier = ">=0.11.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2.3" },
-    { name = "pydantic-settings", specifier = ">=2.6.1" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "python-dotenv", specifier = ">=1.0.1" },
-    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.3.0" },
-    { name = "python-multipart", specifier = ">=0.0.17" },
-    { name = "reportlab", specifier = ">=4.4.6" },
-    { name = "ruff", specifier = ">=0.9.0" },
-    { name = "sqlalchemy", specifier = ">=2.0.36" },
-    { name = "ty", specifier = ">=0.0.9" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.1" },
 ]
 
 [[package]]

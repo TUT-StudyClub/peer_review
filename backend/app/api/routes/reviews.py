@@ -287,6 +287,7 @@ def submit_review(
         review=review,
         reviewer=current_user,
     )
+    review.credit_awarded = credit.added
     current_user.credits += credit.added
 
     db.commit()
