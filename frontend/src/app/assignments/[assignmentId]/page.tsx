@@ -84,12 +84,6 @@ const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
 
 type ScoreInput = number | "";
 
-const parseScoreInput = (value: string): ScoreInput => {
-  if (value === "") return "";
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? "" : parsed;
-};
-
 function shortId(id: string) {
   return id.slice(0, 8);
 }
@@ -219,6 +213,7 @@ export default function AssignmentDetailPage() {
 
   const [grade, setGrade] = useState<GradeMe | null>(null);
   const [gradeLoading, setGradeLoading] = useState(false);
+  const [reviewContributionOpen, setReviewContributionOpen] = useState(false);
 
   const [skill, setSkill] = useState<ReviewerSkill | null>(null);
   const [skillLoading, setSkillLoading] = useState(false);
@@ -233,7 +228,6 @@ export default function AssignmentDetailPage() {
   const [statusFilter, setStatusFilter] = useState<"all" | "waiting" | "reviewing" | "graded">("all");
   const [bulkDownloading, setBulkDownloading] = useState(false);
   const [gradeTargetId, setGradeTargetId] = useState<string | null>(null);
-  const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
   const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, ScoreInput>>({});
   const [teacherReviewList, setTeacherReviewList] = useState<TeacherReviewPublic[]>([]);
@@ -254,6 +248,37 @@ export default function AssignmentDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
+  const teacherRubricTotal = useMemo(() => {
+    return rubric.reduce((sum, c) => {
+      const value = teacherRubricScores[c.id];
+      return sum + (typeof value === "number" ? value : 0);
+    }, 0);
+  }, [rubric, teacherRubricScores]);
+  const derivedTeacherScore = useMemo(() => {
+    if (totalRubricMax <= 0) return 0;
+    return Math.round((teacherRubricTotal / totalRubricMax) * 100);
+  }, [teacherRubricTotal, totalRubricMax]);
+  const reviewContributionBreakdown = useMemo(() => {
+    if (!grade?.breakdown || typeof grade.breakdown !== "object") return null;
+    return grade.breakdown as {
+      reviews_count?: number;
+      review_points_base_weights?: Record<string, number>;
+      per_review?: Array<{
+        review_id?: string;
+        points?: number;
+        score_norm?: number | null;
+        toxic?: boolean;
+        duplicate_penalty?: number;
+        similarity_penalty?: number;
+        metrics?: {
+          helpfulness?: { raw?: number | null; norm?: number | null; weight?: number | null };
+          alignment?: { norm?: number | null; weight?: number | null };
+          quality?: { raw?: number | null; norm?: number | null; weight?: number | null };
+          comment_alignment?: { raw?: number | null; norm?: number | null };
+        };
+      }>;
+    };
+  }, [grade?.breakdown]);
   const rubricNameById = useMemo(() => new Map(rubric.map((c) => [c.id, c.name])), [rubric]);
   const backHref =
     user?.role === "student"
@@ -301,6 +326,11 @@ export default function AssignmentDetailPage() {
   const reviewFileName = reviewTask
     ? `submission-${shortId(reviewTask.submission_id)}.${reviewTask.file_type === "pdf" ? "pdf" : "md"}`
     : "";
+  const reviewContributionItems = reviewContributionBreakdown?.per_review ?? [];
+  const reviewContributionCount =
+    reviewContributionBreakdown?.reviews_count ?? reviewContributionItems.length;
+  const reviewContributionWeights =
+    (reviewContributionBreakdown?.review_points_base_weights ?? {}) as Record<string, number>;
   const reviewCharCount = reviewComment.trim().length;
   const submissionCards = useMemo(() => {
     return teacherSubmissions.map((submission) => {
@@ -752,7 +782,6 @@ export default function AssignmentDetailPage() {
   const openTeacherGrade = (submissionId: string) => {
     setGradeTargetId(submissionId);
     setTeacherFeedback("");
-    setTeacherTotalScore(80);
     const init: Record<string, ScoreInput> = {};
     for (const c of rubric) init[c.id] = "";
     setTeacherRubricScores(init);
@@ -763,7 +792,7 @@ export default function AssignmentDetailPage() {
     setNotice(null);
     try {
       await apiTeacherGradeSubmission(token, gradeTargetId, {
-        teacher_total_score: teacherTotalScore,
+        teacher_total_score: derivedTeacherScore,
         teacher_feedback: teacherFeedback || null,
         rubric_scores: rubric.map((c) => ({ criterion_id: c.id, score: Number(teacherRubricScores[c.id] ?? 0) })),
       });
@@ -1209,57 +1238,56 @@ export default function AssignmentDetailPage() {
             }}
           >
             {gradeTargetId ? (
-              <DialogContent className="sm:max-w-2xl">
+              <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                   <DialogTitle>採点: {shortId(gradeTargetId)}</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="teacher_total_score（0-100推奨）">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={teacherTotalScore}
-                      onChange={(e) => setTeacherTotalScore(Number(e.target.value))}
+                <div className="space-y-4">
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="text-base font-semibold">総合点</div>
+                    <div className="mt-3 flex items-baseline gap-2">
+                      <div className="text-3xl font-semibold">{derivedTeacherScore}</div>
+                      <div className="text-sm text-muted-foreground">/ 100</div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      ルーブリック合計: {teacherRubricTotal}/{totalRubricMax || 0}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="text-base font-semibold">評価項目</div>
+                    <div className="mt-4 space-y-4">
+                      {rubric.map((c) => (
+                        <div key={c.id} className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold">
+                            {c.name}
+                            <span className="text-xs text-muted-foreground">（max {c.max_score}）</span>
+                          </div>
+                          {c.description ? <div className="text-xs text-muted-foreground">{c.description}</div> : null}
+                          <StarRatingInput
+                            value={teacherRubricScores[c.id] ?? ""}
+                            max={c.max_score}
+                            onChange={(value) => setTeacherRubricScores((prev) => ({ ...prev, [c.id]: value }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-base font-semibold">フィードバック</div>
+                      <div className="text-xs text-muted-foreground">{teacherFeedback.trim().length} 文字</div>
+                    </div>
+                    <Textarea
+                      value={teacherFeedback}
+                      onChange={(e) => setTeacherFeedback(e.target.value)}
+                      rows={5}
+                      placeholder="受講者へのフィードバックを記入してください（任意）"
+                      className="mt-3 min-h-[160px]"
                     />
-                  </Field>
-                  <Field label="自動計算（ルーブリック合計を0-100へ換算）">
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => {
-                        const total = rubric.reduce((sum, c) => sum + Number(teacherRubricScores[c.id] ?? 0), 0);
-                        const score = totalRubricMax > 0 ? Math.round((total / totalRubricMax) * 100) : 0;
-                        setTeacherTotalScore(score);
-                      }}
-                    >
-                      ルーブリックから計算
-                    </Button>
-                  </Field>
-                </div>
-
-                <Field label="teacher_feedback（任意）">
-                  <Textarea value={teacherFeedback} onChange={(e) => setTeacherFeedback(e.target.value)} rows={3} />
-                </Field>
-
-                <div className="space-y-3">
-                  {rubric.map((c) => (
-                    <Field key={c.id} label={`${c.name}（max ${c.max_score}）`}>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={c.max_score}
-                        value={teacherRubricScores[c.id] ?? ""}
-                        onChange={(e) =>
-                          setTeacherRubricScores((prev) => ({
-                            ...prev,
-                            [c.id]: parseScoreInput(e.target.value),
-                          }))
-                        }
-                      />
-                    </Field>
-                  ))}
+                  </div>
                 </div>
 
                 <DialogFooter>
@@ -2053,7 +2081,13 @@ export default function AssignmentDetailPage() {
                       確定
                     </span>
                   </div>
-                  <Button variant="ghost" size="sm" className="mt-3 px-0 text-xs text-blue-600">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 px-0 text-xs text-blue-600"
+                    onClick={() => setReviewContributionOpen(true)}
+                    disabled={!reviewContributionBreakdown?.per_review?.length}
+                  >
                     詳細を見る
                   </Button>
                 </div>
@@ -2087,6 +2121,97 @@ export default function AssignmentDetailPage() {
           )}
         </SectionCard>
       ) : null}
+
+      <Dialog open={reviewContributionOpen} onOpenChange={setReviewContributionOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>レビュー貢献の内訳</DialogTitle>
+          </DialogHeader>
+          {reviewContributionItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">表示できるレビューがありません。</p>
+          ) : (
+            <div className="space-y-4 text-sm">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span>レビュー数: {reviewContributionCount}</span>
+                <span>重み: 有用性 {reviewContributionWeights.helpfulness ?? "-"}</span>
+                <span>ルーブリック一致 {reviewContributionWeights.alignment ?? "-"}</span>
+                <span>AI品質 {reviewContributionWeights.quality ?? "-"}</span>
+              </div>
+              <div className="space-y-3">
+                {reviewContributionItems.map((item, index) => {
+                  const metrics = item.metrics ?? {};
+                  const helpfulness = metrics.helpfulness ?? {};
+                  const alignment = metrics.alignment ?? {};
+                  const quality = metrics.quality ?? {};
+                  const commentAlignment = metrics.comment_alignment ?? {};
+                  const reviewId = item.review_id ? shortId(item.review_id) : `#${index + 1}`;
+                  const duplicatePenalty =
+                    typeof item.duplicate_penalty === "number" ? Math.round(item.duplicate_penalty * 100) : null;
+                  const similarityPenalty =
+                    typeof item.similarity_penalty === "number" ? Math.round(item.similarity_penalty * 100) : null;
+                  return (
+                    <div key={`${item.review_id ?? index}`} className="rounded-xl border bg-white p-4 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm font-semibold">レビュー {reviewId}</div>
+                        <div className="text-sm font-semibold">+{formatScore(item.points ?? 0, 2)} 点</div>
+                      </div>
+                      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
+                          <div className="font-semibold text-slate-700">有用性</div>
+                          <div className="mt-1 text-slate-600">
+                            raw: {helpfulness.raw ?? "-"} / norm: {formatScore(helpfulness.norm ?? null, 2)} / weight:{" "}
+                            {formatScore(helpfulness.weight ?? null, 2)}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
+                          <div className="font-semibold text-slate-700">ルーブリック一致</div>
+                          <div className="mt-1 text-slate-600">
+                            norm: {formatScore(alignment.norm ?? null, 2)} / weight:{" "}
+                            {formatScore(alignment.weight ?? null, 2)}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
+                          <div className="font-semibold text-slate-700">AI品質</div>
+                          <div className="mt-1 text-slate-600">
+                            raw: {quality.raw ?? "-"} / norm: {formatScore(quality.norm ?? null, 2)} / weight:{" "}
+                            {formatScore(quality.weight ?? null, 2)}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-slate-50 p-3 text-xs">
+                          <div className="font-semibold text-slate-700">レビュー文一致</div>
+                          <div className="mt-1 text-slate-600">
+                            raw: {commentAlignment.raw ?? "-"} / norm: {formatScore(commentAlignment.norm ?? null, 2)}
+                          </div>
+                        </div>
+                      </div>
+                      {(duplicatePenalty !== null || similarityPenalty !== null || item.toxic) && (
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          {item.toxic ? <span className="rounded-full bg-rose-100 px-2 py-1 text-rose-700">有害</span> : null}
+                          {duplicatePenalty !== null ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">
+                              重複ペナルティ -{duplicatePenalty}%
+                            </span>
+                          ) : null}
+                          {similarityPenalty !== null ? (
+                            <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-700">
+                              類似ペナルティ -{similarityPenalty}%
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewContributionOpen(false)}>
+              閉じる
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {user ? null : (
         <SectionCard title="ログインが必要な操作">
