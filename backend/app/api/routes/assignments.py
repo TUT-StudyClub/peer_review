@@ -104,7 +104,10 @@ def list_rubric_criteria(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    return ensure_fixed_rubric(db, assignment_id)
+    rubric = ensure_fixed_rubric(db, assignment_id)
+    # Persist auto-created rubric criteria so IDs remain stable across requests.
+    db.commit()
+    return rubric
 
 
 @router.get("/{assignment_id}/submissions", response_model=list[SubmissionTeacherPublic])

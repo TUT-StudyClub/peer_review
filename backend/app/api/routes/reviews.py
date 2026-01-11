@@ -88,6 +88,8 @@ def next_review_task(
         raise HTTPException(status_code=404, detail="Submission not found")
 
     rubric = ensure_fixed_rubric(db, assignment_id)
+    # Persist auto-created rubric criteria so IDs remain stable across requests.
+    db.commit()
     rubric_public = [RubricCriterionPublic.model_validate(item) for item in rubric]
     author_alias = alias_for_user(
         user_id=submission.author_id,
