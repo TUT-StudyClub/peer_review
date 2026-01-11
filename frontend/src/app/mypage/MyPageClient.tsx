@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiEnrollCourse, apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
+import { apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
 import type { AssignmentPublic, CoursePublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
@@ -30,21 +30,14 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(initialCourseId);
-  const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
-
   const [refreshing, setRefreshing] = useState(false);
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
-  const availableCourses = useMemo(() => courses.filter((course) => !course.is_enrolled), [courses]);
-  const selectedCourse = useMemo(
-    () => enrolledCourses.find((course) => course.id === selectedCourseId) ?? null,
-    [enrolledCourses, selectedCourseId]
-  );
+  const courseById = useMemo(() => new Map(courses.map((course) => [course.id, course])), [courses]);
 
   const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
-
   const loadSkill = useCallback(async () => {
     if (!token) return;
     setSkillLoading(true);
@@ -73,34 +66,11 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     }
   }, [token]);
 
-  const enrollCourse = useCallback(
-    async (courseId: string) => {
-      if (!token) return;
-      setEnrollingCourseId(courseId);
-      setCoursesError(null);
-      try {
-        await apiEnrollCourse(token, courseId);
-        setCourses((prev) =>
-          prev.map((course) =>
-            course.id === courseId ? { ...course, is_enrolled: true } : course
-          )
-        );
-        setSelectedCourseId(courseId);
-        router.push(`/mypage?course_id=${courseId}`);
-      } catch (err) {
-        setCoursesError(formatApiError(err));
-      } finally {
-        setEnrollingCourseId(null);
-      }
-    },
-    [router, token]
-  );
-
-  const loadAssignments = useCallback(async (courseId: string) => {
+  const loadAssignments = useCallback(async () => {
     setAssignmentsLoading(true);
     setAssignmentsError(null);
     try {
-      const list = await apiListAssignments(courseId);
+      const list = await apiListAssignments();
       setAssignments(list);
     } catch (err) {
       setAssignmentsError(formatApiError(err));
@@ -121,19 +91,19 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     if (!token) return;
     setRefreshing(true);
     try {
-      const tasks = [refreshMe(), loadSkill(), loadCourses()];
-      if (selectedCourseId) tasks.push(loadAssignments(selectedCourseId));
+      const tasks = [refreshMe(), loadSkill(), loadCourses(), loadAssignments()];
       await Promise.all(tasks);
     } finally {
       setRefreshing(false);
     }
-  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments, selectedCourseId]);
+  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments]);
 
   useEffect(() => {
     if (!token || user?.role !== "student") return;
     void loadSkill();
     void loadCourses();
-  }, [loadSkill, loadCourses, token, user?.role]);
+    void loadAssignments();
+  }, [loadSkill, loadCourses, loadAssignments, token, user?.role]);
 
   useEffect(() => {
     setSelectedCourseId(initialCourseId);
@@ -142,7 +112,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   useEffect(() => {
     if (!enrolledCourses.length) {
       setSelectedCourseId(null);
-      setAssignments([]);
       return;
     }
     if (selectedCourseId && enrolledCourses.some((course) => course.id === selectedCourseId)) {
@@ -151,15 +120,85 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     setSelectedCourseId(enrolledCourses[0].id);
   }, [enrolledCourses, selectedCourseId]);
 
-  useEffect(() => {
-    if (!selectedCourseId) {
-      setAssignments([]);
-      return;
-    }
-    void loadAssignments(selectedCourseId);
-  }, [loadAssignments, selectedCourseId]);
+  const timelineItems = useMemo(() => {
+    if (!enrolledCourses.length) return [];
+    const enrolledIds = new Set(enrolledCourses.map((course) => course.id));
+    const now = Date.now();
+    const dayMs = 1000 * 60 * 60 * 24;
 
-  const formatSkill = (value: number) => (value > 0 ? value.toFixed(2) : "-");
+    const items = assignments.flatMap((assignment) => {
+      if (!assignment.course_id || !enrolledIds.has(assignment.course_id) || !assignment.due_at) {
+        return [];
+      }
+      const dueAt = new Date(assignment.due_at);
+      const createdAt = new Date(assignment.created_at);
+      if (Number.isNaN(dueAt.getTime())) return [];
+      if (Number.isNaN(createdAt.getTime())) return [];
+
+      const diffMs = dueAt.getTime() - now;
+      const daysLeft = Math.ceil(diffMs / dayMs);
+      let statusLabel = "";
+      let tone: "overdue" | "soon" | "normal" = "normal";
+
+      if (diffMs < 0) {
+        statusLabel = "期限切れ";
+        tone = "overdue";
+      } else if (diffMs <= dayMs * 3) {
+        statusLabel = diffMs <= dayMs ? "24時間以内" : `あと${daysLeft}日`;
+        tone = "soon";
+      } else {
+        statusLabel = `あと${daysLeft}日`;
+      }
+
+      const startMs = Math.min(createdAt.getTime(), dueAt.getTime());
+      const endMs = Math.max(createdAt.getTime(), dueAt.getTime());
+
+      return [
+        {
+          id: assignment.id,
+          title: assignment.title,
+          courseTitle: courseById.get(assignment.course_id)?.title ?? "授業未設定",
+          createdAt,
+          dueAt,
+          startAt: new Date(startMs),
+          endAt: new Date(endMs),
+          statusLabel,
+          tone,
+        },
+      ];
+    });
+
+    return items.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+  }, [assignments, courseById, enrolledCourses]);
+
+  const timelineRange = useMemo(() => {
+    if (!timelineItems.length) return null;
+    const startMs = Math.min(...timelineItems.map((item) => item.startAt.getTime()));
+    const endMs = Math.max(...timelineItems.map((item) => item.endAt.getTime()), Date.now());
+    const rangeMs = Math.max(endMs - startMs, 1000 * 60 * 60 * 24);
+    return { startMs, endMs, rangeMs };
+  }, [timelineItems]);
+
+  const timelineTicks = useMemo(() => {
+    if (!timelineRange) return [];
+    const steps = 4;
+    return Array.from({ length: steps + 1 }, (_, index) => {
+      const ratio = index / steps;
+      const tickDate = new Date(timelineRange.startMs + timelineRange.rangeMs * ratio);
+      return {
+        label: tickDate.toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }),
+        percent: ratio * 100,
+      };
+    });
+  }, [timelineRange]);
+
+  const todayPercent = useMemo(() => {
+    if (!timelineRange) return null;
+    const percent = ((Date.now() - timelineRange.startMs) / timelineRange.rangeMs) * 100;
+    return Math.min(100, Math.max(0, percent));
+  }, [timelineRange]);
+
+  const formatSkill = (value: number) => (value > 0 ? value.toFixed(1) : "-");
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -207,7 +246,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">学生マイページ</h1>
-          <p className="text-sm text-muted-foreground">学習状況とレビュアースキルの確認</p>
         </div>
         <Button variant="outline" onClick={() => void refreshAll()} disabled={!token || refreshing}>
           {refreshing ? "更新中..." : "まとめて更新"}
@@ -247,7 +285,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>レビュアースキル（総合 / teacher比較）</CardTitle>
+          <CardTitle>レビュアースキル</CardTitle>
           <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
             {skillLoading ? "読み込み中..." : "更新"}
           </Button>
@@ -264,17 +302,49 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           ) : skillLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key}>
-                    {axis.label}: {formatSkill(skill[axis.key])}
-                  </div>
-                ))}
-                <div>総合: {formatSkill(skill.overall)}</div>
-              </div>
-              <div className="rounded-lg border bg-background p-3">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-6">
                 <RadarSkillChart skill={skill} />
+              </div>
+              <div className="flex flex-col justify-center space-y-6">
+                <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5">
+                  <div className="text-sm font-medium text-slate-500">総合スコア</div>
+                  <div className="mt-3 flex items-baseline gap-2">
+                    <span className="text-4xl font-semibold text-blue-600">
+                      {formatSkill(skill.overall)}
+                    </span>
+                    <span className="text-sm text-slate-400">/ 5.0</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {REVIEWER_SKILL_AXES.map((axis) => {
+                    const value = skill[axis.key];
+                    const percent = Math.min(100, Math.max(0, (value / 5) * 100));
+                    return (
+                      <div key={axis.key} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+                          <span>{axis.label}</span>
+                          <span className="text-blue-600">{formatSkill(value)}</span>
+                        </div>
+                        <div
+                          className="h-2 rounded-full bg-slate-100"
+                          role="progressbar"
+                          aria-label={`${axis.label} スコア`}
+                          aria-valuenow={value}
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                        >
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
               </div>
             </div>
           ) : (
@@ -301,19 +371,18 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           ) : null}
           {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
           {!coursesLoading && enrolledCourses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
+              <Button asChild variant="outline">
+                <Link href="/assignments">授業一覧へ</Link>
+              </Button>
+            </div>
           ) : null}
           <ul className="space-y-2">
             {enrolledCourses.map((course) => {
-              const isSelected = course.id === selectedCourseId;
               return (
                 <li key={course.id}>
-                  <div
-                    className={[
-                      "rounded-lg border border-border p-4 transition",
-                      isSelected ? "border-slate-900 bg-slate-50" : "hover:bg-accent",
-                    ].join(" ")}
-                  >
+                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{course.title}</div>
@@ -329,9 +398,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs text-muted-foreground">この授業の課題一覧ページへ移動します</div>
                       <Button
-                        variant={isSelected ? "outline" : "default"}
                         onClick={() => selectCourse(course.id)}
                       >
                         課題一覧へ
@@ -346,52 +413,9 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>授業一覧（受講登録）</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!coursesLoading && availableCourses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">受講可能な授業がありません。</p>
-          ) : null}
-          <ul className="space-y-2">
-            {availableCourses.map((course) => (
-              <li key={course.id}>
-                <div className="rounded-lg border border-border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{course.title}</div>
-                      {course.description ? (
-                        <div className="mt-1 text-sm text-muted-foreground">{course.description}</div>
-                      ) : null}
-                      {course.teacher_name ? (
-                        <div className="mt-2 text-xs text-muted-foreground">teacher: {course.teacher_name}</div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => enrollCourse(course.id)}
-                        disabled={enrollingCourseId === course.id}
-                      >
-                        {enrollingCourseId === course.id ? "登録中..." : "受講する"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>課題一覧{selectedCourse ? ` / ${selectedCourse.title}` : ""}</CardTitle>
-          <Button
-            variant="outline"
-            onClick={() => selectedCourseId && loadAssignments(selectedCourseId)}
-            disabled={assignmentsLoading || !selectedCourseId}
-          >
+          <CardTitle>提出期限タイムライン</CardTitle>
+          <Button variant="outline" onClick={() => void loadAssignments()} disabled={assignmentsLoading}>
             {assignmentsLoading ? "読み込み中..." : "更新"}
           </Button>
         </CardHeader>
@@ -404,37 +428,128 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {!selectedCourseId ? (
-            <p className="text-sm text-muted-foreground">授業を選択してください。</p>
-          ) : null}
           {assignmentsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!assignmentsLoading && selectedCourseId && assignments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">この授業にはまだ課題がありません。</p>
+          {!assignmentsLoading && timelineItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">提出期限が設定された課題がありません。</p>
           ) : null}
-          <ul className="space-y-2">
-            {assignments.map((assignment) => (
-              <li key={assignment.id}>
-                <Link href={`/assignments/${assignment.id}`} className="block">
-                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{assignment.title}</div>
-                        {assignment.description ? (
-                          <div className="mt-1 text-sm text-muted-foreground">{assignment.description}</div>
-                        ) : null}
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <div>reviews/submission: {assignment.target_reviews_per_submission}</div>
-                        <div>{new Date(assignment.created_at).toLocaleString()}</div>
-                      </div>
+          {timelineItems.length ? (
+            <div className="space-y-4">
+              {timelineRange ? (
+                <div className="hidden sm:block">
+                  <div className="grid grid-cols-[minmax(0,220px)_minmax(0,1fr)] items-center gap-3 text-xs text-muted-foreground">
+                    <div />
+                    <div className="relative h-6">
+                      {timelineTicks.map((tick) => (
+                        <span
+                          key={tick.percent}
+                          className="absolute -translate-x-1/2 text-[11px]"
+                          style={{ left: `${tick.percent}%` }}
+                        >
+                          {tick.label}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  <div className="grid grid-cols-[minmax(0,220px)_minmax(0,1fr)] gap-3">
+                    <div />
+                    <div className="relative h-2 rounded-full bg-slate-100">
+                      {timelineTicks.map((tick) => (
+                        <span
+                          key={`tick-${tick.percent}`}
+                          className="absolute -top-1 h-4 w-px bg-slate-200"
+                          style={{ left: `${tick.percent}%` }}
+                          aria-hidden
+                        />
+                      ))}
+                      {todayPercent !== null ? (
+                        <span
+                          className="absolute -top-1 h-4 w-px bg-sky-400/50"
+                          style={{ left: `${todayPercent}%` }}
+                          aria-hidden
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <ol className="space-y-3">
+                {timelineItems.map((item) => {
+                  const badgeClassName =
+                    item.tone === "overdue"
+                      ? "bg-rose-100 text-rose-700"
+                      : item.tone === "soon"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-emerald-100 text-emerald-700";
+                  const barClassName =
+                    item.tone === "overdue"
+                      ? "bg-rose-500"
+                      : item.tone === "soon"
+                      ? "bg-amber-500"
+                      : "bg-emerald-500";
+                  const range = timelineRange;
+                  const startPercent = range
+                    ? Math.min(
+                        100,
+                        Math.max(0, ((item.startAt.getTime() - range.startMs) / range.rangeMs) * 100)
+                      )
+                    : 0;
+                  const endPercent = range
+                    ? Math.min(
+                        100,
+                        Math.max(0, ((item.endAt.getTime() - range.startMs) / range.rangeMs) * 100)
+                      )
+                    : 0;
+                  const minWidth = 2;
+                  const rawWidth = endPercent - startPercent;
+                  const widthPercent = Math.min(Math.max(rawWidth, minWidth), 100 - startPercent);
+                  const markerLeft = Math.min(startPercent + widthPercent, 100);
+
+                  return (
+                    <li key={item.id} className="grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)] sm:items-center">
+                      <div className="space-y-1">
+                        <Link
+                          href={`/assignments/${item.id}`}
+                          className="text-sm font-medium text-slate-900 hover:underline"
+                        >
+                          {item.title}
+                        </Link>
+                        <div className="text-xs text-slate-500">{item.courseTitle}</div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                          <span>作成: {item.createdAt.toLocaleDateString()}</span>
+                          <span>提出期限: {item.dueAt.toLocaleString()}</span>
+                        </div>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] ${badgeClassName}`}>
+                          {item.statusLabel}
+                        </span>
+                      </div>
+                      <div className="relative h-10 rounded-full bg-slate-100">
+                        {todayPercent !== null ? (
+                          <span
+                            className="absolute inset-y-0 w-px bg-sky-400/40"
+                            style={{ left: `${todayPercent}%` }}
+                            aria-hidden
+                          />
+                        ) : null}
+                        <span
+                          className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${barClassName}`}
+                          style={{ left: `${startPercent}%`, width: `${widthPercent}%` }}
+                          aria-hidden
+                        />
+                        <span
+                          className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${barClassName}`}
+                          style={{ left: `${markerLeft}%` }}
+                          aria-hidden
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+
     </div>
   );
 }

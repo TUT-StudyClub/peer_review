@@ -69,25 +69,27 @@ def _evaluation_fields(credit: object | None) -> dict:
     }
 
 
-@router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask)
+@router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask | None)
 def next_review_task(
     assignment_id: UUID,
     db: Session = db_dependency,
     current_user: User = current_user_dependency,
-) -> ReviewAssignmentTask:
+) -> ReviewAssignmentTask | None:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
     review_assignment = get_or_assign_review_assignment(db, assignment, current_user)
     if review_assignment is None:
-        raise HTTPException(status_code=404, detail="No submissions need review right now")
+        return None
 
     submission = db.query(Submission).filter(Submission.id == review_assignment.submission_id).first()
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
     rubric = ensure_fixed_rubric(db, assignment_id)
+    # Persist auto-created rubric criteria so IDs remain stable across requests.
+    db.commit()
     rubric_public = [RubricCriterionPublic.model_validate(item) for item in rubric]
     author_alias = alias_for_user(
         user_id=submission.author_id,
@@ -285,6 +287,7 @@ def submit_review(
         review=review,
         reviewer=current_user,
     )
+    review.credit_awarded = credit.added
     current_user.credits += credit.added
 
     db.commit()
@@ -348,13 +351,17 @@ def received_reviews(
     db: Session = db_dependency,
     current_user: User = current_user_dependency,
 ) -> list[ReviewReceived]:
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if assignment is None:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+
     submission = (
         db.query(Submission)
         .filter(Submission.assignment_id == assignment_id, Submission.author_id == current_user.id)
         .first()
     )
     if submission is None:
-        raise HTTPException(status_code=404, detail="Submission not found")
+        return []
 
     review_assignments = db.query(ReviewAssignment).filter(ReviewAssignment.submission_id == submission.id).all()
     assignment_by_id = {ra.id: ra for ra in review_assignments}

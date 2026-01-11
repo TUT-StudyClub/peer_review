@@ -22,6 +22,7 @@ class Course(Base):
     id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     title: Mapped[str] = mapped_column(String(200))
     description: Mapped[str | None] = mapped_column(Text, default=None)
+    theme: Mapped[str | None] = mapped_column(String(40), default=None)
     teacher_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
