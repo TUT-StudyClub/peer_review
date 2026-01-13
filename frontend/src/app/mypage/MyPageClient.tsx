@@ -2,10 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
 
 import { useAuth } from "@/app/providers";
-import { apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
+import {
+  apiDeleteAvatar,
+  apiGetReviewerSkill,
+  apiListAssignments,
+  apiListCourses,
+  apiUploadAvatar,
+  formatApiError,
+} from "@/lib/api";
 import type { AssignmentPublic, CoursePublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
@@ -13,10 +20,14 @@ import { ErrorMessages } from "@/components/ErrorMessages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 
 type MyPageClientProps = {
   initialCourseId: string | null;
 };
+
+const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const { user, token, loading, refreshMe } = useAuth();
@@ -31,6 +42,13 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(initialCourseId);
   const [refreshing, setRefreshing] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
+  const [avatarPreviewError, setAvatarPreviewError] = useState(false);
+  const [avatarVersion, setAvatarVersion] = useState(0);
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
   const courseById = useMemo(() => new Map(courses.map((course) => [course.id, course])), [courses]);
@@ -104,6 +122,27 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     void loadCourses();
     void loadAssignments();
   }, [loadSkill, loadCourses, loadAssignments, token, user?.role]);
+
+  useEffect(() => {
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
+    setAvatarPreviewError(false);
+    setAvatarError(null);
+    setAvatarNotice(null);
+    setAvatarVersion(Date.now());
+  }, [user?.avatar_url]);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(previewUrl);
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [avatarFile]);
 
   useEffect(() => {
     setSelectedCourseId(initialCourseId);
@@ -199,6 +238,74 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   }, [timelineRange]);
 
   const formatSkill = (value: number) => (value > 0 ? value.toFixed(1) : "-");
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  const avatarInitial = user?.name?.trim().charAt(0) || "?";
+  const remoteAvatarUrl = user?.avatar_url ? new URL(user.avatar_url, apiBaseUrl).toString() : "";
+  const remoteAvatarSrc = remoteAvatarUrl
+    ? `${remoteAvatarUrl}${remoteAvatarUrl.includes("?") ? "&" : "?"}v=${avatarVersion}`
+    : "";
+  const avatarSrc = avatarPreviewUrl ?? remoteAvatarSrc;
+  const showAvatarImage = Boolean(avatarSrc) && !avatarPreviewError;
+
+  const handleAvatarChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setAvatarNotice(null);
+    setAvatarPreviewError(false);
+    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+      setAvatarFile(null);
+      setAvatarError("PNG/JPEG/WEBP/GIF 形式の画像を選択してください。");
+      return;
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      setAvatarFile(null);
+      setAvatarError("2MB以下の画像を選択してください。");
+      return;
+    }
+
+    setAvatarError(null);
+    setAvatarFile(file);
+  }, []);
+
+  const uploadAvatar = useCallback(async () => {
+    if (!token || !avatarFile) return;
+    setAvatarSaving(true);
+    setAvatarError(null);
+    setAvatarNotice(null);
+    setAvatarPreviewError(false);
+    try {
+      await apiUploadAvatar(token, avatarFile);
+      setAvatarFile(null);
+      await refreshMe();
+      setAvatarVersion(Date.now());
+      setAvatarNotice("保存しました。");
+    } catch (err) {
+      setAvatarError(formatApiError(err));
+    } finally {
+      setAvatarSaving(false);
+    }
+  }, [token, avatarFile, refreshMe, formatApiError]);
+
+  const removeAvatar = useCallback(async () => {
+    if (!token) return;
+    setAvatarSaving(true);
+    setAvatarError(null);
+    setAvatarNotice(null);
+    setAvatarPreviewError(false);
+    try {
+      await apiDeleteAvatar(token);
+      setAvatarFile(null);
+      await refreshMe();
+      setAvatarVersion(Date.now());
+      setAvatarNotice("削除しました。");
+    } catch (err) {
+      setAvatarError(formatApiError(err));
+    } finally {
+      setAvatarSaving(false);
+    }
+  }, [token, refreshMe, formatApiError]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -257,16 +364,30 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           <CardTitle>プロフィール</CardTitle>
           <div className="text-xs text-muted-foreground">joined: {new Date(user.created_at).toLocaleString()}</div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-500">
+              {showAvatarImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarSrc}
+                  alt={`${user.name} avatar`}
+                  className="h-full w-full object-cover"
+                  onError={() => {
+                    setAvatarPreviewError(true);
+                    setAvatarNotice(null);
+                  }}
+                />
+              ) : (
+                <span aria-label="avatar-initial">{avatarInitial}</span>
+              )}
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm font-semibold text-slate-900">{user.name}</div>
+              <div className="text-xs text-muted-foreground">{user.email}</div>
+            </div>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">名前</div>
-              <div className="text-sm font-medium">{user.name}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">メール</div>
-              <div className="text-sm">{user.email}</div>
-            </div>
             <div>
               <div className="text-xs text-muted-foreground">ランク / タイトル</div>
               <div className="text-sm">
@@ -279,6 +400,61 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                 {user.credits} / {user.is_ta ? "TA" : "-"}
               </div>
             </div>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="text-sm font-semibold text-slate-700">アイコン設定</div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">画像ファイル</div>
+                <Input
+                  type="file"
+                  accept={ALLOWED_AVATAR_TYPES.join(",")}
+                  onChange={handleAvatarChange}
+                  disabled={avatarSaving}
+                />
+                <div className="text-xs text-muted-foreground">PNG/JPEG/WEBP/GIF、2MBまで。</div>
+                {avatarFile ? (
+                  <div className="text-xs text-slate-600">選択中: {avatarFile.name}</div>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => void uploadAvatar()}
+                  disabled={!avatarFile || avatarSaving}
+                >
+                  {avatarSaving ? "アップロード中..." : "アップロード"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setAvatarFile(null);
+                    setAvatarPreviewError(false);
+                    setAvatarNotice(null);
+                    setAvatarError(null);
+                  }}
+                  disabled={avatarSaving || !avatarFile}
+                >
+                  選択解除
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => void removeAvatar()}
+                  disabled={avatarSaving || !user.avatar_url}
+                >
+                  削除
+                </Button>
+              </div>
+            </div>
+            {avatarError ? (
+              <Alert variant="destructive" className="mt-3">
+                <AlertTitle>アイコン設定エラー</AlertTitle>
+                <AlertDescription>{avatarError}</AlertDescription>
+              </Alert>
+            ) : null}
+            {avatarPreviewError ? (
+              <div className="mt-3 text-xs text-rose-600">画像の読み込みに失敗しました。</div>
+            ) : null}
+            {avatarNotice ? <div className="mt-3 text-xs text-emerald-600">{avatarNotice}</div> : null}
           </div>
         </CardContent>
       </Card>
