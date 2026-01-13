@@ -1990,7 +1990,6 @@ export default function AssignmentDetailPage() {
                 <div key={r.id} className="rounded-lg border p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">{r.reviewer_alias}</div>
                       <div className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
                     </div>
                     <div className="text-right text-xs text-muted-foreground">
