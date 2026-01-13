@@ -11,6 +11,7 @@ export type UserPublic = {
   id: string;
   email: string;
   name: string;
+  avatar_url: string | null;
   role: UserRole;
   credits: number;
   rank: string;

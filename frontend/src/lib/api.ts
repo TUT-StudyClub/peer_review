@@ -334,6 +334,16 @@ export async function apiGetMe(token: string): Promise<UserPublic> {
   return apiFetch<UserPublic>("/users/me", {}, token);
 }
 
+export async function apiUploadAvatar(token: string, file: File): Promise<UserPublic> {
+  const body = new FormData();
+  body.append("file", file);
+  return apiFetch<UserPublic>("/users/me/avatar", { method: "POST", body }, token);
+}
+
+export async function apiDeleteAvatar(token: string): Promise<UserPublic> {
+  return apiFetch<UserPublic>("/users/me/avatar", { method: "DELETE" }, token);
+}
+
 export async function apiGetRanking(
   limit = 5,
   period: RankingPeriod = "total"
