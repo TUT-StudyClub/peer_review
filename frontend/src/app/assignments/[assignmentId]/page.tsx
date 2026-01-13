@@ -141,6 +141,26 @@ function StarRatingInput({
   );
 }
 
+function StarRatingDisplay({ value, max }: { value: number; max: number }) {
+  const safeMax = Math.max(1, max);
+  const filled = Math.min(safeMax, Math.max(0, Math.round(value)));
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: safeMax }, (_, index) => {
+        const active = index < filled;
+        return (
+          <Star
+            key={index}
+            className={
+              active ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4 text-slate-300"
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function reviewDraftStorageKey(assignmentId: string, submissionId: string) {
   return `review-draft:${assignmentId}:${submissionId}`;
 }
@@ -1986,58 +2006,145 @@ export default function AssignmentDetailPage() {
             <p className="text-sm text-muted-foreground">まだレビューが届いていません</p>
           ) : (
             <div className="space-y-3">
-              {received.map((r) => (
-                <div key={r.id} className="rounded-lg border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
+              {received.map((r) => {
+                const trimmedComment = r.comment.trim();
+                const isCompactTitle =
+                  trimmedComment.length > 0 && trimmedComment.length <= 32 && !trimmedComment.includes("\n");
+                const summaryItems = [
+                  { key: "rubric", label: "ルーブリック一致", value: r.rubric_alignment_score, icon: Target },
+                  { key: "comment", label: "レビュー一致", value: r.ai_comment_alignment_score, icon: TrendingUp },
+                  { key: "total", label: "総合評価", value: r.total_alignment_score, icon: CheckCircle2 },
+                ] as const;
+                const rubricScores = [...r.rubric_scores].sort((a, b) => {
+                  const aOrder = rubricMetaById.get(a.criterion_id)?.order_index ?? 0;
+                  const bOrder = rubricMetaById.get(b.criterion_id)?.order_index ?? 0;
+                  return aOrder - bOrder;
+                });
+
+                return (
+                  <div key={r.id} className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-slate-700 via-sky-600 to-emerald-600 px-4 py-3 text-white">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="h-4 w-4" />
+                        <span>{formatDateTime(r.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
+                        <TrendingUp className="h-4 w-4" />
+                        AI品質: {formatScore(r.ai_quality_score, 1)}
+                      </div>
                     </div>
-                    <div className="text-right text-xs text-muted-foreground">
-                      AI品質: {r.ai_quality_score ?? "-"}
+                    <div className="space-y-4 p-4 sm:p-6">
+                      {trimmedComment ? (
+                        isCompactTitle ? (
+                          <h3 className="text-xl font-semibold leading-snug">{trimmedComment}</h3>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="text-sm font-semibold text-muted-foreground">レビュー内容</div>
+                            <div className="whitespace-pre-wrap text-base">{trimmedComment}</div>
+                          </div>
+                        )
+                      ) : null}
+                      {r.ai_quality_reason ? (
+                        <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
+                          {r.ai_quality_reason}
+                        </div>
+                      ) : null}
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {summaryItems.map((item) => {
+                            const value = item.value;
+                            const percent =
+                              value === null ? 0 : Math.min(100, Math.max(0, (value / 5) * 100));
+                            const Icon = item.icon;
+                            return (
+                              <div key={item.key} className="space-y-2">
+                                <div className="flex items-center justify-between text-sm font-medium">
+                                  <div className="flex items-center gap-2 text-slate-600">
+                                    <Icon className="h-4 w-4 text-blue-600" />
+                                    <span>{item.label}</span>
+                                  </div>
+                                  <span>{value === null ? "-" : `${formatScore(value, 1)}/5`}</span>
+                                </div>
+                                <div
+                                  className="h-2 rounded-full bg-slate-200"
+                                  role="progressbar"
+                                  aria-valuemin={0}
+                                  aria-valuemax={5}
+                                  aria-valuenow={value ?? 0}
+                                >
+                                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${percent}%` }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                              <Award className="h-4 w-4 text-blue-600" />
+                              付与credits
+                            </div>
+                            <div className="text-2xl font-semibold text-blue-600">
+                              {formatScore(r.credit_awarded, 1)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {r.ai_comment_alignment_reason ? (
+                        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-slate-700">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                          <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                        </div>
+                      ) : null}
+
+                      {rubricScores.length ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                            <ClipboardList className="h-4 w-4 text-blue-600" />
+                            詳細評価
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {rubricScores.map((s) => {
+                              const meta = rubricMetaById.get(s.criterion_id);
+                              const label = meta?.name ?? shortId(s.criterion_id);
+                              const maxScore = meta?.max_score ?? 5;
+                              return (
+                                <div
+                                  key={s.criterion_id}
+                                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+                                >
+                                  <div className="text-sm text-slate-600">{label}</div>
+                                  <div className="flex items-center gap-2">
+                                    <StarRatingDisplay value={s.score} max={maxScore} />
+                                    <div className="text-sm font-medium text-slate-700">
+                                      {s.score}/{maxScore}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {r.meta_review ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-slate-900">メタ評価</div>
+                            <div className="flex items-center gap-2">
+                              <StarRatingDisplay value={r.meta_review.helpfulness} max={5} />
+                              <div className="text-sm font-medium text-slate-700">{r.meta_review.helpfulness}/5</div>
+                            </div>
+                          </div>
+                          {r.meta_review.comment ? (
+                            <div className="mt-2 text-sm text-slate-600">{r.meta_review.comment}</div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <MetaReviewForm reviewId={r.id} onSubmit={metaReview} />
+                      )}
                     </div>
                   </div>
-                  {r.ai_quality_reason ? (
-                    <div className="mt-2 rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                      {r.ai_quality_reason}
-                    </div>
-                  ) : null}
-                  {r.rubric_alignment_score !== null ||
-                  r.ai_comment_alignment_score !== null ||
-                  r.total_alignment_score !== null ||
-                  r.credit_awarded !== null ||
-                  r.ai_comment_alignment_reason ? (
-                    <div className="mt-2 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
-                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
-                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
-                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
-                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
-                      {r.ai_comment_alignment_reason ? (
-                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="mt-2 whitespace-pre-wrap text-sm">{r.comment}</div>
-
-                  {r.rubric_scores?.length ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {r.rubric_scores.map((s) => (
-                        <div key={s.criterion_id} className="text-xs text-muted-foreground">
-                          {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {r.meta_review ? (
-                    <div className="mt-3 rounded-md border bg-muted p-3 text-sm">
-                      <div>メタ評価: {r.meta_review.helpfulness}/5</div>
-                      {r.meta_review.comment ? <div className="mt-1">{r.meta_review.comment}</div> : null}
-                    </div>
-                  ) : (
-                    <MetaReviewForm reviewId={r.id} onSubmit={metaReview} />
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </SectionCard>
@@ -2484,9 +2591,9 @@ function MetaReviewForm({
   };
 
   return (
-    <div className="mt-3 rounded-md border bg-muted p-3">
-      <div className="text-sm font-medium">メタ評価（このレビューは役に立ちましたか？）</div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div className="text-sm font-semibold text-slate-900">メタ評価（このレビューは役に立ちましたか？）</div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field label="helpfulness (1-5)">
           <Select value={String(helpfulness)} onValueChange={(v: string) => setHelpfulness(Number(v))}>
             <SelectTrigger>
@@ -2505,7 +2612,7 @@ function MetaReviewForm({
           <Input value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
       </div>
-      <div className="mt-2">
+      <div className="mt-3">
         <Button onClick={submit} disabled={submitting}>
           送信
         </Button>
