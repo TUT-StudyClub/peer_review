@@ -366,11 +366,11 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
 
       <Card className="overflow-hidden">
         <div className="h-20 bg-gradient-to-r from-sky-500 via-blue-500 to-emerald-500 sm:h-24" />
-        <CardContent className="pt-0">
-          <div className="-mt-10 space-y-6">
+        <CardContent className="pt-4">
+          <div className="space-y-6">
             <div className="flex flex-wrap items-start justify-between gap-6">
-              <div className="flex flex-wrap items-end gap-4">
-                <div className="relative">
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="relative -mt-10 sm:-mt-12">
                   <button
                     type="button"
                     onClick={triggerAvatarSelect}
@@ -405,7 +405,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                     disabled={avatarSaving}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 pt-6 sm:pt-8">
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="text-xl font-semibold text-slate-900 sm:text-2xl">{user.name}</div>
                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
@@ -425,7 +425,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       joined: {new Date(user.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500">アイコンをクリックして変更できます。</div>
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
