@@ -7,7 +7,6 @@ import { Calendar, Crown, Mail, Sparkles } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import {
-  apiDeleteAvatar,
   apiGetReviewerSkill,
   apiListAssignments,
   apiListCourses,
@@ -248,36 +247,14 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const avatarSrc = avatarPreviewUrl ?? remoteAvatarSrc;
   const showAvatarImage = Boolean(avatarSrc) && !avatarPreviewError;
 
-  const handleAvatarChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    setAvatarNotice(null);
-    setAvatarPreviewError(false);
-    if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
-      setAvatarFile(null);
-      setAvatarError("PNG/JPEG/WEBP/GIF 形式の画像を選択してください。");
-      return;
-    }
-    if (file.size > MAX_AVATAR_BYTES) {
-      setAvatarFile(null);
-      setAvatarError("2MB以下の画像を選択してください。");
-      return;
-    }
-
-    setAvatarError(null);
-    setAvatarFile(file);
-  }, []);
-
-  const uploadAvatar = useCallback(async () => {
-    if (!token || !avatarFile) return;
+  const uploadAvatar = useCallback(async (file: File) => {
+    if (!token) return;
     setAvatarSaving(true);
     setAvatarError(null);
     setAvatarNotice(null);
     setAvatarPreviewError(false);
     try {
-      await apiUploadAvatar(token, avatarFile);
+      await apiUploadAvatar(token, file);
       setAvatarFile(null);
       await refreshMe();
       setAvatarVersion(Date.now());
@@ -287,26 +264,33 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     } finally {
       setAvatarSaving(false);
     }
-  }, [token, avatarFile, refreshMe, formatApiError]);
-
-  const removeAvatar = useCallback(async () => {
-    if (!token) return;
-    setAvatarSaving(true);
-    setAvatarError(null);
-    setAvatarNotice(null);
-    setAvatarPreviewError(false);
-    try {
-      await apiDeleteAvatar(token);
-      setAvatarFile(null);
-      await refreshMe();
-      setAvatarVersion(Date.now());
-      setAvatarNotice("削除しました。");
-    } catch (err) {
-      setAvatarError(formatApiError(err));
-    } finally {
-      setAvatarSaving(false);
-    }
   }, [token, refreshMe, formatApiError]);
+
+  const handleAvatarChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      setAvatarNotice(null);
+      setAvatarPreviewError(false);
+      if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+        setAvatarFile(null);
+        setAvatarError("PNG/JPEG/WEBP/GIF 形式の画像を選択してください。");
+        return;
+      }
+      if (file.size > MAX_AVATAR_BYTES) {
+        setAvatarFile(null);
+        setAvatarError("2MB以下の画像を選択してください。");
+        return;
+      }
+
+      setAvatarError(null);
+      setAvatarFile(file);
+      void uploadAvatar(file);
+    },
+    [uploadAvatar]
+  );
 
   const triggerAvatarSelect = useCallback(() => {
     avatarInputRef.current?.click();
@@ -415,15 +399,15 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       {user.title}
                     </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                    <span className="inline-flex items-center gap-1">
+                  <div className="space-y-1 text-xs text-slate-500">
+                    <div className="inline-flex items-center gap-1">
                       <Mail className="h-3.5 w-3.5" />
                       {user.email}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
+                    </div>
+                    <div className="inline-flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
                       joined: {new Date(user.created_at).toLocaleString()}
-                    </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -446,32 +430,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                 </div>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button variant="outline" onClick={triggerAvatarSelect} disabled={avatarSaving}>
-                画像を選択
-              </Button>
-              <Button onClick={() => void uploadAvatar()} disabled={!avatarFile || avatarSaving}>
-                {avatarSaving ? "アップロード中..." : "アップロード"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setAvatarFile(null);
-                  setAvatarPreviewError(false);
-                  setAvatarNotice(null);
-                  setAvatarError(null);
-                }}
-                disabled={avatarSaving || !avatarFile}
-              >
-                選択解除
-              </Button>
-              <Button variant="outline" onClick={() => void removeAvatar()} disabled={avatarSaving || !user.avatar_url}>
-                削除
-              </Button>
-            </div>
-            {avatarFile ? (
-              <div className="text-xs text-slate-600">選択中: {avatarFile.name}</div>
-            ) : null}
             {avatarError ? (
               <Alert variant="destructive">
                 <AlertTitle>アイコン設定エラー</AlertTitle>
