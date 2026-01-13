@@ -2374,7 +2374,6 @@ export default function AssignmentDetailPage() {
                   const alignment = metrics.alignment ?? {};
                   const quality = metrics.quality ?? {};
                   const commentAlignment = metrics.comment_alignment ?? {};
-                  const reviewId = item.review_id ? shortId(item.review_id) : `#${index + 1}`;
                   const duplicatePenalty =
                     typeof item.duplicate_penalty === "number" ? Math.round(item.duplicate_penalty * 100) : null;
                   const similarityPenalty =

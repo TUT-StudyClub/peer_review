@@ -264,7 +264,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     } finally {
       setAvatarSaving(false);
     }
-  }, [token, refreshMe, formatApiError]);
+  }, [token, refreshMe]);
 
   const handleAvatarChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
