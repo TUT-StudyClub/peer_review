@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Calendar, Crown, Mail, Sparkles } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import {
@@ -20,7 +21,6 @@ import { ErrorMessages } from "@/components/ErrorMessages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 
 type MyPageClientProps = {
   initialCourseId: string | null;
@@ -49,6 +49,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
   const [avatarPreviewError, setAvatarPreviewError] = useState(false);
   const [avatarVersion, setAvatarVersion] = useState(0);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
   const courseById = useMemo(() => new Map(courses.map((course) => [course.id, course])), [courses]);
@@ -307,6 +308,10 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     }
   }, [token, refreshMe, formatApiError]);
 
+  const triggerAvatarSelect = useCallback(() => {
+    avatarInputRef.current?.click();
+  }, []);
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
   }
@@ -359,102 +364,125 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>プロフィール</CardTitle>
-          <div className="text-xs text-muted-foreground">joined: {new Date(user.created_at).toLocaleString()}</div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-100 text-lg font-semibold text-slate-500">
-              {showAvatarImage ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={avatarSrc}
-                  alt={`${user.name} avatar`}
-                  className="h-full w-full object-cover"
-                  onError={() => {
-                    setAvatarPreviewError(true);
-                    setAvatarNotice(null);
-                  }}
-                />
-              ) : (
-                <span aria-label="avatar-initial">{avatarInitial}</span>
-              )}
-            </div>
-            <div className="space-y-1">
-              <div className="text-sm font-semibold text-slate-900">{user.name}</div>
-              <div className="text-xs text-muted-foreground">{user.email}</div>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">ランク / タイトル</div>
-              <div className="text-sm">
-                {user.rank} / {user.title}
+      <Card className="overflow-hidden">
+        <div className="h-20 bg-gradient-to-r from-sky-500 via-blue-500 to-emerald-500 sm:h-24" />
+        <CardContent className="pt-0">
+          <div className="-mt-10 space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div className="flex flex-wrap items-end gap-4">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={triggerAvatarSelect}
+                    disabled={avatarSaving}
+                    className="group relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-100 text-2xl font-semibold text-slate-500 shadow-lg transition hover:-translate-y-0.5 sm:h-24 sm:w-24"
+                    aria-label="アイコンを変更"
+                  >
+                    {showAvatarImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={avatarSrc}
+                        alt={`${user.name} avatar`}
+                        className="h-full w-full object-cover"
+                        onError={() => {
+                          setAvatarPreviewError(true);
+                          setAvatarNotice(null);
+                        }}
+                      />
+                    ) : (
+                      <span aria-label="avatar-initial">{avatarInitial}</span>
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-slate-900/50 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                      編集
+                    </span>
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept={ALLOWED_AVATAR_TYPES.join(",")}
+                    onChange={handleAvatarChange}
+                    disabled={avatarSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-xl font-semibold text-slate-900 sm:text-2xl">{user.name}</div>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                      {user.is_ta ? "TA" : "学生"}
+                    </span>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                      {user.title}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                    <span className="inline-flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5" />
+                      {user.email}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      joined: {new Date(user.created_at).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500">アイコンをクリックして変更できます。</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="min-w-[150px] rounded-xl border border-sky-100 bg-sky-50 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <Sparkles className="h-4 w-4 text-sky-600" />
+                    Credits
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900">{user.credits}</div>
+                  <div className="text-xs text-slate-500">{user.is_ta ? "TA資格あり" : "TA資格なし"}</div>
+                </div>
+                <div className="min-w-[150px] rounded-xl border border-amber-100 bg-amber-50 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <Crown className="h-4 w-4 text-amber-600" />
+                    Rank
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-slate-900">{user.title}</div>
+                  <div className="text-xs text-slate-500">{user.rank}</div>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground">credits / TA</div>
-              <div className="text-sm">
-                {user.credits} / {user.is_ta ? "TA" : "-"}
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="outline" onClick={triggerAvatarSelect} disabled={avatarSaving}>
+                画像を選択
+              </Button>
+              <Button onClick={() => void uploadAvatar()} disabled={!avatarFile || avatarSaving}>
+                {avatarSaving ? "アップロード中..." : "アップロード"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setAvatarFile(null);
+                  setAvatarPreviewError(false);
+                  setAvatarNotice(null);
+                  setAvatarError(null);
+                }}
+                disabled={avatarSaving || !avatarFile}
+              >
+                選択解除
+              </Button>
+              <Button variant="outline" onClick={() => void removeAvatar()} disabled={avatarSaving || !user.avatar_url}>
+                削除
+              </Button>
             </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-semibold text-slate-700">アイコン設定</div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-              <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">画像ファイル</div>
-                <Input
-                  type="file"
-                  accept={ALLOWED_AVATAR_TYPES.join(",")}
-                  onChange={handleAvatarChange}
-                  disabled={avatarSaving}
-                />
-                <div className="text-xs text-muted-foreground">PNG/JPEG/WEBP/GIF、2MBまで。</div>
-                {avatarFile ? (
-                  <div className="text-xs text-slate-600">選択中: {avatarFile.name}</div>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => void uploadAvatar()}
-                  disabled={!avatarFile || avatarSaving}
-                >
-                  {avatarSaving ? "アップロード中..." : "アップロード"}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setAvatarFile(null);
-                    setAvatarPreviewError(false);
-                    setAvatarNotice(null);
-                    setAvatarError(null);
-                  }}
-                  disabled={avatarSaving || !avatarFile}
-                >
-                  選択解除
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => void removeAvatar()}
-                  disabled={avatarSaving || !user.avatar_url}
-                >
-                  削除
-                </Button>
-              </div>
-            </div>
+            {avatarFile ? (
+              <div className="text-xs text-slate-600">選択中: {avatarFile.name}</div>
+            ) : null}
             {avatarError ? (
-              <Alert variant="destructive" className="mt-3">
+              <Alert variant="destructive">
                 <AlertTitle>アイコン設定エラー</AlertTitle>
                 <AlertDescription>{avatarError}</AlertDescription>
               </Alert>
             ) : null}
             {avatarPreviewError ? (
-              <div className="mt-3 text-xs text-rose-600">画像の読み込みに失敗しました。</div>
+              <div className="text-xs text-rose-600">画像の読み込みに失敗しました。</div>
             ) : null}
-            {avatarNotice ? <div className="mt-3 text-xs text-emerald-600">{avatarNotice}</div> : null}
+            {avatarNotice ? <div className="text-xs text-emerald-600">{avatarNotice}</div> : null}
           </div>
         </CardContent>
       </Card>
