@@ -399,12 +399,12 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       {user.title}
                     </span>
                   </div>
-                  <div className="space-y-1 text-xs text-slate-500">
-                    <div className="inline-flex items-center gap-1">
+                  <div className="flex flex-col gap-1 text-xs text-slate-500">
+                    <div className="flex items-center gap-1">
                       <Mail className="h-3.5 w-3.5" />
                       {user.email}
                     </div>
-                    <div className="inline-flex items-center gap-1">
+                    <div className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
                       joined: {new Date(user.created_at).toLocaleString()}
                     </div>
