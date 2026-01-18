@@ -41,6 +41,7 @@ def create_assignment(
         course_id=payload.course_id,
         description=payload.description,
         target_reviews_per_submission=payload.target_reviews_per_submission,
+        due_at=payload.due_at,
     )
     db.add(assignment)
     db.flush()
@@ -103,7 +104,10 @@ def list_rubric_criteria(
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    return ensure_fixed_rubric(db, assignment_id)
+    rubric = ensure_fixed_rubric(db, assignment_id)
+    # Persist auto-created rubric criteria so IDs remain stable across requests.
+    db.commit()
+    return rubric
 
 
 @router.get("/{assignment_id}/submissions", response_model=list[SubmissionTeacherPublic])

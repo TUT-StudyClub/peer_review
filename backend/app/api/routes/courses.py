@@ -20,6 +20,7 @@ from app.services.auth import get_current_user
 from app.services.auth import require_teacher
 
 router = APIRouter()
+COURSE_THEME_OPTIONS = {"sky", "emerald", "amber", "rose", "slate", "violet"}
 db_dependency = Depends(get_db)
 current_user_dependency = Depends(get_current_user)
 teacher_dependency = Depends(require_teacher)
@@ -34,6 +35,9 @@ def create_course(
     if payload.title not in COURSE_TITLE_CANDIDATES:
         raise HTTPException(status_code=400, detail="Course title is not allowed")
 
+    if payload.theme and payload.theme not in COURSE_THEME_OPTIONS:
+        raise HTTPException(status_code=400, detail="Course theme is not allowed")
+
     existing_course = (
         db.query(Course).filter(Course.teacher_id == current_user.id, Course.title == payload.title).first()
     )
@@ -44,6 +48,7 @@ def create_course(
         title=payload.title,
         description=payload.description,
         teacher_id=current_user.id,
+        theme=payload.theme or "sky",
     )
     db.add(course)
     db.commit()
@@ -52,6 +57,7 @@ def create_course(
         id=course.id,
         title=course.title,
         description=course.description,
+        theme=course.theme,
         teacher_id=course.teacher_id,
         created_at=course.created_at,
         teacher_name=current_user.name,
@@ -81,6 +87,7 @@ def list_courses(
                 id=course.id,
                 title=course.title,
                 description=course.description,
+                theme=course.theme,
                 teacher_id=course.teacher_id,
                 created_at=course.created_at,
                 teacher_name=current_user.name,
@@ -98,6 +105,7 @@ def list_courses(
             id=course.id,
             title=course.title,
             description=course.description,
+            theme=course.theme,
             teacher_id=course.teacher_id,
             created_at=course.created_at,
             teacher_name=course.teacher.name if course.teacher else None,
@@ -110,8 +118,8 @@ def list_courses(
 @router.get("/{course_id}", response_model=CoursePublic)
 def get_course_detail(
     course_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> CoursePublic:
     """講義の詳細情報を取得（講師名、受講生数、ユーザーの登録状況を含む）"""
     course = db.query(Course).filter(Course.id == course_id).first()
@@ -120,9 +128,7 @@ def get_course_detail(
 
     # 受講生数を取得
     student_count_raw: int | None = (
-        db.query(func.count(CourseEnrollment.id))
-        .filter(CourseEnrollment.course_id == course_id)
-        .scalar_one_or_none()
+        db.query(func.count(CourseEnrollment.id)).filter(CourseEnrollment.course_id == course_id).scalar_one_or_none()
     )
     student_count: int = student_count_raw or 0
 

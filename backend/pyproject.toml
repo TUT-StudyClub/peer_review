@@ -1,5 +1,5 @@
 [project]
-name = "pure-review"
+name = "peer-review"
 version = "0.1.0"
 description = "Anonymous peer-review platform (FastAPI backend)"
 readme = "README.md"
@@ -11,6 +11,7 @@ dependencies = [
   "email-validator>=2.2.0",
   "fastapi>=0.115.6",
   "httpx>=0.28.1",
+  "jose>=1.0.0",
   "pdfplumber>=0.11.0",
   "psycopg[binary]>=3.2.3",
   "pydantic-settings>=2.6.1",
