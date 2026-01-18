@@ -2,6 +2,7 @@ from app.models.assignment import Assignment
 from app.models.assignment import RubricCriterion
 from app.models.course import Course
 from app.models.course import CourseEnrollment
+from app.models.credit_history import CreditHistory
 from app.models.review import MetaReview
 from app.models.review import Review
 from app.models.review import ReviewAssignment
@@ -17,6 +18,7 @@ __all__ = [
     "Assignment",
     "Course",
     "CourseEnrollment",
+    "CreditHistory",
     "MetaReview",
     "Review",
     "ReviewAssignment",
