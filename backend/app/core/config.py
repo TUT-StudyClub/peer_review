@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # OpenAI依存の機能を有効にするためのフラグ
     enable_openai: bool = False #defaultでは無効
 
+    # Web Push通知 (VAPID)
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_claims_email: str = "admin@example.com"
+
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     # Optional regex-based origins (useful when Next.js dev port changes, e.g. 3001/3002).

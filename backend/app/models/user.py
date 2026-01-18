@@ -31,6 +31,19 @@ class User(Base):
     submissions = relationship("Submission", back_populates="author")
     review_assignments = relationship("ReviewAssignment", back_populates="reviewer")
 
+    # 通知関連
+    push_subscriptions = relationship(
+        "PushSubscription",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+    notification_preference = relationship(
+        "NotificationPreference",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
     @property
     def is_ta(self) -> bool:
         return self.credits >= settings.ta_qualification_threshold

@@ -45,6 +45,7 @@ export function NavBar() {
           <nav className="flex items-center gap-1">
             <NavLink href="/assignments" label="課題" />
             {user?.is_ta ? <NavLink href="/ta/requests" label="TAリクエスト" /> : null}
+            {user ? <NavLink href="/settings" label="設定" /> : null}
           </nav>
         </div>
         <div className="flex items-center gap-3">
