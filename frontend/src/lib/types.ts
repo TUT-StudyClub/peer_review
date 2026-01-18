@@ -32,6 +32,18 @@ export type UserRankingEntry = {
   period_credits?: number;
 };
 
+export type CreditHistoryPublic = {
+  id: string;
+  user_id: string;
+  delta: number;
+  total_credits: number;
+  reason: string;
+  review_id?: string | null;
+  assignment_id?: string | null;
+  submission_id?: string | null;
+  created_at: string;
+};
+
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
 
 export type TAReviewRequestPublic = {

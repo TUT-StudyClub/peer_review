@@ -41,7 +41,9 @@ from app.services.ai import polish_review
 from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user
 from app.services.auth import require_teacher
+from app.services.credits import CREDIT_REASON_REVIEW_SUBMITTED
 from app.services.credits import calculate_review_credit_gain
+from app.services.credits import record_credit_history
 from app.services.credits import score_1_to_5_from_norm
 from app.services.duplicate import detect_duplicate_review
 from app.services.duplicate import hash_comment
@@ -289,6 +291,16 @@ def submit_review(
     )
     review.credit_awarded = credit.added
     current_user.credits += credit.added
+    record_credit_history(
+        db,
+        user=current_user,
+        delta=credit.added,
+        total_credits=current_user.credits,
+        reason=CREDIT_REASON_REVIEW_SUBMITTED,
+        review_id=review.id,
+        assignment_id=review_assignment.assignment_id,
+        submission_id=review_assignment.submission_id,
+    )
 
     db.commit()
     db.refresh(review)

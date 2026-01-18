@@ -4,6 +4,7 @@ import type {
   CourseCreate,
   CourseEnrollmentPublic,
   CoursePublic,
+  CreditHistoryPublic,
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
@@ -332,6 +333,12 @@ export async function apiLogin(email: string, password: string): Promise<string>
 
 export async function apiGetMe(token: string): Promise<UserPublic> {
   return apiFetch<UserPublic>("/users/me", {}, token);
+}
+
+export async function apiGetMyCreditHistory(token: string, limit = 50): Promise<CreditHistoryPublic[]> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  return apiFetch<CreditHistoryPublic[]>(`/users/me/credit-history?${params.toString()}`, {}, token);
 }
 
 export async function apiUploadAvatar(token: string, file: File): Promise<UserPublic> {

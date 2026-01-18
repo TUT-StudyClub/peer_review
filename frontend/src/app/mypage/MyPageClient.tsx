@@ -7,19 +7,21 @@ import { Calendar, Crown, Mail, Sparkles } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
 import {
+  apiGetMyCreditHistory,
   apiGetReviewerSkill,
   apiListAssignments,
   apiListCourses,
   apiUploadAvatar,
   formatApiError,
 } from "@/lib/api";
-import type { AssignmentPublic, CoursePublic, ReviewerSkill } from "@/lib/types";
+import type { AssignmentPublic, CoursePublic, CreditHistoryPublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type MyPageClientProps = {
   initialCourseId: string | null;
@@ -27,6 +29,10 @@ type MyPageClientProps = {
 
 const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const CREDIT_REASON_LABELS: Record<string, string> = {
+  review_submitted: "レビュー提出",
+  review_recalculated: "レビュー再計算",
+};
 
 export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const { user, token, loading, refreshMe } = useAuth();
@@ -35,6 +41,10 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const [skill, setSkill] = useState<ReviewerSkill | null>(null);
   const [skillLoading, setSkillLoading] = useState(false);
   const [skillError, setSkillError] = useState<string | null>(null);
+
+  const [creditHistory, setCreditHistory] = useState<CreditHistoryPublic[]>([]);
+  const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
+  const [creditHistoryError, setCreditHistoryError] = useState<string | null>(null);
 
   const [courses, setCourses] = useState<CoursePublic[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
@@ -97,6 +107,20 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     }
   }, []);
 
+  const loadCreditHistory = useCallback(async () => {
+    if (!token) return;
+    setCreditHistoryLoading(true);
+    setCreditHistoryError(null);
+    try {
+      const list = await apiGetMyCreditHistory(token, 50);
+      setCreditHistory(list);
+    } catch (err) {
+      setCreditHistoryError(formatApiError(err));
+    } finally {
+      setCreditHistoryLoading(false);
+    }
+  }, [token]);
+
   const selectCourse = useCallback(
     (courseId: string) => {
       setSelectedCourseId(courseId);
@@ -109,19 +133,20 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     if (!token) return;
     setRefreshing(true);
     try {
-      const tasks = [refreshMe(), loadSkill(), loadCourses(), loadAssignments()];
+      const tasks = [refreshMe(), loadSkill(), loadCourses(), loadAssignments(), loadCreditHistory()];
       await Promise.all(tasks);
     } finally {
       setRefreshing(false);
     }
-  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments]);
+  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments, loadCreditHistory]);
 
   useEffect(() => {
     if (!token || user?.role !== "student") return;
     void loadSkill();
     void loadCourses();
     void loadAssignments();
-  }, [loadSkill, loadCourses, loadAssignments, token, user?.role]);
+    void loadCreditHistory();
+  }, [loadSkill, loadCourses, loadAssignments, loadCreditHistory, token, user?.role]);
 
   useEffect(() => {
     setAvatarFile(null);
@@ -246,6 +271,12 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     : "";
   const avatarSrc = avatarPreviewUrl ?? remoteAvatarSrc;
   const showAvatarImage = Boolean(avatarSrc) && !avatarPreviewError;
+  const latestCreditHistory = creditHistory[0] ?? null;
+  const latestCreditSummary = latestCreditHistory
+    ? `${latestCreditHistory.delta >= 0 ? "+" : ""}${latestCreditHistory.delta} / ${new Date(
+        latestCreditHistory.created_at
+      ).toLocaleDateString()}`
+    : "履歴なし";
 
   const uploadAvatar = useCallback(async (file: File) => {
     if (!token) return;
@@ -443,6 +474,75 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog onOpenChange={(open) => {
+        if (open) {
+          void loadCreditHistory();
+        }
+      }}>
+        <DialogTrigger asChild>
+          <button type="button" className="w-full text-left">
+            <Card className="transition hover:shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <CardTitle>クレジット履歴</CardTitle>
+                <div className="text-xs text-muted-foreground">{creditHistory.length}件</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-slate-600">最新: {latestCreditSummary}</div>
+              </CardContent>
+            </Card>
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <DialogHeader className="text-left">
+              <DialogTitle>クレジット履歴</DialogTitle>
+              <DialogDescription>最近の付与・調整の履歴です。</DialogDescription>
+            </DialogHeader>
+            <Button variant="outline" onClick={loadCreditHistory} disabled={!token || creditHistoryLoading}>
+              {creditHistoryLoading ? "読み込み中..." : "更新"}
+            </Button>
+          </div>
+          {creditHistoryError ? (
+            <Alert variant="destructive">
+              <AlertTitle>取得に失敗しました</AlertTitle>
+              <AlertDescription>{creditHistoryError}</AlertDescription>
+            </Alert>
+          ) : null}
+          {!token ? (
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
+          ) : creditHistoryLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : creditHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">履歴がありません</p>
+          ) : (
+            <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+              {creditHistory.map((item) => {
+                const deltaSign = item.delta >= 0 ? "+" : "";
+                const deltaClass = item.delta >= 0 ? "text-emerald-600" : "text-rose-600";
+                const reasonLabel = CREDIT_REASON_LABELS[item.reason] ?? item.reason;
+                return (
+                  <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</div>
+                        <div className="text-sm font-semibold text-slate-800">{reasonLabel}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-lg font-semibold ${deltaClass}`}>
+                          {deltaSign}
+                          {item.delta}
+                        </div>
+                        <div className="text-xs text-slate-500">合計: {item.total_credits}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">

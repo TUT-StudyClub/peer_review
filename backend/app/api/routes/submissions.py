@@ -26,7 +26,9 @@ from app.schemas.submission import TeacherGradeSubmit
 from app.services.ai import analyze_review_alignment
 from app.services.auth import get_current_user
 from app.services.auth import require_teacher
+from app.services.credits import CREDIT_REASON_REVIEW_RECALCULATED
 from app.services.credits import calculate_review_credit_gain
+from app.services.credits import record_credit_history
 from app.services.pdf import PDFExtractionService
 from app.services.rubric import ensure_fixed_rubric
 from app.services.storage import build_download_response
@@ -253,6 +255,16 @@ def set_teacher_grade(
         delta = new_credit.added - old_awarded
         if delta != 0:
             reviewer.credits = max(0, reviewer.credits + delta)
+            record_credit_history(
+                db,
+                user=reviewer,
+                delta=delta,
+                total_credits=reviewer.credits,
+                reason=CREDIT_REASON_REVIEW_RECALCULATED,
+                review_id=review.id,
+                assignment_id=review_assignment.assignment_id,
+                submission_id=review_assignment.submission_id,
+            )
         review.credit_awarded = new_credit.added
 
     db.commit()
