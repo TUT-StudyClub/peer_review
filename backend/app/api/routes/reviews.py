@@ -42,6 +42,7 @@ from app.services.anonymize import alias_for_user
 from app.services.auth import get_current_user, require_teacher
 from app.services.credits import calculate_review_credit_gain
 from app.services.matching import get_or_assign_review_assignment
+from app.services.push_notification import push_service
 from app.services.similarity import check_similarity
 
 router = APIRouter()
@@ -246,6 +247,17 @@ def submit_review(
 
     db.commit()
     db.refresh(review)
+    
+    # レビュー受信通知を送信
+    push_service.send_to_user(
+        db=db,
+        user_id=str(submission.author_id),
+        title="レビューが届きました",
+        body=f"あなたの提出物にレビューが届きました",
+        url=f"/assignments/{review_assignment.assignment_id}",
+        notification_type="review_received",
+    )
+    
     return review
 
 

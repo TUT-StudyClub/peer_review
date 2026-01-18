@@ -283,7 +283,8 @@ async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string)
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+    const url = `${API_BASE_URL}/api${path}`;
+    res = await fetch(url, { ...init, headers });
   } catch (err) {
     const hint = [
       "APIに接続できませんでした。",
@@ -372,7 +373,7 @@ export async function apiGetMySubmission(token: string, assignmentId: string): P
 }
 
 export async function apiDownloadSubmissionFile(token: string, submissionId: string): Promise<Blob> {
-  const res = await fetch(`${API_BASE_URL}/submissions/${submissionId}/file`, {
+  const res = await fetch(`${API_BASE_URL}/api/submissions/${submissionId}/file`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
