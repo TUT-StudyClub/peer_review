@@ -1,34 +1,55 @@
 import logging
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import File
+from fastapi import HTTPException
+from fastapi import UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.assignment import Assignment
-from app.models.review import Review, ReviewAssignment
-from app.models.submission import Submission, SubmissionFileType, SubmissionRubricScore
-from app.models.user import User, UserRole
-from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
+from app.models.review import Review
+from app.models.review import ReviewAssignment
+from app.models.submission import Submission
+from app.models.submission import SubmissionFileType
+from app.models.submission import SubmissionRubricScore
+from app.models.user import User
+from app.models.user import UserRole
+from app.schemas.submission import SubmissionPublic
+from app.schemas.submission import TeacherGradeSubmit
 from app.services.ai import analyze_review_alignment
-from app.services.auth import get_current_user, require_teacher
+from app.services.auth import get_current_user
+from app.services.auth import require_teacher
+from app.services.credits import CREDIT_REASON_REVIEW_RECALCULATED
+from app.services.credits import calculate_review_credit_gain
+from app.services.credits import record_credit_history
 from app.services.pdf import PDFExtractionService
 from app.services.rubric import ensure_fixed_rubric
-from app.services.storage import build_download_response, detect_file_type, save_upload_file
+from app.services.storage import build_download_response
+from app.services.storage import detect_file_type
+from app.services.storage import save_upload_file
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+current_user_dependency = Depends(get_current_user)
+teacher_dependency = Depends(require_teacher)
+upload_file_dependency = File(...)
 
 
 @router.post("/assignment/{assignment_id}", response_model=SubmissionPublic)
 def submit_report(
     assignment_id: UUID,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    file: UploadFile = upload_file_dependency,
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> Submission:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
@@ -40,9 +61,7 @@ def submit_report(
         .first()
     )
     if existing is not None:
-        raise HTTPException(
-            status_code=400, detail="You have already submitted for this assignment"
-        )
+        raise HTTPException(status_code=400, detail="You have already submitted for this assignment")
 
     file_type = detect_file_type(file)
     if file_type is None:
@@ -101,8 +120,8 @@ def submit_report(
 @router.get("/assignment/{assignment_id}/me", response_model=SubmissionPublic)
 def get_my_submission(
     assignment_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> Submission:
     submission = (
         db.query(Submission)
@@ -117,8 +136,8 @@ def get_my_submission(
 @router.get("/{submission_id}", response_model=SubmissionPublic)
 def get_submission(
     submission_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> Submission:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
@@ -132,8 +151,8 @@ def get_submission(
 @router.get("/{submission_id}/file")
 def download_submission_file(
     submission_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> FileResponse:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
@@ -153,12 +172,8 @@ def download_submission_file(
     if not allowed:
         raise HTTPException(status_code=403, detail="Not allowed")
 
-    filename = (
-        "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
-    )
-    media_type = (
-        "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
-    )
+    filename = "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
+    media_type = "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
     return build_download_response(
         storage_path=submission.storage_path,
         filename=filename,
@@ -170,8 +185,8 @@ def download_submission_file(
 def set_teacher_grade(
     submission_id: UUID,
     payload: TeacherGradeSubmit,
-    db: Session = Depends(get_db),
-    _teacher: User = Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher: User = teacher_dependency,
 ) -> Submission:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
@@ -189,12 +204,11 @@ def set_teacher_grade(
         if not (0 <= s.score <= criterion.max_score):
             raise HTTPException(status_code=400, detail="Rubric score out of range")
 
+    was_graded = submission.teacher_total_score is not None
     submission.teacher_total_score = payload.teacher_total_score
     submission.teacher_feedback = payload.teacher_feedback
 
-    db.query(SubmissionRubricScore).filter(
-        SubmissionRubricScore.submission_id == submission.id
-    ).delete()
+    db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id == submission.id).delete()
     for s in payload.rubric_scores:
         db.add(
             SubmissionRubricScore(
@@ -204,14 +218,15 @@ def set_teacher_grade(
             )
         )
 
-    if payload.teacher_feedback and payload.teacher_feedback.strip():
-        reviews = (
-            db.query(Review)
-            .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
-            .filter(ReviewAssignment.submission_id == submission.id)
-            .all()
-        )
-        for review in reviews:
+    reviews = (
+        db.query(Review, ReviewAssignment, User)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .join(User, User.id == ReviewAssignment.reviewer_id)
+        .filter(ReviewAssignment.submission_id == submission.id)
+        .all()
+    )
+    for review, review_assignment, reviewer in reviews:
+        if payload.teacher_feedback and payload.teacher_feedback.strip():
             alignment = analyze_review_alignment(
                 teacher_review_text=payload.teacher_feedback,
                 student_review_text=review.comment,
@@ -222,6 +237,35 @@ def set_teacher_grade(
             else:
                 review.ai_comment_alignment_score = alignment.alignment_score
                 review.ai_comment_alignment_reason = alignment.alignment_reason
+
+        new_credit = calculate_review_credit_gain(
+            db,
+            review_assignment=review_assignment,
+            review=review,
+            reviewer=reviewer,
+        )
+        old_awarded = review.credit_awarded
+        if old_awarded is None:
+            if was_graded:
+                old_awarded = new_credit.added
+            else:
+                base = max(0.0, float(settings.review_credit_base))
+                multiplier = float(settings.ta_credit_multiplier if reviewer.is_ta else 1.0)
+                old_awarded = max(1, int(round(base * multiplier)))
+        delta = new_credit.added - old_awarded
+        if delta != 0:
+            reviewer.credits = max(0, reviewer.credits + delta)
+            record_credit_history(
+                db,
+                user=reviewer,
+                delta=delta,
+                total_credits=reviewer.credits,
+                reason=CREDIT_REASON_REVIEW_RECALCULATED,
+                review_id=review.id,
+                assignment_id=review_assignment.assignment_id,
+                submission_id=review_assignment.submission_id,
+            )
+        review.credit_awarded = new_credit.added
 
     db.commit()
     db.refresh(submission)

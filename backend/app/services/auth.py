@@ -1,20 +1,25 @@
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
+from fastapi import HTTPException
+from fastapi import status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jose import JWTError
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import ALGORITHM
 from app.db.session import get_db
-from app.models.user import User, UserRole
+from app.models.user import User
+from app.models.user import UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -36,7 +41,7 @@ def get_current_user(
     return user
 
 
-def require_teacher(current_user: User = Depends(get_current_user)) -> User:
+def require_teacher(current_user: User = Depends(get_current_user)) -> User:  # noqa: B008
     if current_user.role != UserRole.teacher:
         raise HTTPException(status_code=403, detail="Teacher role required")
     return current_user

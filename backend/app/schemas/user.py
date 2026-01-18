@@ -1,7 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import EmailStr
+from pydantic import Field
 
 from app.models.user import UserRole
 
@@ -19,6 +22,7 @@ class UserPublic(BaseModel):
     id: UUID
     email: EmailStr
     name: str
+    avatar_url: str | None = None
     role: UserRole
     credits: int
     rank: str
@@ -35,6 +39,20 @@ class UserRankingEntry(BaseModel):
     title: str
     is_ta: bool
     period_credits: int | None = None
+
+
+class CreditHistoryPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    user_id: UUID
+    delta: int
+    total_credits: int
+    reason: str
+    review_id: UUID | None = None
+    assignment_id: UUID | None = None
+    submission_id: UUID | None = None
+    created_at: datetime
 
 
 class ReviewerSkill(BaseModel):

@@ -1,6 +1,6 @@
+from collections.abc import Iterator
 from io import StringIO
 from pathlib import Path
-from typing import Iterator
 
 import pdfplumber
 from pdfminer.pdfparser import PDFSyntaxError
@@ -8,6 +8,7 @@ from pdfminer.pdfparser import PDFSyntaxError
 
 class PDFExtractionService:
     """PDFからテキストを抽出するサービス"""
+
     @staticmethod
     def _has_pdf_signature(pdf_path: Path) -> bool:
         """ファイル先頭のマジックバイトでPDF実体を確認する。
@@ -18,7 +19,7 @@ class PDFExtractionService:
             with pdf_path.open("rb") as f:
                 header = f.read(5)
             return header.startswith(b"%PDF-")
-        except (OSError, IOError):
+        except OSError:
             return False
         except Exception:
             # 予期しないエラーもFalseとして扱う
@@ -27,7 +28,7 @@ class PDFExtractionService:
     @staticmethod
     def _validate_pdf_path(pdf_path: str | Path) -> Path:
         """共通のPDFパス検証: 存在・拡張子・シグネチャを確認してPathを返す。
-        
+
         例外処理:
             FileNotFoundError: ファイルが存在しない場合
             ValueError: 拡張子がPDFでない場合
@@ -38,27 +39,28 @@ class PDFExtractionService:
             p = Path(pdf_path)
         except (TypeError, ValueError) as e:
             raise ValueError(f"不正なパス形式です: {pdf_path}") from e
-        
+
         # ファイル存在確認
         if not p.exists():
             raise FileNotFoundError(f"PDFファイルが見つかりません: {p}")
-        
+
         # ファイルアクセス可能か確認
         try:
             if not p.is_file():
                 raise ValueError(f"パスはファイルである必要があります: {p}")
         except OSError as e:
             raise OSError(f"ファイルアクセスエラー: {p}") from e
-        
+
         # 拡張子確認
         if p.suffix.lower() != ".pdf":
             raise ValueError(f"ファイルはPDF形式である必要があります: {p}")
-        
+
         # PDFシグネチャ確認
         if not PDFExtractionService._has_pdf_signature(p):
             raise ValueError(f"PDFシグネチャが不正です。有効なPDFファイルではない可能性があります: {p}")
-        
+
         return p
+
     @staticmethod
     def extract_text(
         pdf_path: str | Path,
@@ -117,6 +119,11 @@ class PDFExtractionService:
         return out.getvalue().rstrip()
 
     @staticmethod
+    def extract_markdown(pdf_path: str | Path) -> str:
+        """PDFからMarkdown用の文字列を抽出する（現状はテキスト抽出の結果を返す）。"""
+        return PDFExtractionService.extract_text(pdf_path)
+
+    @staticmethod
     def extract_text_iter(pdf_path: str | Path) -> Iterator[str]:
         """
         PDFテキストをページ単位でストリーミング抽出するジェネレータ。
@@ -173,13 +180,13 @@ class PDFExtractionService:
     @staticmethod
     def extract_tables_by_page(pdf_path: str | Path) -> dict[int, list[list[list[str | None]]]]:
         """ページごとのテーブル（セル文字列）を抽出する。
-        
+
         Args:
             pdf_path: PDFファイルのパス
-            
+
         Returns:
             ページ番号をキー、テーブル情報（セル行列）をリストで返す
-            
+
         Raises:
             FileNotFoundError: PDFファイルが見つからない場合
             ValueError: PDFファイルが無効/破損している場合

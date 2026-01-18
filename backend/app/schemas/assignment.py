@@ -1,7 +1,9 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import Field
 
 
 class AssignmentCreate(BaseModel):
@@ -9,6 +11,7 @@ class AssignmentCreate(BaseModel):
     course_id: UUID
     description: str | None = None
     target_reviews_per_submission: int = Field(default=2, ge=1, le=3)
+    due_at: datetime | None = None
 
 
 class AssignmentPublic(BaseModel):
@@ -20,6 +23,7 @@ class AssignmentPublic(BaseModel):
     description: str | None
     target_reviews_per_submission: int
     created_at: datetime
+    due_at: datetime | None
 
 
 class RubricCriterionCreate(BaseModel):

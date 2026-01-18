@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.review import Review, ReviewAssignment
+from app.models.credit_history import CreditHistory
+from app.models.review import Review
+from app.models.review import ReviewAssignment
 from app.models.user import User
 from app.services.scoring import _rubric_alignment_score
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+
+CREDIT_REASON_REVIEW_SUBMITTED = "review_submitted"
+CREDIT_REASON_REVIEW_RECALCULATED = "review_recalculated"
 
 
 @dataclass(frozen=True)
@@ -73,9 +83,7 @@ def calculate_review_credit_gain(
     if trust_score is not None:
         trust_score = max(0.0, min(1.0, trust_score))
 
-    alignment_bonus = max(0.0, float(settings.review_credit_alignment_bonus_max)) * (
-        trust_score or 0.0
-    )
+    alignment_bonus = max(0.0, float(settings.review_credit_alignment_bonus_max)) * (trust_score or 0.0)
 
     is_ta = reviewer.is_ta
     multiplier = float(settings.ta_credit_multiplier if is_ta else 1.0)
@@ -91,3 +99,30 @@ def calculate_review_credit_gain(
         multiplier=multiplier,
         is_ta=is_ta,
     )
+
+
+def record_credit_history(
+    db: Session,
+    *,
+    user: User,
+    delta: int,
+    total_credits: int,
+    reason: str,
+    review_id: UUID | None = None,
+    assignment_id: UUID | None = None,
+    submission_id: UUID | None = None,
+) -> CreditHistory | None:
+    if delta == 0:
+        return None
+
+    history = CreditHistory(
+        user_id=user.id,
+        delta=delta,
+        total_credits=total_credits,
+        reason=reason,
+        review_id=review_id,
+        assignment_id=assignment_id,
+        submission_id=submission_id,
+    )
+    db.add(history)
+    return history

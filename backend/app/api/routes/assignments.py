@@ -1,31 +1,34 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import REVIEWER_SKILL_TEMPLATE
 from app.db.session import get_db
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
+from app.models.assignment import RubricCriterion
 from app.models.course import Course
 from app.models.submission import Submission
-from app.schemas.assignment import (
-    AssignmentCreate,
-    AssignmentPublic,
-    RubricCriterionCreate,
-    RubricCriterionPublic,
-)
+from app.schemas.assignment import AssignmentCreate
+from app.schemas.assignment import AssignmentPublic
+from app.schemas.assignment import RubricCriterionCreate
+from app.schemas.assignment import RubricCriterionPublic
 from app.schemas.submission import SubmissionTeacherPublic
 from app.services.auth import require_teacher
 from app.services.rubric import ensure_fixed_rubric
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+teacher_dependency = Depends(require_teacher)
 
 
 @router.post("", response_model=AssignmentPublic)
 def create_assignment(
     payload: AssignmentCreate,
-    db: Session = Depends(get_db),
-    _teacher=Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher=teacher_dependency,
 ) -> Assignment:
     course = db.query(Course).filter(Course.id == payload.course_id).first()
     if course is None:
@@ -38,6 +41,7 @@ def create_assignment(
         course_id=payload.course_id,
         description=payload.description,
         target_reviews_per_submission=payload.target_reviews_per_submission,
+        due_at=payload.due_at,
     )
     db.add(assignment)
     db.flush()
@@ -50,7 +54,7 @@ def create_assignment(
 @router.get("", response_model=list[AssignmentPublic])
 def list_assignments(
     course_id: UUID | None = None,
-    db: Session = Depends(get_db),
+    db: Session = db_dependency,
 ) -> list[Assignment]:
     query = db.query(Assignment)
     if course_id is not None:
@@ -62,8 +66,8 @@ def list_assignments(
 def add_rubric_criterion(
     assignment_id: UUID,
     payload: RubricCriterionCreate,
-    db: Session = Depends(get_db),
-    _teacher=Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher=teacher_dependency,
 ) -> RubricCriterion:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
@@ -92,19 +96,25 @@ def add_rubric_criterion(
 
 
 @router.get("/{assignment_id}/rubric", response_model=list[RubricCriterionPublic])
-def list_rubric_criteria(assignment_id: UUID, db: Session = Depends(get_db)) -> list[RubricCriterion]:
+def list_rubric_criteria(
+    assignment_id: UUID,
+    db: Session = db_dependency,
+) -> list[RubricCriterion]:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
         raise HTTPException(status_code=404, detail="Assignment not found")
 
-    return ensure_fixed_rubric(db, assignment_id)
+    rubric = ensure_fixed_rubric(db, assignment_id)
+    # Persist auto-created rubric criteria so IDs remain stable across requests.
+    db.commit()
+    return rubric
 
 
 @router.get("/{assignment_id}/submissions", response_model=list[SubmissionTeacherPublic])
 def list_submissions_for_assignment(
     assignment_id: UUID,
-    db: Session = Depends(get_db),
-    _teacher=Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher=teacher_dependency,
 ) -> list[Submission]:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:

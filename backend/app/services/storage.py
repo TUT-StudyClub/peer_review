@@ -3,21 +3,38 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
-from fastapi import HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import HTTPException
+from fastapi import UploadFile
+from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
 from app.core.config import settings
 from app.models.submission import SubmissionFileType
 
 logger = logging.getLogger(__name__)
+
+IMAGE_TYPE_MAP = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+}
+IMAGE_EXTENSION_MAP = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
 
 
 @dataclass
@@ -55,6 +72,19 @@ def detect_file_type(upload: UploadFile) -> SubmissionFileType | None:
     return None
 
 
+def detect_image_type(upload: UploadFile) -> tuple[str, str] | None:
+    content_type = (upload.content_type or "").lower()
+    if content_type in IMAGE_TYPE_MAP:
+        return IMAGE_TYPE_MAP[content_type], content_type
+
+    filename = (upload.filename or "").lower()
+    suffix = Path(filename).suffix
+    if suffix in IMAGE_EXTENSION_MAP:
+        return suffix.lstrip("."), IMAGE_EXTENSION_MAP[suffix]
+
+    return None
+
+
 def save_upload_file(
     *,
     upload: UploadFile,
@@ -84,6 +114,33 @@ def save_upload_file(
     return StoredUpload(storage_path=str(dest), local_path=dest)
 
 
+def save_avatar_file(*, upload: UploadFile, user_id) -> tuple[StoredUpload, str]:
+    detected = detect_image_type(upload)
+    if detected is None:
+        raise HTTPException(status_code=400, detail="Only image files are supported")
+    extension, content_type = detected
+
+    if _is_s3_backend():
+        bucket = _require_s3_bucket()
+        key = _build_avatar_key(user_id=user_id, extension=extension)
+        temp_path = _create_temp_path(suffix=f".{extension}")
+        _write_upload_to_path(upload, temp_path)
+        try:
+            _upload_file_to_s3(local_path=temp_path, bucket=bucket, key=key)
+        except Exception as exc:
+            logger.error("S3 upload failed for %s", key, exc_info=True)
+            raise HTTPException(status_code=500, detail="Failed to upload file") from exc
+        storage_path = f"s3://{bucket}/{key}"
+        return StoredUpload(storage_path=storage_path, local_path=temp_path, cleanup_path=temp_path), content_type
+
+    base = ensure_storage_dir()
+    avatar_dir = base / "avatars"
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+    dest = avatar_dir / f"{user_id}.{extension}"
+    _write_upload_to_path(upload, dest)
+    return StoredUpload(storage_path=str(dest), local_path=dest), content_type
+
+
 def build_download_response(*, storage_path: str, filename: str, media_type: str):
     if storage_path.startswith("s3://"):
         bucket, key = _parse_s3_uri(storage_path)
@@ -110,6 +167,13 @@ def _build_s3_key(*, assignment_id, submission_id, extension: str) -> str:
     parts = [p for p in [prefix, str(assignment_id)] if p]
     base = "/".join(parts)
     return f"{base}/{submission_id}.{extension}" if base else f"{submission_id}.{extension}"
+
+
+def _build_avatar_key(*, user_id, extension: str) -> str:
+    prefix = settings.s3_key_prefix.strip("/")
+    parts = [p for p in [prefix, "avatars"] if p]
+    base = "/".join(parts)
+    return f"{base}/{user_id}.{extension}" if base else f"{user_id}.{extension}"
 
 
 def _write_upload_to_path(upload: UploadFile, dest: Path) -> None:
@@ -149,6 +213,25 @@ def _parse_s3_uri(uri: str) -> tuple[str, str]:
     if not bucket or not key:
         raise HTTPException(status_code=500, detail="Invalid S3 storage path")
     return bucket, key
+
+
+def delete_storage_path(storage_path: str) -> None:
+    if storage_path.startswith("s3://"):
+        try:
+            bucket, key = _parse_s3_uri(storage_path)
+            client = _get_s3_client()
+            client.delete_object(Bucket=bucket, Key=key)
+        except Exception:
+            logger.warning("Failed to delete S3 object: %s", storage_path, exc_info=True)
+        return
+
+    path = Path(storage_path)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        logger.warning("Failed to delete file: %s", storage_path, exc_info=True)
 
 
 def _stream_s3_object(*, bucket: str, key: str, filename: str, media_type: str):
