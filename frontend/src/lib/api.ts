@@ -4,6 +4,7 @@ import type {
   CourseCreate,
   CourseEnrollmentPublic,
   CoursePublic,
+  CreditHistoryPublic,
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
@@ -334,6 +335,22 @@ export async function apiGetMe(token: string): Promise<UserPublic> {
   return apiFetch<UserPublic>("/users/me", {}, token);
 }
 
+export async function apiGetMyCreditHistory(token: string, limit = 50): Promise<CreditHistoryPublic[]> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  return apiFetch<CreditHistoryPublic[]>(`/users/me/credit-history?${params.toString()}`, {}, token);
+}
+
+export async function apiUploadAvatar(token: string, file: File): Promise<UserPublic> {
+  const body = new FormData();
+  body.append("file", file);
+  return apiFetch<UserPublic>("/users/me/avatar", { method: "POST", body }, token);
+}
+
+export async function apiDeleteAvatar(token: string): Promise<UserPublic> {
+  return apiFetch<UserPublic>("/users/me/avatar", { method: "DELETE" }, token);
+}
+
 export async function apiGetRanking(
   limit = 5,
   period: RankingPeriod = "total"
@@ -423,8 +440,11 @@ export async function apiDownloadSubmissionFile(token: string, submissionId: str
   return await res.blob();
 }
 
-export async function apiNextReviewTask(token: string, assignmentId: string): Promise<ReviewAssignmentTask> {
-  return apiFetch<ReviewAssignmentTask>(`/assignments/${assignmentId}/reviews/next`, {}, token);
+export async function apiNextReviewTask(
+  token: string,
+  assignmentId: string
+): Promise<ReviewAssignmentTask | null> {
+  return apiFetch<ReviewAssignmentTask | null>(`/assignments/${assignmentId}/reviews/next`, {}, token);
 }
 
 export async function apiSubmitReview(

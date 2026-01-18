@@ -1,15 +1,21 @@
 import AssignmentsClient from "./AssignmentsClient";
 
 type AssignmentsPageProps = {
-  searchParams?: Promise<{ course_id?: string | string[] }> | { course_id?: string | string[] };
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+const getFirstParam = (value: string | string[] | undefined): string | null => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
 };
 
 export default async function AssignmentsPage({ searchParams }: AssignmentsPageProps) {
-  const resolvedSearchParams = await Promise.resolve(searchParams);
-  const courseIdParam = resolvedSearchParams?.course_id;
-  const initialCourseId = Array.isArray(courseIdParam)
-    ? courseIdParam[0] ?? null
-    : courseIdParam ?? null;
+  const resolvedSearchParams = await searchParams;
+  const initialCourseId = getFirstParam(resolvedSearchParams?.course_id);
+  const viewParam = getFirstParam(resolvedSearchParams?.view);
+  const initialCourseView = viewParam === "create" ? "create" : "list";
 
-  return <AssignmentsClient initialCourseId={initialCourseId} />;
+  return <AssignmentsClient initialCourseId={initialCourseId} initialCourseView={initialCourseView} />;
 }

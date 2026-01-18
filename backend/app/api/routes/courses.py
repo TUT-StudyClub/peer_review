@@ -20,6 +20,7 @@ from app.services.auth import get_current_user
 from app.services.auth import require_teacher
 
 router = APIRouter()
+COURSE_THEME_OPTIONS = {"sky", "emerald", "amber", "rose", "slate", "violet"}
 db_dependency = Depends(get_db)
 current_user_dependency = Depends(get_current_user)
 teacher_dependency = Depends(require_teacher)
@@ -34,6 +35,9 @@ def create_course(
     if payload.title not in COURSE_TITLE_CANDIDATES:
         raise HTTPException(status_code=400, detail="Course title is not allowed")
 
+    if payload.theme and payload.theme not in COURSE_THEME_OPTIONS:
+        raise HTTPException(status_code=400, detail="Course theme is not allowed")
+
     existing_course = (
         db.query(Course).filter(Course.teacher_id == current_user.id, Course.title == payload.title).first()
     )
@@ -44,6 +48,7 @@ def create_course(
         title=payload.title,
         description=payload.description,
         teacher_id=current_user.id,
+        theme=payload.theme or "sky",
     )
     db.add(course)
     db.commit()
@@ -52,6 +57,7 @@ def create_course(
         id=course.id,
         title=course.title,
         description=course.description,
+        theme=course.theme,
         teacher_id=course.teacher_id,
         created_at=course.created_at,
         teacher_name=current_user.name,
@@ -81,6 +87,7 @@ def list_courses(
                 id=course.id,
                 title=course.title,
                 description=course.description,
+                theme=course.theme,
                 teacher_id=course.teacher_id,
                 created_at=course.created_at,
                 teacher_name=current_user.name,
@@ -98,6 +105,7 @@ def list_courses(
             id=course.id,
             title=course.title,
             description=course.description,
+            theme=course.theme,
             teacher_id=course.teacher_id,
             created_at=course.created_at,
             teacher_name=course.teacher.name if course.teacher else None,

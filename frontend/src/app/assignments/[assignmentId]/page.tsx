@@ -2,6 +2,26 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import {
+  Award,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Download,
+  Eye,
+  FileText,
+  Filter,
+  GraduationCap,
+  Lightbulb,
+  RefreshCcw,
+  Save,
+  Search,
+  Star,
+  Target,
+  TrendingUp,
+  X,
+  Users,
+} from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAuth } from "@/app/providers";
@@ -10,6 +30,7 @@ import {
   apiDownloadSubmissionFile,
   apiGetMyGrade,
   apiGetMySubmission,
+  apiListCourseStudents,
   apiListEligibleTAs,
   apiGetReviewerSkill,
   apiListAssignments,
@@ -47,7 +68,7 @@ import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -64,18 +85,12 @@ const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
 
 type ScoreInput = number | "";
 
-const parseScoreInput = (value: string): ScoreInput => {
-  if (value === "") return "";
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? "" : parsed;
-};
-
 function shortId(id: string) {
   return id.slice(0, 8);
 }
 
 function formatSkill(value: number) {
-  return value > 0 ? value.toFixed(2) : "-";
+  return value > 0 ? value.toFixed(1) : "-";
 }
 
 function formatScore(value: number | null, digits = 1, fallback = "-") {
@@ -83,9 +98,71 @@ function formatScore(value: number | null, digits = 1, fallback = "-") {
   return value.toFixed(digits);
 }
 
-function extractReviewCount(breakdown: Record<string, unknown>) {
-  const count = breakdown.reviews_count;
-  return typeof count === "number" ? count : null;
+function formatDateTime(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleString();
+}
+
+function StarRatingInput({
+  value,
+  max,
+  onChange,
+}: {
+  value: ScoreInput;
+  max: number;
+  onChange: (value: ScoreInput) => void;
+}) {
+  const safeMax = Math.max(1, max);
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex items-center gap-1">
+        {Array.from({ length: safeMax }, (_, index) => {
+          const starValue = index + 1;
+          const active = typeof value === "number" && value >= starValue;
+          return (
+            <button
+              key={starValue}
+              type="button"
+              onClick={() => onChange(value === starValue ? "" : starValue)}
+              className="rounded-sm p-0.5 transition hover:scale-105"
+              aria-label={`${starValue}点`}
+            >
+              <Star className={active ? "h-5 w-5 fill-amber-400 text-amber-400" : "h-5 w-5 text-slate-300"} />
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-xs text-muted-foreground">
+        {typeof value === "number" ? `${value}/${safeMax}` : "未評価"}
+      </span>
+    </div>
+  );
+}
+
+function StarRatingDisplay({ value, max }: { value: number; max: number }) {
+  const safeMax = Math.max(1, max);
+  const filled = Math.min(safeMax, Math.max(0, Math.round(value)));
+  return (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: safeMax }, (_, index) => {
+        const active = index < filled;
+        return (
+          <Star
+            key={index}
+            className={
+              active ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4 text-slate-300"
+            }
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function reviewDraftStorageKey(assignmentId: string, submissionId: string) {
+  return `review-draft:${assignmentId}:${submissionId}`;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -139,11 +216,17 @@ export default function AssignmentDetailPage() {
     "idle"
   );
   const [uploading, setUploading] = useState(false);
+  const [resubmitMode, setResubmitMode] = useState(false);
 
   const [reviewTask, setReviewTask] = useState<ReviewAssignmentTask | null>(null);
   const [reviewComment, setReviewComment] = useState("");
   const [reviewScores, setReviewScores] = useState<Record<string, ScoreInput>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewStatus, setReviewStatus] = useState<"idle" | "loading" | "ready" | "none" | "submitted">("idle");
+  const [reviewPreviewUrl, setReviewPreviewUrl] = useState<string | null>(null);
+  const [reviewPreviewText, setReviewPreviewText] = useState<string | null>(null);
+  const [reviewPreviewLoading, setReviewPreviewLoading] = useState(false);
+  const [reviewPreviewError, setReviewPreviewError] = useState<string | null>(null);
   const templateClicks = useRef<Record<string, number>>({});
 
   const [received, setReceived] = useState<ReviewReceived[]>([]);
@@ -151,14 +234,21 @@ export default function AssignmentDetailPage() {
 
   const [grade, setGrade] = useState<GradeMe | null>(null);
   const [gradeLoading, setGradeLoading] = useState(false);
+  const [reviewContributionOpen, setReviewContributionOpen] = useState(false);
 
   const [skill, setSkill] = useState<ReviewerSkill | null>(null);
   const [skillLoading, setSkillLoading] = useState(false);
 
   const [teacherSubmissions, setTeacherSubmissions] = useState<SubmissionTeacherPublic[]>([]);
   const [teacherSubmissionsLoading, setTeacherSubmissionsLoading] = useState(false);
+  const [courseStudents, setCourseStudents] = useState<UserPublic[]>([]);
+  const [reviewCounts, setReviewCounts] = useState<Record<string, number>>({});
+  const [reviewCountsLoading, setReviewCountsLoading] = useState(false);
+  const [reviewCountsLoaded, setReviewCountsLoaded] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "waiting" | "reviewing" | "graded">("all");
+  const [bulkDownloading, setBulkDownloading] = useState(false);
   const [gradeTargetId, setGradeTargetId] = useState<string | null>(null);
-  const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
   const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, ScoreInput>>({});
   const [teacherReviewList, setTeacherReviewList] = useState<TeacherReviewPublic[]>([]);
@@ -176,10 +266,41 @@ export default function AssignmentDetailPage() {
   const [paraphraseLoading, setParaphraseLoading] = useState(false);
   const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
-
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
+  const teacherRubricTotal = useMemo(() => {
+    return rubric.reduce((sum, c) => {
+      const value = teacherRubricScores[c.id];
+      return sum + (typeof value === "number" ? value : 0);
+    }, 0);
+  }, [rubric, teacherRubricScores]);
+  const derivedTeacherScore = useMemo(() => {
+    if (totalRubricMax <= 0) return 0;
+    return Math.round((teacherRubricTotal / totalRubricMax) * 100);
+  }, [teacherRubricTotal, totalRubricMax]);
+  const rubricMetaById = useMemo(() => new Map(rubric.map((c) => [c.id, c])), [rubric]);
+  const reviewContributionBreakdown = useMemo(() => {
+    if (!grade?.breakdown || typeof grade.breakdown !== "object") return null;
+    return grade.breakdown as {
+      reviews_count?: number;
+      review_points_base_weights?: Record<string, number>;
+      per_review?: Array<{
+        review_id?: string;
+        points?: number;
+        score_norm?: number | null;
+        toxic?: boolean;
+        duplicate_penalty?: number;
+        similarity_penalty?: number;
+        metrics?: {
+          helpfulness?: { raw?: number | null; norm?: number | null; weight?: number | null };
+          alignment?: { norm?: number | null; weight?: number | null };
+          quality?: { raw?: number | null; norm?: number | null; weight?: number | null };
+          comment_alignment?: { raw?: number | null; norm?: number | null };
+        };
+      }>;
+    };
+  }, [grade?.breakdown]);
   const rubricNameById = useMemo(() => new Map(rubric.map((c) => [c.id, c.name])), [rubric]);
   const backHref =
     user?.role === "student"
@@ -195,6 +316,97 @@ export default function AssignmentDetailPage() {
     }
     return map;
   }, [taRequests]);
+  const taRequestByUserId = useMemo(() => {
+    if (!taDialogSubmissionId) return new Map<string, TAReviewRequestPublic>();
+    const list = taRequestsBySubmission[taDialogSubmissionId] ?? [];
+    return new Map(list.map((request) => [request.ta_id, request]));
+  }, [taDialogSubmissionId, taRequestsBySubmission]);
+  const studentById = useMemo(() => {
+    return new Map(courseStudents.map((student) => [student.id, student]));
+  }, [courseStudents]);
+  const reviewTarget = assignment?.target_reviews_per_submission ?? 0;
+  const reviewProgress = reviewTarget ? Math.min(received.length / reviewTarget, 1) : 0;
+  const reviewTimeRange = useMemo(() => {
+    if (!received.length) return { start: null, end: null };
+    const times = received
+      .map((r) => new Date(r.created_at).getTime())
+      .filter((t) => !Number.isNaN(t));
+    if (!times.length) return { start: null, end: null };
+    return { start: Math.min(...times), end: Math.max(...times) };
+  }, [received]);
+  const reviewStartAt =
+    reviewTimeRange.start === null ? null : new Date(reviewTimeRange.start).toLocaleString();
+  const reviewCompleteAt =
+    reviewTarget > 0 && received.length >= reviewTarget && reviewTimeRange.end !== null
+      ? new Date(reviewTimeRange.end).toLocaleString()
+      : null;
+  const reviewFileLabel = reviewTask
+    ? reviewTask.file_type === "pdf"
+      ? "PDFプレビュー"
+      : "Markdownプレビュー"
+    : "";
+  const reviewFileName = reviewTask
+    ? `submission-${shortId(reviewTask.submission_id)}.${reviewTask.file_type === "pdf" ? "pdf" : "md"}`
+    : "";
+  const reviewContributionItems = reviewContributionBreakdown?.per_review ?? [];
+  const reviewContributionCount =
+    reviewContributionBreakdown?.reviews_count ?? reviewContributionItems.length;
+  const reviewContributionWeights =
+    (reviewContributionBreakdown?.review_points_base_weights ?? {}) as Record<string, number>;
+  const reviewCharCount = reviewComment.trim().length;
+  const submissionCards = useMemo(() => {
+    return teacherSubmissions.map((submission) => {
+      const reviewCount = reviewCounts[submission.id] ?? 0;
+      const student = studentById.get(submission.author_id);
+      const status =
+        submission.teacher_total_score !== null
+          ? "graded"
+          : reviewCount > 0
+            ? "reviewing"
+            : "waiting";
+      return {
+        submission,
+        reviewCount,
+        studentName: student?.name ?? `受講生 ${shortId(submission.author_id)}`,
+        status,
+      };
+    });
+  }, [teacherSubmissions, reviewCounts, studentById]);
+  const filteredSubmissionCards = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    return submissionCards.filter((card) => {
+      if (statusFilter !== "all" && card.status !== statusFilter) {
+        return false;
+      }
+      if (!keyword) return true;
+      const candidates = [
+        card.studentName,
+        card.submission.author_id,
+        card.submission.original_filename,
+        card.submission.id,
+        shortId(card.submission.id),
+      ]
+        .filter(Boolean)
+        .map((value) => value.toLowerCase());
+      return candidates.some((value) => value.includes(keyword));
+    });
+  }, [searchTerm, statusFilter, submissionCards]);
+  const teacherSummary = useMemo(() => {
+    let graded = 0;
+    let reviewing = 0;
+    let waiting = 0;
+    for (const card of submissionCards) {
+      if (card.status === "graded") graded += 1;
+      else if (card.status === "reviewing") reviewing += 1;
+      else waiting += 1;
+    }
+    return {
+      total: submissionCards.length,
+      graded,
+      reviewing,
+      waiting,
+    };
+  }, [submissionCards]);
 
   const loadBase = useCallback(async () => {
     setLoadingBase(true);
@@ -268,6 +480,7 @@ export default function AssignmentDetailPage() {
       setMySubmission(s);
       setMySubmissionStatus("ready");
       setFile(null);
+      setResubmitMode(false);
       setNotice("提出しました");
     } catch (err) {
       setNotice(formatApiError(err));
@@ -291,15 +504,52 @@ export default function AssignmentDetailPage() {
     }
   };
 
+  const downloadAllSubmissions = async () => {
+    if (!token) {
+      setNotice("ダウンロードにはログインが必要です");
+      return;
+    }
+    if (teacherSubmissions.length === 0) return;
+    setBulkDownloading(true);
+    for (const submission of teacherSubmissions) {
+      await downloadSubmission(submission.id, submission.file_type);
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    setBulkDownloading(false);
+  };
+
+  const previewSubmission = async (submissionId: string) => {
+    if (!token) {
+      setNotice("プレビューにはログインが必要です");
+      return;
+    }
+    setNotice(null);
+    try {
+      const blob = await apiDownloadSubmissionFile(token, submissionId);
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank", "noopener,noreferrer");
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    }
+  };
+
   const getNextTask = async () => {
     if (!token) {
       setNotice("レビューにはログインが必要です");
       return;
     }
     setNotice(null);
+    setReviewStatus("loading");
     try {
       const task = await apiNextReviewTask(token, assignmentId);
+      if (!task) {
+        setReviewTask(null);
+        setReviewStatus("none");
+        return;
+      }
       setReviewTask(task);
+      setReviewStatus("ready");
       setReviewComment("");
       const init: Record<string, ScoreInput> = {};
       for (const c of task.rubric) init[c.id] = "";
@@ -307,9 +557,10 @@ export default function AssignmentDetailPage() {
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setReviewTask(null);
-        setNotice("今はレビュー対象がありません（全てレビュー済み等）");
+        setReviewStatus("none");
         return;
       }
+      setReviewStatus("idle");
       setNotice(formatApiError(err));
     }
   };
@@ -328,6 +579,22 @@ export default function AssignmentDetailPage() {
     console.info("review template used", { key: tpl.key, label: tpl.label, count: nextCount });
   };
 
+  const saveReviewDraft = () => {
+    if (!reviewTask) return;
+    try {
+      const key = reviewDraftStorageKey(assignmentId, reviewTask.submission_id);
+      const payload = {
+        comment: reviewComment,
+        scores: reviewScores,
+        saved_at: new Date().toISOString(),
+      };
+      localStorage.setItem(key, JSON.stringify(payload));
+      setNotice("下書きを保存しました");
+    } catch {
+      setNotice("下書きの保存に失敗しました");
+    }
+  };
+
   const submitReview = async () => {
     if (!token || !reviewTask) return;
     setReviewSubmitting(true);
@@ -341,8 +608,10 @@ export default function AssignmentDetailPage() {
         })),
       };
       const res = await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
+      localStorage.removeItem(reviewDraftStorageKey(assignmentId, reviewTask.submission_id));
       setReviewTask(null);
       setReviewComment("");
+      setReviewStatus("submitted");
       const creditLabel = res.credit_awarded ? `credits +${res.credit_awarded}` : "credits 加算";
       setNotice(`レビューを提出しました（${creditLabel}）`);
       await refreshMe();
@@ -436,10 +705,48 @@ export default function AssignmentDetailPage() {
     try {
       const list = await apiTeacherListSubmissions(token, assignmentId);
       setTeacherSubmissions(list);
+      await loadReviewCounts(list);
     } catch (err) {
       setNotice(formatApiError(err));
     } finally {
       setTeacherSubmissionsLoading(false);
+    }
+  };
+
+  const loadCourseStudents = useCallback(async () => {
+    if (!token || !assignment?.course_id) return;
+    try {
+      const list = await apiListCourseStudents(token, assignment.course_id);
+      setCourseStudents(list);
+    } catch (err) {
+      setNotice(formatApiError(err));
+    }
+  }, [assignment?.course_id, token]);
+
+  const loadReviewCounts = async (submissions: SubmissionTeacherPublic[]) => {
+    if (!token) return;
+    if (submissions.length === 0) {
+      setReviewCounts({});
+      setReviewCountsLoaded(true);
+      return;
+    }
+    setReviewCountsLoading(true);
+    setReviewCountsLoaded(false);
+    let succeeded = false;
+    try {
+      const entries = await Promise.all(
+        submissions.map(async (submission) => {
+          const list = await apiListReviewsForSubmission(token, submission.id);
+          return [submission.id, list.length] as const;
+        })
+      );
+      setReviewCounts(Object.fromEntries(entries));
+      succeeded = true;
+    } catch (err) {
+      setNotice(formatApiError(err));
+    } finally {
+      setReviewCountsLoading(false);
+      setReviewCountsLoaded(succeeded);
     }
   };
 
@@ -497,7 +804,6 @@ export default function AssignmentDetailPage() {
   const openTeacherGrade = (submissionId: string) => {
     setGradeTargetId(submissionId);
     setTeacherFeedback("");
-    setTeacherTotalScore(80);
     const init: Record<string, ScoreInput> = {};
     for (const c of rubric) init[c.id] = "";
     setTeacherRubricScores(init);
@@ -508,7 +814,7 @@ export default function AssignmentDetailPage() {
     setNotice(null);
     try {
       await apiTeacherGradeSubmission(token, gradeTargetId, {
-        teacher_total_score: teacherTotalScore,
+        teacher_total_score: derivedTeacherScore,
         teacher_feedback: teacherFeedback || null,
         rubric_scores: rubric.map((c) => ({ criterion_id: c.id, score: Number(teacherRubricScores[c.id] ?? 0) })),
       });
@@ -545,6 +851,7 @@ export default function AssignmentDetailPage() {
     if (user.role === "teacher") {
       void loadTeacherSubmissions();
       void loadTARequests();
+      void loadCourseStudents();
       return;
     }
     void loadMySubmission();
@@ -554,6 +861,108 @@ export default function AssignmentDetailPage() {
     // NOTE: 初期表示時にだけロードしたいので、意図的に dependency を最小限にしています。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user, assignmentId]);
+
+  useEffect(() => {
+    if (!token || user?.role !== "teacher" || !assignment?.course_id) return;
+    void loadCourseStudents();
+  }, [assignment?.course_id, loadCourseStudents, token, user?.role]);
+
+  useEffect(() => {
+    if (!reviewTask) return;
+    const key = reviewDraftStorageKey(assignmentId, reviewTask.submission_id);
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as { comment?: string; scores?: Record<string, ScoreInput> };
+      if (parsed.comment) setReviewComment(parsed.comment);
+      if (parsed.scores) {
+        setReviewScores((prev) => ({ ...prev, ...parsed.scores }));
+      }
+    } catch {
+    }
+  }, [assignmentId, reviewTask]);
+
+  useEffect(() => {
+    if (!token || !reviewTask) return;
+    let canceled = false;
+    let previewUrl: string | null = null;
+    setReviewPreviewLoading(true);
+    setReviewPreviewError(null);
+    setReviewPreviewText(null);
+    setReviewPreviewUrl(null);
+    const loadPreview = async () => {
+      try {
+        const blob = await apiDownloadSubmissionFile(token, reviewTask.submission_id);
+        if (reviewTask.file_type === "markdown") {
+          const text = await blob.text();
+          if (!canceled) setReviewPreviewText(text);
+        } else {
+          previewUrl = URL.createObjectURL(blob);
+          if (!canceled) setReviewPreviewUrl(previewUrl);
+        }
+      } catch (err) {
+        if (!canceled) setReviewPreviewError(formatApiError(err));
+      } finally {
+        if (!canceled) setReviewPreviewLoading(false);
+      }
+    };
+    void loadPreview();
+    return () => {
+      canceled = true;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [reviewTask, token]);
+
+  const renderUploadArea = (options: { submitLabel: string; onCancel?: () => void }) => (
+    <div className="space-y-3">
+      <div
+        className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 transition-colors"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.add("border-muted-foreground/60", "bg-muted/60");
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+          const droppedFile = e.dataTransfer.files?.[0];
+          if (
+            droppedFile &&
+            (droppedFile.type === "text/markdown" ||
+              droppedFile.type === "application/pdf" ||
+              droppedFile.name.endsWith(".md") ||
+              droppedFile.name.endsWith(".pdf"))
+          ) {
+            setFile(droppedFile);
+          }
+        }}
+      >
+        <label className="flex flex-col items-center justify-center gap-2 cursor-pointer">
+          <div className="text-sm font-medium">ファイルを選択またはドラッグ＆ドロップ</div>
+          <div className="text-xs text-muted-foreground">{file ? file.name : "Markdown (.md) または PDF (.pdf)"}</div>
+          <input
+            type="file"
+            accept=".md,.pdf,text/markdown,application/pdf"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="hidden"
+          />
+        </label>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button onClick={upload} disabled={uploading || !file} className="w-full sm:flex-1">
+          {uploading ? "提出中..." : options.submitLabel}
+        </Button>
+        {options.onCancel ? (
+          <Button variant="outline" onClick={options.onCancel} className="w-full sm:flex-1">
+            キャンセル
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
 
   if (loadingBase) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -578,9 +987,13 @@ export default function AssignmentDetailPage() {
     <div className="space-y-6">
       <SectionCard title={assignment ? assignment.title : `課題 ${assignmentId}`} contentClassName="space-y-2">
         {assignment?.description ? <p className="text-sm text-muted-foreground">{assignment.description}</p> : null}
-        <div className="text-xs text-muted-foreground">
-          reviews/submission: {assignment?.target_reviews_per_submission ?? "-"} / created:{" "}
-          {assignment?.created_at ? new Date(assignment.created_at).toLocaleString() : "-"}
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+            必要レビュー数: {assignment?.target_reviews_per_submission ?? "-"}
+          </span>
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+            作成日: {assignment?.created_at ? new Date(assignment.created_at).toLocaleString() : "-"}
+          </span>
         </div>
       </SectionCard>
 
@@ -616,87 +1029,227 @@ export default function AssignmentDetailPage() {
           </ul>
         )}
 
-        {user?.role === "teacher" ? (
-          <div className="rounded-lg border bg-muted p-4 text-xs text-muted-foreground">
-            固定ルーブリックは自動で設定されます。
-          </div>
-        ) : null}
       </SectionCard>
 
       {user?.role === "teacher" ? (
         <SectionCard
-          title="（teacher）提出一覧 & 採点"
+          title="提出一覧"
           actions={
             <Button
               variant="outline"
-              onClick={() => {
-                void loadTeacherSubmissions();
-                void loadTARequests();
-              }}
-              disabled={teacherSubmissionsLoading}
+              onClick={downloadAllSubmissions}
+              disabled={bulkDownloading || teacherSubmissions.length === 0}
+              className="gap-2"
             >
-              更新
+              <Download className="h-4 w-4" />
+              {bulkDownloading ? "ダウンロード中..." : "一括ダウンロード"}
             </Button>
           }
+          contentClassName="space-y-6"
         >
+          <div className="text-sm text-muted-foreground">
+            課題: {assignment?.title ?? "-"}
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                <FileText className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">総提出数</div>
+                <div className="text-lg font-semibold">{teacherSummary.total}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">採点済み</div>
+                <div className="text-lg font-semibold">{teacherSummary.graded}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">レビュー中</div>
+                <div className="text-lg font-semibold">
+                  {reviewCountsLoaded ? teacherSummary.reviewing : "-"}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-50 text-slate-600">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">レビュー待ち</div>
+                <div className="text-lg font-semibold">
+                  {reviewCountsLoaded ? teacherSummary.waiting : "-"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-xl border bg-white p-4 shadow-sm lg:flex-row lg:items-center">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="学生名、学籍番号、提出IDで検索..."
+                className="pl-9"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value as typeof statusFilter)}>
+                <SelectTrigger className="w-[140px] bg-white">
+                  <SelectValue placeholder="すべて" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">すべて</SelectItem>
+                  <SelectItem value="waiting">レビュー待ち</SelectItem>
+                  <SelectItem value="reviewing">レビュー中</SelectItem>
+                  <SelectItem value="graded">採点済み</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" className="gap-2">
+                <Filter className="h-4 w-4" />
+                フィルター
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  void loadTeacherSubmissions();
+                  void loadTARequests();
+                }}
+                disabled={teacherSubmissionsLoading}
+              >
+                更新
+              </Button>
+            </div>
+          </div>
+
           {taRequestsLoading ? <p className="text-xs text-muted-foreground">TA依頼を読み込み中...</p> : null}
           {teacherSubmissionsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {teacherSubmissions.length === 0 ? (
+          {reviewCountsLoading ? <p className="text-sm text-muted-foreground">レビュー数を取得中...</p> : null}
+
+          {!teacherSubmissionsLoading && teacherSubmissions.length === 0 ? (
             <p className="text-sm text-muted-foreground">提出がまだありません</p>
+          ) : !teacherSubmissionsLoading && filteredSubmissionCards.length === 0 ? (
+            <p className="text-sm text-muted-foreground">該当する提出がありません</p>
           ) : (
-            <div className="space-y-2">
-              {teacherSubmissions.map((s) => (
-                <div key={s.id} className="rounded-lg border p-3">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="text-sm">
-                      <div className="font-medium">submission: {shortId(s.id)}</div>
-                      <div className="text-xs text-muted-foreground">
-                        author: {shortId(s.author_id)} / {s.file_type} / {new Date(s.created_at).toLocaleString()}
+            <div className="space-y-4">
+              {filteredSubmissionCards.map((card) => {
+                const reviewLabel =
+                  reviewTarget && reviewCountsLoaded ? `${card.reviewCount}/${reviewTarget}` : "-";
+                const progressValue = reviewTarget ? Math.min(card.reviewCount / reviewTarget, 1) : 0;
+                const statusLabel =
+                  card.status === "graded" ? "採点済み" : card.status === "reviewing" ? "レビュー中" : "レビュー待ち";
+                const statusClass =
+                  card.status === "graded"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : card.status === "reviewing"
+                      ? "bg-blue-50 text-blue-700"
+                      : "bg-slate-100 text-slate-600";
+                const taRequestCount = taRequestsBySubmission[card.submission.id]?.length ?? 0;
+                return (
+                  <div key={card.submission.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600">
+                          <GraduationCap className="h-6 w-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex flex-wrap items-baseline gap-2">
+                            <div className="text-base font-semibold">{card.studentName}</div>
+                            <div className="text-xs text-muted-foreground">
+                              ({shortId(card.submission.author_id)})
+                            </div>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                            <FileText className="h-4 w-4" />
+                            <span className="max-w-[280px] truncate">
+                              {card.submission.original_filename ||
+                                `submission-${shortId(card.submission.id)}.${
+                                  card.submission.file_type === "pdf" ? "pdf" : "md"
+                                }`}
+                            </span>
+                            <span>・</span>
+                            <span>{card.submission.file_type === "pdf" ? "PDF" : "Markdown"}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            提出: {formatDateTime(card.submission.created_at)} ・ ID:{" "}
+                            {shortId(card.submission.id)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        teacher_total_score: {s.teacher_total_score ?? "-"}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        TA依頼:{" "}
-                        {taRequestsBySubmission[s.id]?.length ? (
-                          <span className="inline-flex flex-wrap gap-1">
-                            {taRequestsBySubmission[s.id].map((r) => (
-                              <span
-                                key={r.id}
-                                className={[
-                                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-                                  r.status === "offered"
-                                    ? "bg-amber-100 text-amber-900"
-                                    : r.status === "accepted"
-                                      ? "bg-emerald-100 text-emerald-900"
-                                      : "bg-slate-100 text-slate-900",
-                                ].join(" ")}
-                                title={`ta: ${shortId(r.ta_id)} / ${new Date(r.created_at).toLocaleString()}`}
-                              >
-                                {r.status} ({shortId(r.ta_id)})
-                              </span>
-                            ))}
-                          </span>
-                        ) : (
-                          "なし"
-                        )}
+                      <div className="flex flex-col items-end gap-2">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClass}`}>
+                          {statusLabel}
+                        </span>
+                        {card.submission.teacher_total_score !== null ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
+                            <CheckCircle2 className="h-4 w-4" />
+                            教員採点 {card.submission.teacher_total_score}点
+                          </div>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={() => downloadSubmission(s.id, s.file_type)}>
-                        DL
+
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>ピアレビュー進捗</span>
+                        <span>{reviewLabel}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted">
+                        <div
+                          className="h-2 rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${progressValue * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadSubmission(card.submission.id, card.submission.file_type)}
+                        className="w-full"
+                      >
+                        ダウンロード
                       </Button>
-                      <Button onClick={() => openTeacherGrade(s.id)}>採点</Button>
-                      <Button variant="outline" onClick={() => openTeacherReviews(s.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openTeacherGrade(card.submission.id)}
+                        className="w-full"
+                      >
+                        採点
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openTeacherReviews(card.submission.id)}
+                        className="w-full"
+                      >
                         レビュー一覧
                       </Button>
-                      <Button variant="outline" onClick={() => openTARequest(s.id)}>
-                        TA依頼
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openTARequest(card.submission.id)}
+                        className="w-full"
+                      >
+                        TA依頼{taRequestCount ? ` (${taRequestCount})` : ""}
                       </Button>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -707,57 +1260,56 @@ export default function AssignmentDetailPage() {
             }}
           >
             {gradeTargetId ? (
-              <DialogContent className="sm:max-w-2xl">
+              <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                   <DialogTitle>採点: {shortId(gradeTargetId)}</DialogTitle>
                 </DialogHeader>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <Field label="teacher_total_score（0-100推奨）">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={teacherTotalScore}
-                      onChange={(e) => setTeacherTotalScore(Number(e.target.value))}
+                <div className="space-y-4">
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="text-base font-semibold">総合点</div>
+                    <div className="mt-3 flex items-baseline gap-2">
+                      <div className="text-3xl font-semibold">{derivedTeacherScore}</div>
+                      <div className="text-sm text-muted-foreground">/ 100</div>
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      ルーブリック合計: {teacherRubricTotal}/{totalRubricMax || 0}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="text-base font-semibold">評価項目</div>
+                    <div className="mt-4 space-y-4">
+                      {rubric.map((c) => (
+                        <div key={c.id} className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold">
+                            {c.name}
+                            <span className="text-xs text-muted-foreground">（max {c.max_score}）</span>
+                          </div>
+                          {c.description ? <div className="text-xs text-muted-foreground">{c.description}</div> : null}
+                          <StarRatingInput
+                            value={teacherRubricScores[c.id] ?? ""}
+                            max={c.max_score}
+                            onChange={(value) => setTeacherRubricScores((prev) => ({ ...prev, [c.id]: value }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-base font-semibold">フィードバック</div>
+                      <div className="text-xs text-muted-foreground">{teacherFeedback.trim().length} 文字</div>
+                    </div>
+                    <Textarea
+                      value={teacherFeedback}
+                      onChange={(e) => setTeacherFeedback(e.target.value)}
+                      rows={5}
+                      placeholder="受講者へのフィードバックを記入してください（任意）"
+                      className="mt-3 min-h-[160px]"
                     />
-                  </Field>
-                  <Field label="自動計算（ルーブリック合計を0-100へ換算）">
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => {
-                        const total = rubric.reduce((sum, c) => sum + Number(teacherRubricScores[c.id] ?? 0), 0);
-                        const score = totalRubricMax > 0 ? Math.round((total / totalRubricMax) * 100) : 0;
-                        setTeacherTotalScore(score);
-                      }}
-                    >
-                      ルーブリックから計算
-                    </Button>
-                  </Field>
-                </div>
-
-                <Field label="teacher_feedback（任意）">
-                  <Textarea value={teacherFeedback} onChange={(e) => setTeacherFeedback(e.target.value)} rows={3} />
-                </Field>
-
-                <div className="space-y-3">
-                  {rubric.map((c) => (
-                    <Field key={c.id} label={`${c.name}（max ${c.max_score}）`}>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={c.max_score}
-                        value={teacherRubricScores[c.id] ?? ""}
-                        onChange={(e) =>
-                          setTeacherRubricScores((prev) => ({
-                            ...prev,
-                            [c.id]: parseScoreInput(e.target.value),
-                          }))
-                        }
-                      />
-                    </Field>
-                  ))}
+                  </div>
                 </div>
 
                 <DialogFooter>
@@ -782,12 +1334,9 @@ export default function AssignmentDetailPage() {
             {taDialogSubmissionId ? (
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>TA依頼: {shortId(taDialogSubmissionId)}</DialogTitle>
+                  <DialogTitle>TA依頼</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    TA資格のある学生に依頼します。受諾されると、その学生がこの提出物をレビューできます。
-                  </p>
                   <Field label="TAを選択">
                     <Select
                       value={taSelectedUserId ?? undefined}
@@ -805,11 +1354,27 @@ export default function AssignmentDetailPage() {
                             {taCandidatesLoading ? "読み込み中..." : "TA資格の学生がいません"}
                           </div>
                         ) : (
-                          taCandidates.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name} / {u.title} / ランク: {u.rank} / credits: {u.credits}
-                            </SelectItem>
-                          ))
+                          taCandidates.map((u) => {
+                            const existing = taRequestByUserId.get(u.id);
+                            const statusLabel = existing
+                              ? existing.review_submitted
+                                ? "レビュー済み"
+                                : existing.status === "offered"
+                                  ? "依頼中"
+                                  : existing.status === "accepted"
+                                    ? "受諾済み"
+                                    : "辞退済み"
+                              : null;
+                            const isDisabled = Boolean(
+                              existing && (existing.review_submitted || existing.status !== "declined")
+                            );
+                            return (
+                              <SelectItem key={u.id} value={u.id} disabled={isDisabled}>
+                                {u.name} / {u.title} / ランク: {u.rank} / credits: {u.credits}
+                                {statusLabel ? `（${statusLabel}）` : ""}
+                              </SelectItem>
+                            );
+                          })
                         )}
                       </SelectContent>
                     </Select>
@@ -878,56 +1443,150 @@ export default function AssignmentDetailPage() {
                             <p className="text-xs text-muted-foreground">なし</p>
                           ) : (
                             <div className="space-y-3">
-                              {list.map((r) => (
-                                <div key={r.id} className="rounded-lg border p-3 space-y-2">
-                                  <div className="flex flex-wrap items-start justify-between gap-2">
-                                    <div>
-                                      <div className="font-medium">Reviewer: {r.reviewer_alias}</div>
-                                      <div className="text-xs text-muted-foreground">
-                                        {new Date(r.created_at).toLocaleString()}
+                              {list.map((r) => {
+                                const rubricScores = [...r.rubric_scores].sort((a, b) => {
+                                  const aOrder = rubricMetaById.get(a.criterion_id)?.order_index ?? 0;
+                                  const bOrder = rubricMetaById.get(b.criterion_id)?.order_index ?? 0;
+                                  return aOrder - bOrder;
+                                });
+                                const creditValue = r.credit_awarded ?? null;
+                                const creditClass =
+                                  creditValue && creditValue > 0
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-slate-200 bg-white text-slate-700";
+                                if (group !== "TA") {
+                                  return (
+                                    <div key={r.id} className="rounded-lg border p-3 space-y-2">
+                                      <div className="flex flex-wrap items-start justify-between gap-2">
+                                        <div>
+                                          <div className="font-medium">Reviewer: {r.reviewer_alias}</div>
+                                          <div className="text-xs text-muted-foreground">
+                                            {new Date(r.created_at).toLocaleString()}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          AI品質: {r.ai_quality_score ?? "-"}
+                                        </div>
                                       </div>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      AI品質: {r.ai_quality_score ?? "-"}
-                                    </div>
-                                  </div>
-                                  <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
-                                  <div className="space-y-1 rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
-                                    <div className="font-semibold">Rubric</div>
-                                    {r.rubric_scores.map((s) => (
-                                      <div key={s.criterion_id}>
-                                        {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
+                                      <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
+                                      <div className="space-y-1 rounded-md bg-muted/60 p-2 text-xs text-muted-foreground">
+                                        <div className="font-semibold">Rubric</div>
+                                        {r.rubric_scores.map((s) => (
+                                          <div key={s.criterion_id}>
+                                            {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
-                                  </div>
-                                  {r.meta_review ? (
-                                    <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
-                                      メタ評価: {r.meta_review.helpfulness}/5
-                                      {r.meta_review.comment ? ` / ${r.meta_review.comment}` : ""}
-                                    </div>
-                                  ) : null}
-                                  {r.ai_quality_reason ? (
-                                    <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-                                      {r.ai_quality_reason}
-                                    </div>
-                                  ) : null}
-                                  {r.rubric_alignment_score !== null ||
-                                  r.ai_comment_alignment_score !== null ||
-                                  r.total_alignment_score !== null ||
-                                  r.credit_awarded !== null ||
-                                  r.ai_comment_alignment_reason ? (
-                                    <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
-                                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
-                                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
-                                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
-                                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
-                                      {r.ai_comment_alignment_reason ? (
-                                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                                      {r.meta_review ? (
+                                        <div className="rounded-md border bg-muted/40 p-2 text-xs text-muted-foreground">
+                                          メタ評価: {r.meta_review.helpfulness}/5
+                                          {r.meta_review.comment ? ` / ${r.meta_review.comment}` : ""}
+                                        </div>
+                                      ) : null}
+                                      {r.ai_quality_reason ? (
+                                        <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
+                                          {r.ai_quality_reason}
+                                        </div>
+                                      ) : null}
+                                      {r.rubric_alignment_score !== null ||
+                                      r.ai_comment_alignment_score !== null ||
+                                      r.total_alignment_score !== null ||
+                                      r.credit_awarded !== null ||
+                                      r.ai_comment_alignment_reason ? (
+                                        <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
+                                          <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
+                                          <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
+                                          <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
+                                          <div>付与credits: {r.credit_awarded ?? "-"}</div>
+                                          {r.ai_comment_alignment_reason ? (
+                                            <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                                          ) : null}
+                                        </div>
                                       ) : null}
                                     </div>
-                                  ) : null}
-                                </div>
-                              ))}
+                                  );
+                                }
+                                return (
+                                  <div key={r.id} className="rounded-xl border bg-white p-4 shadow-sm space-y-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div>
+                                        <div className="text-sm font-semibold">Reviewer: {r.reviewer_alias}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {new Date(r.created_at).toLocaleString()}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                                        AI品質: {r.ai_quality_score ?? "-"}
+                                      </div>
+                                    </div>
+                                    <div className="whitespace-pre-wrap text-sm">{r.comment}</div>
+                                    <div className="rounded-lg bg-slate-50 p-3 space-y-3">
+                                      <div className="text-xs font-semibold text-slate-700">Rubric</div>
+                                      {rubricScores.length === 0 ? (
+                                        <div className="text-xs text-muted-foreground">ルーブリック未入力</div>
+                                      ) : (
+                                        <div className="grid gap-3 sm:grid-cols-2">
+                                          {rubricScores.map((s) => {
+                                            const meta = rubricMetaById.get(s.criterion_id);
+                                            const label = meta?.name ?? shortId(s.criterion_id);
+                                            const maxScore = meta?.max_score ?? 5;
+                                            const percent =
+                                              maxScore > 0 ? Math.min(100, Math.max(0, (s.score / maxScore) * 100)) : 0;
+                                            return (
+                                              <div key={s.criterion_id} className="space-y-1">
+                                                <div className="flex items-center justify-between text-xs text-slate-600">
+                                                  <span>{label}</span>
+                                                  <span className="font-semibold text-slate-800">{s.score}</span>
+                                                </div>
+                                                <div className="h-2 rounded-full bg-white">
+                                                  <div
+                                                    className="h-2 rounded-full bg-blue-600"
+                                                    style={{ width: `${percent}%` }}
+                                                  />
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {r.ai_quality_reason ? (
+                                      <div className="rounded-md border-l-4 border-amber-400 bg-amber-50 p-3 text-xs text-amber-900">
+                                        {r.ai_quality_reason}
+                                      </div>
+                                    ) : null}
+                                    <div className="grid gap-2 sm:grid-cols-4">
+                                      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div>ルーブリック一致</div>
+                                        <div className="mt-1 text-base font-semibold text-slate-900">
+                                          {r.rubric_alignment_score ?? "-"}
+                                          {r.rubric_alignment_score !== null ? "/5" : ""}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div>レビュー一致</div>
+                                        <div className="mt-1 text-base font-semibold text-slate-900">
+                                          {r.ai_comment_alignment_score ?? "-"}
+                                          {r.ai_comment_alignment_score !== null ? "/5" : ""}
+                                        </div>
+                                      </div>
+                                      <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+                                        <div>総合評価</div>
+                                        <div className="mt-1 text-base font-semibold text-slate-900">
+                                          {r.total_alignment_score ?? "-"}
+                                          {r.total_alignment_score !== null ? "/5" : ""}
+                                        </div>
+                                      </div>
+                                      <div className={`rounded-lg border p-3 text-xs ${creditClass}`}>
+                                        <div>付与credits</div>
+                                        <div className="mt-1 text-base font-semibold">
+                                          {creditValue !== null ? creditValue : "-"}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -948,7 +1607,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）提出（My Submission）"
+          title="提出"
           actions={
             <Button variant="outline" onClick={loadMySubmission}>
               更新
@@ -960,59 +1619,165 @@ export default function AssignmentDetailPage() {
           ) : mySubmissionStatus === "loading" ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : mySubmissionStatus === "missing" ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 まだ提出していません。Markdown（.md）推奨（AIの「本文＋レビュー」判定が効きやすいです）。
               </p>
-              <div className="space-y-3">
-                <div
-                  className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 transition-colors"
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.add("border-muted-foreground/60", "bg-muted/60");
-                  }}
-                  onDragLeave={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
-                    const droppedFile = e.dataTransfer.files?.[0];
-                    if (droppedFile && (droppedFile.type === "text/markdown" || droppedFile.type === "application/pdf" || droppedFile.name.endsWith(".md") || droppedFile.name.endsWith(".pdf"))) {
-                      setFile(droppedFile);
-                    }
-                  }}
-                >
-                  <label className="flex flex-col items-center justify-center gap-2 cursor-pointer">
-                    <div className="text-sm font-medium">ファイルを選択またはドラッグ＆ドロップ</div>
-                    <div className="text-xs text-muted-foreground">
-                      {file ? file.name : "Markdown (.md) または PDF (.pdf)"}
-                    </div>
-                    <input
-                      type="file"
-                      accept=".md,.pdf,text/markdown,application/pdf"
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-                <Button onClick={upload} disabled={uploading || !file} className="w-full">
-                  {uploading ? "提出中..." : "提出"}
-                </Button>
-              </div>
+              {renderUploadArea({ submitLabel: "提出" })}
             </div>
           ) : mySubmission ? (
-            <div className="space-y-2 text-sm">
-              <div>
-                submission_id: <span className="font-mono">{mySubmission.id}</span>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 rounded-xl border bg-emerald-50/70 p-4 sm:flex-row sm:items-center">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="text-lg font-semibold">提出完了</div>
+                  <div className="text-sm text-muted-foreground">
+                    課題が正常に提出されました。レビューをお待ちください。
+                  </div>
+                </div>
               </div>
-              <div>file_type: {mySubmission.file_type}</div>
-              <div>created_at: {new Date(mySubmission.created_at).toLocaleString()}</div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => downloadSubmission(mySubmission.id, mySubmission.file_type)}>
-                  ファイルDL
-                </Button>
+
+              <div className="grid gap-4 lg:grid-cols-[2fr,1fr]">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">提出ファイル</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="rounded-lg border bg-muted/30 p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-rose-50 text-rose-500">
+                          <FileText className="h-7 w-7" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">
+                            {mySubmission.original_filename ||
+                              `submission-${shortId(mySubmission.id)}.${
+                                mySubmission.file_type === "pdf" ? "pdf" : "md"
+                              }`}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {mySubmission.file_type === "pdf" ? "PDF" : "Markdown"} ・{" "}
+                            {formatDateTime(mySubmission.created_at)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        onClick={() => downloadSubmission(mySubmission.id, mySubmission.file_type)}
+                        className="gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        ダウンロード
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => previewSubmission(mySubmission.id)}
+                        className="gap-2"
+                      >
+                        <Eye className="h-4 w-4" />
+                        プレビュー
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setResubmitMode(true);
+                          setFile(null);
+                        }}
+                        className="gap-2"
+                      >
+                        <RefreshCcw className="h-4 w-4" />
+                        再提出
+                      </Button>
+                    </div>
+                    {resubmitMode ? (
+                      <div className="space-y-3 rounded-lg border bg-muted/30 p-4">
+                        <div className="text-sm font-medium">再提出</div>
+                        <div className="text-xs text-muted-foreground">再提出すると前の提出は上書きされます。</div>
+                        {renderUploadArea({
+                          submitLabel: "再提出",
+                          onCancel: () => {
+                            setResubmitMode(false);
+                            setFile(null);
+                          },
+                        })}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">ステータス</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center gap-2 rounded-lg border bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+                      <CheckCircle2 className="h-4 w-4" />
+                      提出済み
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">レビュー進捗</span>
+                        <span className="font-medium">
+                          {receivedLoading
+                            ? "読み込み中..."
+                            : reviewTarget
+                              ? `${received.length}/${reviewTarget}`
+                              : "-"}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-muted">
+                        <div
+                          className="h-2 rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${reviewProgress * 100}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {reviewTarget
+                          ? `${reviewTarget}人のレビュアーが割り当てられています。`
+                          : "レビュアーがまだ割り当てられていません。"}
+                      </div>
+                    </div>
+                    <div className="border-t pt-4">
+                      <div className="text-sm font-semibold">タイムライン</div>
+                      <div className="mt-3 space-y-4">
+                        {[
+                          {
+                            label: "提出完了",
+                            time: formatDateTime(mySubmission.created_at),
+                            active: true,
+                          },
+                          {
+                            label: "レビュー開始",
+                            time: reviewStartAt ?? "待機中",
+                            active: Boolean(reviewStartAt),
+                          },
+                          {
+                            label: "レビュー完了",
+                            time: reviewCompleteAt ?? "待機中",
+                            active: Boolean(reviewCompleteAt),
+                          },
+                        ].map((item, index, items) => (
+                          <div key={item.label} className="relative pl-6">
+                            <div
+                              className={[
+                                "absolute left-0 top-1 h-3 w-3 rounded-full",
+                                item.active ? "bg-emerald-500" : "bg-muted-foreground/30",
+                              ].join(" ")}
+                            />
+                            {index < items.length - 1 ? (
+                              <div className="absolute left-[5px] top-3 h-full w-px bg-muted" />
+                            ) : null}
+                            <div className="text-sm font-medium">{item.label}</div>
+                            <div className="text-xs text-muted-foreground">{item.time}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           ) : (
@@ -1023,7 +1788,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）レビュー（Next Task → Submit）"
+          title="レビュー"
           actions={
             <Button variant="outline" onClick={getNextTask} disabled={!token}>
               次のレビューを取得
@@ -1032,73 +1797,144 @@ export default function AssignmentDetailPage() {
         >
           {!token ? (
             <p className="text-sm text-muted-foreground">ログインするとレビューできます</p>
+          ) : reviewStatus === "loading" ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : reviewStatus === "submitted" ? (
+            <div className="rounded-xl border bg-emerald-50/70 p-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                  <CheckCircle2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="font-semibold">レビューを提出しました</div>
+                  <div className="text-sm text-muted-foreground">次のレビューがあれば取得できます。</div>
+                </div>
+              </div>
+            </div>
+          ) : reviewStatus === "none" ? (
+            <div className="flex min-h-[220px] items-center justify-center rounded-xl border bg-white p-8 text-center">
+              <div className="space-y-3">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <ClipboardList className="h-7 w-7" />
+                </div>
+                <div className="text-lg font-semibold">レビューする課題がありません</div>
+                <div className="text-sm text-muted-foreground">
+                  現在、レビュー待ちの課題はありません。
+                  <br />
+                  上の「次のレビューを取得」ボタンをクリックして、新しい課題を取得してください。
+                </div>
+              </div>
+            </div>
           ) : !reviewTask ? (
             <p className="text-sm text-muted-foreground">
               「次のレビューを取得」を押してください（未提出タスクがある場合は同じタスクが出続けます）
             </p>
           ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border bg-muted p-3 text-sm">
-                <div>author_alias: {reviewTask.author_alias}</div>
-                <div>submission_id: {shortId(reviewTask.submission_id)}</div>
-                <div>file_type: {reviewTask.file_type}</div>
-                <div className="mt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => downloadSubmission(reviewTask.submission_id, reviewTask.file_type)}
-                  >
-                    提出物をDL
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {reviewTask.rubric.map((c) => (
-                  <div key={c.id} className="grid gap-2 sm:grid-cols-2">
-                    <div className="text-sm">
-                      {c.name}（max {c.max_score}）
+            <div className="space-y-6">
+              <div className="grid gap-4 lg:grid-cols-[1.15fr,1fr]">
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="text-base font-semibold">ファイルプレビュー</div>
+                  <div className="mt-4 min-h-[420px] rounded-lg border border-dashed bg-slate-50 p-4">
+                    {reviewPreviewLoading ? (
+                      <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-muted-foreground">
+                        プレビューを読み込み中...
+                      </div>
+                    ) : reviewPreviewError ? (
+                      <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-red-500">
+                        プレビューの読み込みに失敗しました
+                      </div>
+                    ) : reviewPreviewUrl ? (
+                      <iframe
+                        title="submission preview"
+                        src={reviewPreviewUrl}
+                        className="h-[360px] w-full rounded-md bg-white"
+                      />
+                    ) : reviewPreviewText ? (
+                      <pre className="h-[360px] w-full overflow-auto rounded-md bg-white p-3 text-xs text-slate-700">
+                        {reviewPreviewText}
+                      </pre>
+                    ) : (
+                      <div className="flex h-full min-h-[360px] flex-col items-center justify-center text-center">
+                        <FileText className="h-10 w-10 text-slate-400" />
+                        <div className="mt-4 text-sm font-semibold">{reviewFileLabel}</div>
+                        <div className="text-xs text-muted-foreground">{reviewFileName}</div>
+                      </div>
+                    )}
+                    <div className="mt-4 flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => previewSubmission(reviewTask.submission_id)}
+                      >
+                        <Eye className="h-4 w-4" />
+                        別ウィンドウで開く
+                      </Button>
                     </div>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={c.max_score}
-                      value={reviewScores[c.id] ?? ""}
-                      onChange={(e) =>
-                        setReviewScores((prev) => ({ ...prev, [c.id]: parseScoreInput(e.target.value) }))
-                      }
-                    />
                   </div>
-                ))}
-              </div>
+                </div>
 
-              <Field label="レビューコメント（具体的に）" hint="短すぎるとAI/簡易判定で低評価になります">
-                <div className="space-y-2">
-                  <div className="space-y-2 rounded-md border bg-muted/70 p-3">
-                    <div className="text-xs font-medium text-muted-foreground">定型文を挿入</div>
-                    <div className="flex flex-wrap gap-2">
+                <div className="space-y-4">
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="text-base font-semibold">評価項目</div>
+                    <div className="mt-4 space-y-4">
+                      {reviewTask.rubric.map((c) => (
+                        <div key={c.id} className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm font-semibold">
+                            {c.name}
+                            <span className="text-xs text-muted-foreground">（max {c.max_score}）</span>
+                          </div>
+                          {c.description ? (
+                            <div className="text-xs text-muted-foreground">{c.description}</div>
+                          ) : null}
+                          <StarRatingInput
+                            value={reviewScores[c.id] ?? ""}
+                            max={c.max_score}
+                            onChange={(value) => setReviewScores((prev) => ({ ...prev, [c.id]: value }))}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border bg-white p-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-base font-semibold">レビューコメント</div>
+                      <div className="text-xs text-muted-foreground">{reviewCharCount} 文字</div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      テンプレート
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
                       {REVIEW_TEMPLATES.map((tpl) => (
                         <Button key={tpl.key} size="sm" variant="outline" onClick={() => insertTemplate(tpl)}>
                           {tpl.label}
                         </Button>
                       ))}
                     </div>
-                  </div>
-                  <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
-                  <div className="space-y-2">
-                    <div className="">
+                    <Textarea
+                      value={reviewComment}
+                      onChange={(e) => setReviewComment(e.target.value)}
+                      rows={8}
+                      placeholder="具体的なフィードバックを記入してください。良い点や改善点を明確に伝えることで、提出者の学習に役立ちます。"
+                      className="mt-4 min-h-[200px]"
+                    />
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>短すぎるとAI/簡易判定で低評価になります</span>
                       <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
                         言い換え
                       </Button>
-                      {paraphraseLoading ? <span className="ml-2 text-sm text-muted-foreground">変換中...</span> : null}
                     </div>
+                    {paraphraseLoading ? <span className="text-sm text-muted-foreground">変換中...</span> : null}
                     {paraphraseError ? (
-                      <Alert variant="destructive">
+                      <Alert variant="destructive" className="mt-2">
                         <AlertTitle>エラー</AlertTitle>
                         <AlertDescription className="text-sm">{paraphraseError}</AlertDescription>
                       </Alert>
                     ) : null}
                     {paraphrasePreview ? (
-                      <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                      <div className="mt-3 rounded-lg border bg-muted/50 p-3 space-y-2">
                         <div>
                           <div className="text-xs font-medium text-muted-foreground">変換結果</div>
                           <div className="mt-1 whitespace-pre-wrap text-sm">{paraphrasePreview.rephrased}</div>
@@ -1128,15 +1964,25 @@ export default function AssignmentDetailPage() {
                     ) : null}
                   </div>
                 </div>
-              </Field>
+              </div>
 
-              <div className="flex gap-2">
-                <Button onClick={submitReview} disabled={reviewSubmitting || !reviewComment.trim()}>
-                  レビュー提出
-                </Button>
-                <Button variant="outline" onClick={() => setReviewTask(null)}>
-                  キャンセル
-                </Button>
+              <div className="rounded-xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button variant="outline" className="w-full sm:w-1/3 gap-2" onClick={saveReviewDraft}>
+                    <Save className="h-4 w-4" />
+                    下書き保存
+                  </Button>
+                  <Button
+                    className="w-full sm:flex-1 bg-slate-900 text-white hover:bg-slate-800"
+                    onClick={submitReview}
+                    disabled={reviewSubmitting || !reviewComment.trim()}
+                  >
+                    レビュー提出
+                  </Button>
+                </div>
+                <div className="mt-2 text-center text-xs text-muted-foreground">
+                  提出前に、すべての評価項目とコメントを確認してください
+                </div>
               </div>
             </div>
           )}
@@ -1145,7 +1991,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）受け取ったレビュー（Received Reviews）"
+          title="受け取ったレビュー"
           actions={
             <Button variant="outline" onClick={loadReceived} disabled={!token || receivedLoading}>
               更新
@@ -1160,59 +2006,145 @@ export default function AssignmentDetailPage() {
             <p className="text-sm text-muted-foreground">まだレビューが届いていません</p>
           ) : (
             <div className="space-y-3">
-              {received.map((r) => (
-                <div key={r.id} className="rounded-lg border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{r.reviewer_alias}</div>
-                      <div className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
+              {received.map((r) => {
+                const trimmedComment = r.comment.trim();
+                const isCompactTitle =
+                  trimmedComment.length > 0 && trimmedComment.length <= 32 && !trimmedComment.includes("\n");
+                const summaryItems = [
+                  { key: "rubric", label: "ルーブリック一致", value: r.rubric_alignment_score, icon: Target },
+                  { key: "comment", label: "レビュー一致", value: r.ai_comment_alignment_score, icon: TrendingUp },
+                  { key: "total", label: "総合評価", value: r.total_alignment_score, icon: CheckCircle2 },
+                ] as const;
+                const rubricScores = [...r.rubric_scores].sort((a, b) => {
+                  const aOrder = rubricMetaById.get(a.criterion_id)?.order_index ?? 0;
+                  const bOrder = rubricMetaById.get(b.criterion_id)?.order_index ?? 0;
+                  return aOrder - bOrder;
+                });
+
+                return (
+                  <div key={r.id} className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-slate-700 via-sky-600 to-emerald-600 px-4 py-3 text-white">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="h-4 w-4" />
+                        <span>{formatDateTime(r.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-xs font-semibold">
+                        <TrendingUp className="h-4 w-4" />
+                        AI品質: {formatScore(r.ai_quality_score, 1)}
+                      </div>
                     </div>
-                    <div className="text-right text-xs text-muted-foreground">
-                      AI品質: {r.ai_quality_score ?? "-"}
-                    </div>
-                  </div>
-                  {r.ai_quality_reason ? (
-                    <div className="mt-2 rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                      {r.ai_quality_reason}
-                    </div>
-                  ) : null}
-                  {r.rubric_alignment_score !== null ||
-                  r.ai_comment_alignment_score !== null ||
-                  r.total_alignment_score !== null ||
-                  r.credit_awarded !== null ||
-                  r.ai_comment_alignment_reason ? (
-                    <div className="mt-2 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
-                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
-                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
-                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
-                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
-                      {r.ai_comment_alignment_reason ? (
-                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                    <div className="space-y-4 p-4 sm:p-6">
+                      {trimmedComment ? (
+                        isCompactTitle ? (
+                          <h3 className="text-xl font-semibold leading-snug">{trimmedComment}</h3>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="text-sm font-semibold text-muted-foreground">レビュー内容</div>
+                            <div className="whitespace-pre-wrap text-base">{trimmedComment}</div>
+                          </div>
+                        )
                       ) : null}
-                    </div>
-                  ) : null}
-                  <div className="mt-2 whitespace-pre-wrap text-sm">{r.comment}</div>
-
-                  {r.rubric_scores?.length ? (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {r.rubric_scores.map((s) => (
-                        <div key={s.criterion_id} className="text-xs text-muted-foreground">
-                          {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
+                      {r.ai_quality_reason ? (
+                        <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm text-slate-700">
+                          {r.ai_quality_reason}
                         </div>
-                      ))}
-                    </div>
-                  ) : null}
+                      ) : null}
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {summaryItems.map((item) => {
+                            const value = item.value;
+                            const percent =
+                              value === null ? 0 : Math.min(100, Math.max(0, (value / 5) * 100));
+                            const Icon = item.icon;
+                            return (
+                              <div key={item.key} className="space-y-2">
+                                <div className="flex items-center justify-between text-sm font-medium">
+                                  <div className="flex items-center gap-2 text-slate-600">
+                                    <Icon className="h-4 w-4 text-blue-600" />
+                                    <span>{item.label}</span>
+                                  </div>
+                                  <span>{value === null ? "-" : `${formatScore(value, 1)}/5`}</span>
+                                </div>
+                                <div
+                                  className="h-2 rounded-full bg-slate-200"
+                                  role="progressbar"
+                                  aria-valuemin={0}
+                                  aria-valuemax={5}
+                                  aria-valuenow={value ?? 0}
+                                >
+                                  <div className="h-full rounded-full bg-blue-500" style={{ width: `${percent}%` }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                              <Award className="h-4 w-4 text-blue-600" />
+                              付与credits
+                            </div>
+                            <div className="text-2xl font-semibold text-blue-600">
+                              {formatScore(r.credit_awarded, 1)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      {r.ai_comment_alignment_reason ? (
+                        <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-slate-700">
+                          <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                          <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                        </div>
+                      ) : null}
 
-                  {r.meta_review ? (
-                    <div className="mt-3 rounded-md border bg-muted p-3 text-sm">
-                      <div>メタ評価: {r.meta_review.helpfulness}/5</div>
-                      {r.meta_review.comment ? <div className="mt-1">{r.meta_review.comment}</div> : null}
+                      {rubricScores.length ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 text-base font-semibold text-slate-900">
+                            <ClipboardList className="h-4 w-4 text-blue-600" />
+                            詳細評価
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {rubricScores.map((s) => {
+                              const meta = rubricMetaById.get(s.criterion_id);
+                              const label = meta?.name ?? shortId(s.criterion_id);
+                              const maxScore = meta?.max_score ?? 5;
+                              return (
+                                <div
+                                  key={s.criterion_id}
+                                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"
+                                >
+                                  <div className="text-sm text-slate-600">{label}</div>
+                                  <div className="flex items-center gap-2">
+                                    <StarRatingDisplay value={s.score} max={maxScore} />
+                                    <div className="text-sm font-medium text-slate-700">
+                                      {s.score}/{maxScore}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {r.meta_review ? (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm font-semibold text-slate-900">メタ評価</div>
+                            <div className="flex items-center gap-2">
+                              <StarRatingDisplay value={r.meta_review.helpfulness} max={5} />
+                              <div className="text-sm font-medium text-slate-700">{r.meta_review.helpfulness}/5</div>
+                            </div>
+                          </div>
+                          {r.meta_review.comment ? (
+                            <div className="mt-2 text-sm text-slate-600">{r.meta_review.comment}</div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <MetaReviewForm reviewId={r.id} onSubmit={metaReview} />
+                      )}
                     </div>
-                  ) : (
-                    <MetaReviewForm reviewId={r.id} onSubmit={metaReview} />
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </SectionCard>
@@ -1220,66 +2152,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）成績（Grade）"
-          actions={
-            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading}>
-              更新
-            </Button>
-          }
-        >
-          {!token ? (
-            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
-          ) : gradeLoading ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : grade ? (
-            <div className="space-y-3 text-sm">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="text-xs text-muted-foreground">課題スコア</div>
-                  <div className="text-lg font-semibold">
-                    {formatScore(grade.assignment_score, 1, "採点待ち")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">/100</div>
-                </div>
-                <div className="rounded-lg border bg-muted/40 p-3">
-                  <div className="text-xs text-muted-foreground">レビュー貢献</div>
-                  <div className="text-lg font-semibold">
-                    +{formatScore(grade.review_contribution, 2)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">加点</div>
-                </div>
-                <div className="rounded-lg border bg-primary/10 p-3">
-                  <div className="text-xs text-muted-foreground">最終スコア</div>
-                  <div className="text-2xl font-semibold text-primary">
-                    {formatScore(grade.final_score, 1, "未確定")}
-                  </div>
-                  <div className="text-xs text-muted-foreground">max 100</div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
-              </p>
-              <details className="rounded-md border bg-muted/60 p-3 text-xs">
-                <summary className="cursor-pointer font-medium">内訳（breakdown）</summary>
-                {extractReviewCount(grade.breakdown) !== null ? (
-                  <div className="mt-2 text-[11px] text-muted-foreground">
-                    レビュー数: {extractReviewCount(grade.breakdown)}
-                  </div>
-                ) : null}
-                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap">
-                  {JSON.stringify(grade.breakdown, null, 2)}
-                </pre>
-              </details>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
-          )}
-        </SectionCard>
-      ) : null}
-
-      {user?.role === "student" ? (
-        <SectionCard
-          title="（student）レビュアースキル（この課題 / teacher比較）"
+          title="レビュアースキル"
           actions={
             <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
               更新
@@ -1291,17 +2164,49 @@ export default function AssignmentDetailPage() {
           ) : skillLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key}>
-                    {axis.label}: {formatSkill(skill[axis.key])}
-                  </div>
-                ))}
-                <div>総合: {formatSkill(skill.overall)}</div>
-              </div>
-              <div className="rounded-lg border bg-background p-3">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-6">
                 <RadarSkillChart skill={skill} />
+              </div>
+              <div className="flex flex-col justify-center space-y-6">
+                <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5">
+                  <div className="text-sm font-medium text-slate-500">総合スコア</div>
+                  <div className="mt-3 flex items-baseline gap-2">
+                    <span className="text-4xl font-semibold text-blue-600">
+                      {formatSkill(skill.overall)}
+                    </span>
+                    <span className="text-sm text-slate-400">/ 5.0</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {REVIEWER_SKILL_AXES.map((axis) => {
+                    const value = skill[axis.key];
+                    const percent = Math.min(100, Math.max(0, (value / 5) * 100));
+                    return (
+                      <div key={axis.key} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+                          <span>{axis.label}</span>
+                          <span className="text-blue-600">{formatSkill(value)}</span>
+                        </div>
+                        <div
+                          className="h-2 rounded-full bg-slate-100"
+                          role="progressbar"
+                          aria-label={`${axis.label} スコア`}
+                          aria-valuenow={value}
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                        >
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
               </div>
             </div>
           ) : (
@@ -1309,6 +2214,340 @@ export default function AssignmentDetailPage() {
           )}
         </SectionCard>
       ) : null}
+
+      {user?.role === "student" ? (
+        <SectionCard
+          title={
+            <div className="space-y-1">
+              <div>成績</div>
+              <div className="text-xs font-normal text-muted-foreground">
+                課題の評価とレビュー貢献度を確認できます
+              </div>
+            </div>
+          }
+          actions={
+            <Button variant="outline" onClick={loadGrade} disabled={!token || gradeLoading} className="gap-2">
+              <RefreshCcw className="h-4 w-4" />
+              更新
+            </Button>
+          }
+        >
+          {!token ? (
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
+          ) : gradeLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : grade ? (
+            <div className="space-y-4 text-sm">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">課題スコア</div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                      <Target className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <div className="text-3xl font-semibold">
+                      {grade.assignment_score == null ? "採点待ち" : formatScore(grade.assignment_score, 1)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">/100</div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800">
+                      {grade.assignment_score == null ? "採点待ち" : "確定"}
+                    </span>
+                  </div>
+                  <div className="mt-4 h-2 rounded-full bg-slate-100">
+                    <div
+                      className="h-2 rounded-full bg-blue-500"
+                      style={{
+                        width: `${Math.min(100, Math.max(0, (grade.assignment_score ?? 0)))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-muted-foreground">レビュー貢献</div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-50 text-violet-600">
+                      <Award className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-baseline gap-2">
+                    <div className="text-3xl font-semibold">+{formatScore(grade.review_contribution, 2)}</div>
+                    <div className="text-xs text-muted-foreground">加点</div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                      確定
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-3 px-0 text-xs text-blue-600"
+                    onClick={() => setReviewContributionOpen(true)}
+                    disabled={!reviewContributionBreakdown?.per_review?.length}
+                  >
+                    詳細を見る
+                  </Button>
+                </div>
+
+                <div className="rounded-xl border bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-sky-50 via-white to-emerald-50 p-4 text-slate-900 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-slate-500">最終スコア</div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-slate-700">
+                      <TrendingUp className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <div className="mt-2 text-3xl font-semibold">
+                    {grade.final_score == null ? "未確定" : formatScore(grade.final_score, 1)}
+                  </div>
+                  <div className="mt-2">
+                    <span className="rounded-full bg-sky-100 px-2 py-1 text-xs font-semibold text-sky-700">
+                      {grade.final_score == null ? "未確定" : "確定"}
+                    </span>
+                  </div>
+                  <div className="mt-3 text-xs text-slate-600">
+                    課題スコア確定後に最終スコアが計算されます
+                  </div>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">「更新」を押して取得してください</p>
+          )}
+        </SectionCard>
+      ) : null}
+
+      <Dialog open={reviewContributionOpen} onOpenChange={setReviewContributionOpen}>
+        <DialogContent className="sm:max-w-3xl gap-0 overflow-hidden p-0 [&>button]:hidden">
+          <div className="bg-gradient-to-r from-blue-600 via-sky-600 to-cyan-500 px-6 py-5 text-white">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="text-lg font-semibold text-white">レビュー貢献の内訳</DialogTitle>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-blue-100">
+                  <span>レビュー数: {reviewContributionCount}</span>
+                  <span>
+                    有用性:{" "}
+                    {typeof reviewContributionWeights.helpfulness === "number"
+                      ? formatScore(reviewContributionWeights.helpfulness, 2)
+                      : "-"}
+                  </span>
+                  <span>
+                    ルーブリック一致:{" "}
+                    {typeof reviewContributionWeights.alignment === "number"
+                      ? formatScore(reviewContributionWeights.alignment, 2)
+                      : "-"}
+                  </span>
+                  <span>
+                    AI品質:{" "}
+                    {typeof reviewContributionWeights.quality === "number"
+                      ? formatScore(reviewContributionWeights.quality, 2)
+                      : "-"}
+                  </span>
+                </div>
+              </div>
+              <DialogClose asChild>
+                <button
+                  type="button"
+                  className="rounded-full border border-white/30 bg-white/10 p-2 text-white transition hover:bg-white/20"
+                  aria-label="閉じる"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </DialogClose>
+            </div>
+          </div>
+          <div className="space-y-6 bg-slate-50 px-6 py-6">
+            {reviewContributionItems.length === 0 ? (
+              <p className="text-sm text-slate-500">表示できるレビューがありません。</p>
+            ) : (
+              <div className="space-y-6 text-sm">
+                {reviewContributionItems.map((item, index) => {
+                  const metrics = item.metrics ?? {};
+                  const helpfulness = metrics.helpfulness ?? {};
+                  const alignment = metrics.alignment ?? {};
+                  const quality = metrics.quality ?? {};
+                  const commentAlignment = metrics.comment_alignment ?? {};
+                  const duplicatePenalty =
+                    typeof item.duplicate_penalty === "number" ? Math.round(item.duplicate_penalty * 100) : null;
+                  const similarityPenalty =
+                    typeof item.similarity_penalty === "number" ? Math.round(item.similarity_penalty * 100) : null;
+                  const helpfulnessWeight =
+                    typeof helpfulness.weight === "number" ? Math.min(1, Math.max(0, helpfulness.weight)) : null;
+                  const alignmentWeight =
+                    typeof alignment.weight === "number" ? Math.min(1, Math.max(0, alignment.weight)) : null;
+                  const qualityWeight =
+                    typeof quality.weight === "number" ? Math.min(1, Math.max(0, quality.weight)) : null;
+                  const commentAlignmentNorm =
+                    typeof commentAlignment.norm === "number" ? Math.min(1, Math.max(0, commentAlignment.norm)) : null;
+                  const helpfulnessScoreDisplay =
+                    typeof helpfulness.raw === "number" ? `${formatScore(helpfulness.raw, 1)} 点` : "-";
+                  const alignmentScoreDisplay =
+                    typeof alignment.norm === "number" ? `${formatScore(alignment.norm * 5, 1)} 点` : "-";
+                  const qualityScoreDisplay =
+                    typeof quality.raw === "number" ? `${formatScore(quality.raw, 1)} 点` : "-";
+                  const commentAlignmentScoreDisplay =
+                    typeof commentAlignment.raw === "number"
+                      ? `${formatScore(commentAlignment.raw, 1)} 点`
+                      : typeof commentAlignment.norm === "number"
+                        ? `${formatScore(commentAlignment.norm * 5, 1)} 点`
+                        : "-";
+                  return (
+                    <div key={`${item.review_id ?? index}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                      <div className="mt-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-xs font-semibold text-slate-600">評価メトリクス</div>
+                            <div className="mt-1 text-[11px] text-slate-500">
+                              ※ レビュー文一致はクレジット付与の計算にのみ使用
+                            </div>
+                          </div>
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full border-4 border-sky-100 bg-sky-50 text-xs font-semibold text-sky-700">
+                            +{formatScore(item.points ?? 0, 2)}
+                          </div>
+                        </div>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-sky-100 bg-sky-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">有用性</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{helpfulnessScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: {helpfulness.raw ?? "-"}</div>
+                              <div>norm: {formatScore(helpfulness.norm ?? null, 2)}</div>
+                              <div>weight: {formatScore(helpfulness.weight ?? null, 2)}</div>
+                            </div>
+                            {helpfulnessWeight !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-sky-500"
+                                  style={{ width: `${Math.round(helpfulnessWeight * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">ルーブリック一致</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{alignmentScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: -</div>
+                              <div>norm: {formatScore(alignment.norm ?? null, 2)}</div>
+                              <div>weight: {formatScore(alignment.weight ?? null, 2)}</div>
+                            </div>
+                            {alignmentWeight !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-emerald-500"
+                                  style={{ width: `${Math.round(alignmentWeight * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">AI品質</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{qualityScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: {quality.raw ?? "-"}</div>
+                              <div>norm: {formatScore(quality.norm ?? null, 2)}</div>
+                              <div>weight: {formatScore(quality.weight ?? null, 2)}</div>
+                            </div>
+                            {qualityWeight !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-amber-500"
+                                  style={{ width: `${Math.round(qualityWeight * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold text-slate-700">レビュー文一致（クレジット）</div>
+                              <div className="rounded-full bg-white/80 px-2 py-1 text-[10px] font-semibold text-slate-600">
+                                スコア <span className="text-sm text-slate-900">{commentAlignmentScoreDisplay}</span>
+                              </div>
+                            </div>
+                            <div className="mt-2 space-y-1 text-slate-600">
+                              <div>raw: {commentAlignment.raw ?? "-"}</div>
+                              <div>norm: {formatScore(commentAlignment.norm ?? null, 2)}</div>
+                              <div>weight: -</div>
+                            </div>
+                            {commentAlignmentNorm !== null ? (
+                              <div className="mt-3 h-2 w-full rounded-full bg-white">
+                                <div
+                                  className="h-2 rounded-full bg-slate-500"
+                                  style={{ width: `${Math.round(commentAlignmentNorm * 100)}%` }}
+                                />
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <div className="text-xs font-semibold text-slate-600">ペナルティ</div>
+                        {item.toxic ? (
+                          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
+                            有害表現検知
+                          </div>
+                        ) : null}
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-700">重複ペナルティ</span>
+                              {duplicatePenalty === null ? (
+                                <span className="flex items-center gap-1 text-emerald-600">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  なし
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-amber-600">-{duplicatePenalty}%</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-slate-700">類似ペナルティ</span>
+                              {similarityPenalty === null ? (
+                                <span className="flex items-center gap-1 text-emerald-600">
+                                  <CheckCircle2 className="h-4 w-4" />
+                                  なし
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-amber-600">-{similarityPenalty}%</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <DialogFooter className="border-t border-slate-200 pt-4">
+              <Button variant="outline" onClick={() => setReviewContributionOpen(false)} className="bg-white">
+                閉じる
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {user ? null : (
         <SectionCard title="ログインが必要な操作">
@@ -1351,9 +2590,9 @@ function MetaReviewForm({
   };
 
   return (
-    <div className="mt-3 rounded-md border bg-muted p-3">
-      <div className="text-sm font-medium">メタ評価（このレビューは役に立ちましたか？）</div>
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+      <div className="text-sm font-semibold text-slate-900">メタ評価（このレビューは役に立ちましたか？）</div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field label="helpfulness (1-5)">
           <Select value={String(helpfulness)} onValueChange={(v: string) => setHelpfulness(Number(v))}>
             <SelectTrigger>
@@ -1372,7 +2611,7 @@ function MetaReviewForm({
           <Input value={comment} onChange={(e) => setComment(e.target.value)} />
         </Field>
       </div>
-      <div className="mt-2">
+      <div className="mt-3">
         <Button onClick={submit} disabled={submitting}>
           送信
         </Button>

@@ -2,20 +2,36 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Calendar, Crown, Mail, Sparkles } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
-import { apiEnrollCourse, apiGetReviewerSkill, apiListAssignments, apiListCourses, formatApiError } from "@/lib/api";
-import type { AssignmentPublic, CoursePublic, ReviewerSkill } from "@/lib/types";
+import {
+  apiGetMyCreditHistory,
+  apiGetReviewerSkill,
+  apiListAssignments,
+  apiListCourses,
+  apiUploadAvatar,
+  formatApiError,
+} from "@/lib/api";
+import type { AssignmentPublic, CoursePublic, CreditHistoryPublic, ReviewerSkill } from "@/lib/types";
 import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 type MyPageClientProps = {
   initialCourseId: string | null;
+};
+
+const ALLOWED_AVATAR_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif"];
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
+const CREDIT_REASON_LABELS: Record<string, string> = {
+  review_submitted: "レビュー提出",
+  review_recalculated: "レビュー再計算",
 };
 
 export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
@@ -26,25 +42,30 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   const [skillLoading, setSkillLoading] = useState(false);
   const [skillError, setSkillError] = useState<string | null>(null);
 
+  const [creditHistory, setCreditHistory] = useState<CreditHistoryPublic[]>([]);
+  const [creditHistoryLoading, setCreditHistoryLoading] = useState(false);
+  const [creditHistoryError, setCreditHistoryError] = useState<string | null>(null);
+
   const [courses, setCourses] = useState<CoursePublic[]>([]);
   const [coursesLoading, setCoursesLoading] = useState(false);
   const [coursesError, setCoursesError] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(initialCourseId);
-  const [enrollingCourseId, setEnrollingCourseId] = useState<string | null>(null);
-
   const [refreshing, setRefreshing] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarNotice, setAvatarNotice] = useState<string | null>(null);
+  const [avatarPreviewError, setAvatarPreviewError] = useState(false);
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const enrolledCourses = useMemo(() => courses.filter((course) => course.is_enrolled), [courses]);
-  const availableCourses = useMemo(() => courses.filter((course) => !course.is_enrolled), [courses]);
-  const selectedCourse = useMemo(
-    () => enrolledCourses.find((course) => course.id === selectedCourseId) ?? null,
-    [enrolledCourses, selectedCourseId]
-  );
+  const courseById = useMemo(() => new Map(courses.map((course) => [course.id, course])), [courses]);
 
   const [assignments, setAssignments] = useState<AssignmentPublic[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
-
   const loadSkill = useCallback(async () => {
     if (!token) return;
     setSkillLoading(true);
@@ -73,34 +94,11 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     }
   }, [token]);
 
-  const enrollCourse = useCallback(
-    async (courseId: string) => {
-      if (!token) return;
-      setEnrollingCourseId(courseId);
-      setCoursesError(null);
-      try {
-        await apiEnrollCourse(token, courseId);
-        setCourses((prev) =>
-          prev.map((course) =>
-            course.id === courseId ? { ...course, is_enrolled: true } : course
-          )
-        );
-        setSelectedCourseId(courseId);
-        router.push(`/mypage?course_id=${courseId}`);
-      } catch (err) {
-        setCoursesError(formatApiError(err));
-      } finally {
-        setEnrollingCourseId(null);
-      }
-    },
-    [router, token]
-  );
-
-  const loadAssignments = useCallback(async (courseId: string) => {
+  const loadAssignments = useCallback(async () => {
     setAssignmentsLoading(true);
     setAssignmentsError(null);
     try {
-      const list = await apiListAssignments(courseId);
+      const list = await apiListAssignments();
       setAssignments(list);
     } catch (err) {
       setAssignmentsError(formatApiError(err));
@@ -108,6 +106,20 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       setAssignmentsLoading(false);
     }
   }, []);
+
+  const loadCreditHistory = useCallback(async () => {
+    if (!token) return;
+    setCreditHistoryLoading(true);
+    setCreditHistoryError(null);
+    try {
+      const list = await apiGetMyCreditHistory(token, 50);
+      setCreditHistory(list);
+    } catch (err) {
+      setCreditHistoryError(formatApiError(err));
+    } finally {
+      setCreditHistoryLoading(false);
+    }
+  }, [token]);
 
   const selectCourse = useCallback(
     (courseId: string) => {
@@ -121,19 +133,41 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     if (!token) return;
     setRefreshing(true);
     try {
-      const tasks = [refreshMe(), loadSkill(), loadCourses()];
-      if (selectedCourseId) tasks.push(loadAssignments(selectedCourseId));
+      const tasks = [refreshMe(), loadSkill(), loadCourses(), loadAssignments(), loadCreditHistory()];
       await Promise.all(tasks);
     } finally {
       setRefreshing(false);
     }
-  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments, selectedCourseId]);
+  }, [token, refreshMe, loadSkill, loadCourses, loadAssignments, loadCreditHistory]);
 
   useEffect(() => {
     if (!token || user?.role !== "student") return;
     void loadSkill();
     void loadCourses();
-  }, [loadSkill, loadCourses, token, user?.role]);
+    void loadAssignments();
+    void loadCreditHistory();
+  }, [loadSkill, loadCourses, loadAssignments, loadCreditHistory, token, user?.role]);
+
+  useEffect(() => {
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
+    setAvatarPreviewError(false);
+    setAvatarError(null);
+    setAvatarNotice(null);
+    setAvatarVersion(Date.now());
+  }, [user?.avatar_url]);
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+    const previewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(previewUrl);
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [avatarFile]);
 
   useEffect(() => {
     setSelectedCourseId(initialCourseId);
@@ -142,7 +176,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
   useEffect(() => {
     if (!enrolledCourses.length) {
       setSelectedCourseId(null);
-      setAssignments([]);
       return;
     }
     if (selectedCourseId && enrolledCourses.some((course) => course.id === selectedCourseId)) {
@@ -151,15 +184,148 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     setSelectedCourseId(enrolledCourses[0].id);
   }, [enrolledCourses, selectedCourseId]);
 
-  useEffect(() => {
-    if (!selectedCourseId) {
-      setAssignments([]);
-      return;
-    }
-    void loadAssignments(selectedCourseId);
-  }, [loadAssignments, selectedCourseId]);
+  const timelineItems = useMemo(() => {
+    if (!enrolledCourses.length) return [];
+    const enrolledIds = new Set(enrolledCourses.map((course) => course.id));
+    const now = Date.now();
+    const dayMs = 1000 * 60 * 60 * 24;
 
-  const formatSkill = (value: number) => (value > 0 ? value.toFixed(2) : "-");
+    const items = assignments.flatMap((assignment) => {
+      if (!assignment.course_id || !enrolledIds.has(assignment.course_id) || !assignment.due_at) {
+        return [];
+      }
+      const dueAt = new Date(assignment.due_at);
+      const createdAt = new Date(assignment.created_at);
+      if (Number.isNaN(dueAt.getTime())) return [];
+      if (Number.isNaN(createdAt.getTime())) return [];
+
+      const diffMs = dueAt.getTime() - now;
+      const daysLeft = Math.ceil(diffMs / dayMs);
+      let statusLabel = "";
+      let tone: "overdue" | "soon" | "normal" = "normal";
+
+      if (diffMs < 0) {
+        statusLabel = "期限切れ";
+        tone = "overdue";
+      } else if (diffMs <= dayMs * 3) {
+        statusLabel = diffMs <= dayMs ? "24時間以内" : `あと${daysLeft}日`;
+        tone = "soon";
+      } else {
+        statusLabel = `あと${daysLeft}日`;
+      }
+
+      const startMs = Math.min(createdAt.getTime(), dueAt.getTime());
+      const endMs = Math.max(createdAt.getTime(), dueAt.getTime());
+
+      return [
+        {
+          id: assignment.id,
+          title: assignment.title,
+          courseTitle: courseById.get(assignment.course_id)?.title ?? "授業未設定",
+          createdAt,
+          dueAt,
+          startAt: new Date(startMs),
+          endAt: new Date(endMs),
+          statusLabel,
+          tone,
+        },
+      ];
+    });
+
+    return items.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+  }, [assignments, courseById, enrolledCourses]);
+
+  const timelineRange = useMemo(() => {
+    if (!timelineItems.length) return null;
+    const startMs = Math.min(...timelineItems.map((item) => item.startAt.getTime()));
+    const endMs = Math.max(...timelineItems.map((item) => item.endAt.getTime()), Date.now());
+    const rangeMs = Math.max(endMs - startMs, 1000 * 60 * 60 * 24);
+    return { startMs, endMs, rangeMs };
+  }, [timelineItems]);
+
+  const timelineTicks = useMemo(() => {
+    if (!timelineRange) return [];
+    const steps = 4;
+    return Array.from({ length: steps + 1 }, (_, index) => {
+      const ratio = index / steps;
+      const tickDate = new Date(timelineRange.startMs + timelineRange.rangeMs * ratio);
+      return {
+        label: tickDate.toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" }),
+        percent: ratio * 100,
+      };
+    });
+  }, [timelineRange]);
+
+  const todayPercent = useMemo(() => {
+    if (!timelineRange) return null;
+    const percent = ((Date.now() - timelineRange.startMs) / timelineRange.rangeMs) * 100;
+    return Math.min(100, Math.max(0, percent));
+  }, [timelineRange]);
+
+  const formatSkill = (value: number) => (value > 0 ? value.toFixed(1) : "-");
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+  const avatarInitial = user?.name?.trim().charAt(0) || "?";
+  const remoteAvatarUrl = user?.avatar_url ? new URL(user.avatar_url, apiBaseUrl).toString() : "";
+  const remoteAvatarSrc = remoteAvatarUrl
+    ? `${remoteAvatarUrl}${remoteAvatarUrl.includes("?") ? "&" : "?"}v=${avatarVersion}`
+    : "";
+  const avatarSrc = avatarPreviewUrl ?? remoteAvatarSrc;
+  const showAvatarImage = Boolean(avatarSrc) && !avatarPreviewError;
+  const latestCreditHistory = creditHistory[0] ?? null;
+  const latestCreditSummary = latestCreditHistory
+    ? `${latestCreditHistory.delta >= 0 ? "+" : ""}${latestCreditHistory.delta} / ${new Date(
+        latestCreditHistory.created_at
+      ).toLocaleDateString()}`
+    : "履歴なし";
+
+  const uploadAvatar = useCallback(async (file: File) => {
+    if (!token) return;
+    setAvatarSaving(true);
+    setAvatarError(null);
+    setAvatarNotice(null);
+    setAvatarPreviewError(false);
+    try {
+      await apiUploadAvatar(token, file);
+      setAvatarFile(null);
+      await refreshMe();
+      setAvatarVersion(Date.now());
+      setAvatarNotice("保存しました。");
+    } catch (err) {
+      setAvatarError(formatApiError(err));
+    } finally {
+      setAvatarSaving(false);
+    }
+  }, [token, refreshMe]);
+
+  const handleAvatarChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) return;
+
+      setAvatarNotice(null);
+      setAvatarPreviewError(false);
+      if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+        setAvatarFile(null);
+        setAvatarError("PNG/JPEG/WEBP/GIF 形式の画像を選択してください。");
+        return;
+      }
+      if (file.size > MAX_AVATAR_BYTES) {
+        setAvatarFile(null);
+        setAvatarError("2MB以下の画像を選択してください。");
+        return;
+      }
+
+      setAvatarError(null);
+      setAvatarFile(file);
+      void uploadAvatar(file);
+    },
+    [uploadAvatar]
+  );
+
+  const triggerAvatarSelect = useCallback(() => {
+    avatarInputRef.current?.click();
+  }, []);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -207,47 +373,180 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">学生マイページ</h1>
-          <p className="text-sm text-muted-foreground">学習状況とレビュアースキルの確認</p>
         </div>
         <Button variant="outline" onClick={() => void refreshAll()} disabled={!token || refreshing}>
           {refreshing ? "更新中..." : "まとめて更新"}
         </Button>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>プロフィール</CardTitle>
-          <div className="text-xs text-muted-foreground">joined: {new Date(user.created_at).toLocaleString()}</div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <div className="text-xs text-muted-foreground">名前</div>
-              <div className="text-sm font-medium">{user.name}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">メール</div>
-              <div className="text-sm">{user.email}</div>
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">ランク / タイトル</div>
-              <div className="text-sm">
-                {user.rank} / {user.title}
+      <Card className="overflow-hidden">
+        <div className="h-20 bg-gradient-to-r from-sky-500 via-blue-500 to-emerald-500 sm:h-24" />
+        <CardContent className="pt-4">
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-start justify-between gap-6">
+              <div className="flex flex-wrap items-start gap-4">
+                <div className="relative -mt-10 sm:-mt-12">
+                  <button
+                    type="button"
+                    onClick={triggerAvatarSelect}
+                    disabled={avatarSaving}
+                    className="group relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-slate-100 text-2xl font-semibold text-slate-500 shadow-lg transition hover:-translate-y-0.5 sm:h-24 sm:w-24"
+                    aria-label="アイコンを変更"
+                  >
+                    {showAvatarImage ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={avatarSrc}
+                        alt={`${user.name} avatar`}
+                        className="h-full w-full object-cover"
+                        onError={() => {
+                          setAvatarPreviewError(true);
+                          setAvatarNotice(null);
+                        }}
+                      />
+                    ) : (
+                      <span aria-label="avatar-initial">{avatarInitial}</span>
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center bg-slate-900/50 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                      編集
+                    </span>
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    className="sr-only"
+                    accept={ALLOWED_AVATAR_TYPES.join(",")}
+                    onChange={handleAvatarChange}
+                    disabled={avatarSaving}
+                  />
+                </div>
+                <div className="space-y-2 pt-6 sm:pt-8">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-xl font-semibold text-slate-900 sm:text-2xl">{user.name}</div>
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                      {user.is_ta ? "TA" : "学生"}
+                    </span>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                      {user.title}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1 text-xs text-slate-500">
+                    <div className="flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5" />
+                      {user.email}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      joined: {new Date(user.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <div className="min-w-[150px] rounded-xl border border-sky-100 bg-sky-50 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <Sparkles className="h-4 w-4 text-sky-600" />
+                    Credits
+                  </div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900">{user.credits}</div>
+                  <div className="text-xs text-slate-500">{user.is_ta ? "TA資格あり" : "TA資格なし"}</div>
+                </div>
+                <div className="min-w-[150px] rounded-xl border border-amber-100 bg-amber-50 p-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <Crown className="h-4 w-4 text-amber-600" />
+                    Rank
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-slate-900">{user.title}</div>
+                  <div className="text-xs text-slate-500">{user.rank}</div>
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-xs text-muted-foreground">credits / TA</div>
-              <div className="text-sm">
-                {user.credits} / {user.is_ta ? "TA" : "-"}
-              </div>
-            </div>
+            {avatarError ? (
+              <Alert variant="destructive">
+                <AlertTitle>アイコン設定エラー</AlertTitle>
+                <AlertDescription>{avatarError}</AlertDescription>
+              </Alert>
+            ) : null}
+            {avatarPreviewError ? (
+              <div className="text-xs text-rose-600">画像の読み込みに失敗しました。</div>
+            ) : null}
+            {avatarNotice ? <div className="text-xs text-emerald-600">{avatarNotice}</div> : null}
           </div>
         </CardContent>
       </Card>
 
+      <Dialog onOpenChange={(open) => {
+        if (open) {
+          void loadCreditHistory();
+        }
+      }}>
+        <DialogTrigger asChild>
+          <button type="button" className="w-full text-left">
+            <Card className="transition hover:shadow-sm">
+              <CardHeader className="flex flex-row items-center justify-between gap-3">
+                <CardTitle>クレジット履歴</CardTitle>
+                <div className="text-xs text-muted-foreground">{creditHistory.length}件</div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm text-slate-600">最新: {latestCreditSummary}</div>
+              </CardContent>
+            </Card>
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-w-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <DialogHeader className="text-left">
+              <DialogTitle>クレジット履歴</DialogTitle>
+              <DialogDescription>最近の付与・調整の履歴です。</DialogDescription>
+            </DialogHeader>
+            <Button variant="outline" onClick={loadCreditHistory} disabled={!token || creditHistoryLoading}>
+              {creditHistoryLoading ? "読み込み中..." : "更新"}
+            </Button>
+          </div>
+          {creditHistoryError ? (
+            <Alert variant="destructive">
+              <AlertTitle>取得に失敗しました</AlertTitle>
+              <AlertDescription>{creditHistoryError}</AlertDescription>
+            </Alert>
+          ) : null}
+          {!token ? (
+            <p className="text-sm text-muted-foreground">ログインすると確認できます</p>
+          ) : creditHistoryLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : creditHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">履歴がありません</p>
+          ) : (
+            <div className="max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+              {creditHistory.map((item) => {
+                const deltaSign = item.delta >= 0 ? "+" : "";
+                const deltaClass = item.delta >= 0 ? "text-emerald-600" : "text-rose-600";
+                const reasonLabel = CREDIT_REASON_LABELS[item.reason] ?? item.reason;
+                return (
+                  <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <div className="text-xs text-slate-500">{new Date(item.created_at).toLocaleString()}</div>
+                        <div className="text-sm font-semibold text-slate-800">{reasonLabel}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`text-lg font-semibold ${deltaClass}`}>
+                          {deltaSign}
+                          {item.delta}
+                        </div>
+                        <div className="text-xs text-slate-500">合計: {item.total_credits}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>レビュアースキル（総合 / teacher比較）</CardTitle>
+          <CardTitle>レビュアースキル</CardTitle>
           <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
             {skillLoading ? "読み込み中..." : "更新"}
           </Button>
@@ -264,17 +563,49 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           ) : skillLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : skill ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 text-sm text-muted-foreground">
-                {REVIEWER_SKILL_AXES.map((axis) => (
-                  <div key={axis.key}>
-                    {axis.label}: {formatSkill(skill[axis.key])}
-                  </div>
-                ))}
-                <div>総合: {formatSkill(skill.overall)}</div>
-              </div>
-              <div className="rounded-lg border bg-background p-3">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+              <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white p-6">
                 <RadarSkillChart skill={skill} />
+              </div>
+              <div className="flex flex-col justify-center space-y-6">
+                <div className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-emerald-50 p-5">
+                  <div className="text-sm font-medium text-slate-500">総合スコア</div>
+                  <div className="mt-3 flex items-baseline gap-2">
+                    <span className="text-4xl font-semibold text-blue-600">
+                      {formatSkill(skill.overall)}
+                    </span>
+                    <span className="text-sm text-slate-400">/ 5.0</span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {REVIEWER_SKILL_AXES.map((axis) => {
+                    const value = skill[axis.key];
+                    const percent = Math.min(100, Math.max(0, (value / 5) * 100));
+                    return (
+                      <div key={axis.key} className="space-y-2">
+                        <div className="flex items-center justify-between text-sm font-medium text-slate-700">
+                          <span>{axis.label}</span>
+                          <span className="text-blue-600">{formatSkill(value)}</span>
+                        </div>
+                        <div
+                          className="h-2 rounded-full bg-slate-100"
+                          role="progressbar"
+                          aria-label={`${axis.label} スコア`}
+                          aria-valuenow={value}
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                        >
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
               </div>
             </div>
           ) : (
@@ -301,19 +632,18 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
           ) : null}
           {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
           {!coursesLoading && enrolledCourses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">受講中の授業がありません。</p>
+              <Button asChild variant="outline">
+                <Link href="/assignments">授業一覧へ</Link>
+              </Button>
+            </div>
           ) : null}
           <ul className="space-y-2">
             {enrolledCourses.map((course) => {
-              const isSelected = course.id === selectedCourseId;
               return (
                 <li key={course.id}>
-                  <div
-                    className={[
-                      "rounded-lg border border-border p-4 transition",
-                      isSelected ? "border-slate-900 bg-slate-50" : "hover:bg-accent",
-                    ].join(" ")}
-                  >
+                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium">{course.title}</div>
@@ -329,9 +659,7 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="text-xs text-muted-foreground">この授業の課題一覧ページへ移動します</div>
                       <Button
-                        variant={isSelected ? "outline" : "default"}
                         onClick={() => selectCourse(course.id)}
                       >
                         課題一覧へ
@@ -346,52 +674,9 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>授業一覧（受講登録）</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {coursesLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!coursesLoading && availableCourses.length === 0 ? (
-            <p className="text-sm text-muted-foreground">受講可能な授業がありません。</p>
-          ) : null}
-          <ul className="space-y-2">
-            {availableCourses.map((course) => (
-              <li key={course.id}>
-                <div className="rounded-lg border border-border p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium">{course.title}</div>
-                      {course.description ? (
-                        <div className="mt-1 text-sm text-muted-foreground">{course.description}</div>
-                      ) : null}
-                      {course.teacher_name ? (
-                        <div className="mt-2 text-xs text-muted-foreground">teacher: {course.teacher_name}</div>
-                      ) : null}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => enrollCourse(course.id)}
-                        disabled={enrollingCourseId === course.id}
-                      >
-                        {enrollingCourseId === course.id ? "登録中..." : "受講する"}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <CardTitle>課題一覧{selectedCourse ? ` / ${selectedCourse.title}` : ""}</CardTitle>
-          <Button
-            variant="outline"
-            onClick={() => selectedCourseId && loadAssignments(selectedCourseId)}
-            disabled={assignmentsLoading || !selectedCourseId}
-          >
+          <CardTitle>提出期限タイムライン</CardTitle>
+          <Button variant="outline" onClick={() => void loadAssignments()} disabled={assignmentsLoading}>
             {assignmentsLoading ? "読み込み中..." : "更新"}
           </Button>
         </CardHeader>
@@ -404,37 +689,128 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {!selectedCourseId ? (
-            <p className="text-sm text-muted-foreground">授業を選択してください。</p>
-          ) : null}
           {assignmentsLoading ? <p className="text-sm text-muted-foreground">読み込み中...</p> : null}
-          {!assignmentsLoading && selectedCourseId && assignments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">この授業にはまだ課題がありません。</p>
+          {!assignmentsLoading && timelineItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground">提出期限が設定された課題がありません。</p>
           ) : null}
-          <ul className="space-y-2">
-            {assignments.map((assignment) => (
-              <li key={assignment.id}>
-                <Link href={`/assignments/${assignment.id}`} className="block">
-                  <div className="rounded-lg border border-border p-4 transition hover:bg-accent">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{assignment.title}</div>
-                        {assignment.description ? (
-                          <div className="mt-1 text-sm text-muted-foreground">{assignment.description}</div>
-                        ) : null}
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <div>reviews/submission: {assignment.target_reviews_per_submission}</div>
-                        <div>{new Date(assignment.created_at).toLocaleString()}</div>
-                      </div>
+          {timelineItems.length ? (
+            <div className="space-y-4">
+              {timelineRange ? (
+                <div className="hidden sm:block">
+                  <div className="grid grid-cols-[minmax(0,220px)_minmax(0,1fr)] items-center gap-3 text-xs text-muted-foreground">
+                    <div />
+                    <div className="relative h-6">
+                      {timelineTicks.map((tick) => (
+                        <span
+                          key={tick.percent}
+                          className="absolute -translate-x-1/2 text-[11px]"
+                          style={{ left: `${tick.percent}%` }}
+                        >
+                          {tick.label}
+                        </span>
+                      ))}
                     </div>
                   </div>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                  <div className="grid grid-cols-[minmax(0,220px)_minmax(0,1fr)] gap-3">
+                    <div />
+                    <div className="relative h-2 rounded-full bg-slate-100">
+                      {timelineTicks.map((tick) => (
+                        <span
+                          key={`tick-${tick.percent}`}
+                          className="absolute -top-1 h-4 w-px bg-slate-200"
+                          style={{ left: `${tick.percent}%` }}
+                          aria-hidden
+                        />
+                      ))}
+                      {todayPercent !== null ? (
+                        <span
+                          className="absolute -top-1 h-4 w-px bg-sky-400/50"
+                          style={{ left: `${todayPercent}%` }}
+                          aria-hidden
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+              <ol className="space-y-3">
+                {timelineItems.map((item) => {
+                  const badgeClassName =
+                    item.tone === "overdue"
+                      ? "bg-rose-100 text-rose-700"
+                      : item.tone === "soon"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-emerald-100 text-emerald-700";
+                  const barClassName =
+                    item.tone === "overdue"
+                      ? "bg-rose-500"
+                      : item.tone === "soon"
+                      ? "bg-amber-500"
+                      : "bg-emerald-500";
+                  const range = timelineRange;
+                  const startPercent = range
+                    ? Math.min(
+                        100,
+                        Math.max(0, ((item.startAt.getTime() - range.startMs) / range.rangeMs) * 100)
+                      )
+                    : 0;
+                  const endPercent = range
+                    ? Math.min(
+                        100,
+                        Math.max(0, ((item.endAt.getTime() - range.startMs) / range.rangeMs) * 100)
+                      )
+                    : 0;
+                  const minWidth = 2;
+                  const rawWidth = endPercent - startPercent;
+                  const widthPercent = Math.min(Math.max(rawWidth, minWidth), 100 - startPercent);
+                  const markerLeft = Math.min(startPercent + widthPercent, 100);
+
+                  return (
+                    <li key={item.id} className="grid gap-3 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)] sm:items-center">
+                      <div className="space-y-1">
+                        <Link
+                          href={`/assignments/${item.id}`}
+                          className="text-sm font-medium text-slate-900 hover:underline"
+                        >
+                          {item.title}
+                        </Link>
+                        <div className="text-xs text-slate-500">{item.courseTitle}</div>
+                        <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
+                          <span>作成: {item.createdAt.toLocaleDateString()}</span>
+                          <span>提出期限: {item.dueAt.toLocaleString()}</span>
+                        </div>
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] ${badgeClassName}`}>
+                          {item.statusLabel}
+                        </span>
+                      </div>
+                      <div className="relative h-10 rounded-full bg-slate-100">
+                        {todayPercent !== null ? (
+                          <span
+                            className="absolute inset-y-0 w-px bg-sky-400/40"
+                            style={{ left: `${todayPercent}%` }}
+                            aria-hidden
+                          />
+                        ) : null}
+                        <span
+                          className={`absolute top-1/2 h-3 -translate-y-1/2 rounded-full ${barClassName}`}
+                          style={{ left: `${startPercent}%`, width: `${widthPercent}%` }}
+                          aria-hidden
+                        />
+                        <span
+                          className={`absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${barClassName}`}
+                          style={{ left: `${markerLeft}%` }}
+                          aria-hidden
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+
     </div>
   );
 }

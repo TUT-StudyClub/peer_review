@@ -32,7 +32,9 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
         <AuthProvider>
-          <NavBar />
+          <Suspense fallback={<div className="h-14 border-b border-border bg-background" />}>
+            <NavBar />
+          </Suspense>
           <main className="mx-auto w-full max-w-5xl px-4 py-8">
             <Suspense fallback={<div className="page-transition">{children}</div>}>
               <PageTransition>{children}</PageTransition>

@@ -9,7 +9,7 @@ export function Field({
   className,
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
   hint?: string;
   className?: string;
   children: React.ReactNode;
@@ -22,4 +22,3 @@ export function Field({
     </div>
   );
 }
-
