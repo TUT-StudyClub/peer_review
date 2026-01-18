@@ -12,9 +12,8 @@ assignees: ""
 
 - [ ] 
 
-## 依存（親Issue / 前提）
+## 依存（前提）
 
-- Parent:
 - Blocked by:
 
 ## 作業メモ

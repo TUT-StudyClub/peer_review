@@ -4,15 +4,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
-from app.models.review import Review, ReviewAssignment
+from app.models.review import Review
+from app.models.review import ReviewAssignment
 from app.services.similarity import check_similarity
 
 
 def make_in_memory_session():
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    return Session()
+    session_factory = sessionmaker(bind=engine)
+    return session_factory()
 
 
 def test_check_similarity_detects_copy():

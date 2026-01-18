@@ -15,9 +15,8 @@
 
 <!-- 実行したコマンド / 画面操作 / API手順など -->
 
-- [ ] backend: `cd backend && uv run ruff check app`
+- [ ] `task check`
 - [ ] backend: `cd backend && uv run python -m compileall app`
-- [ ] frontend: `cd frontend && npm run lint`
 - [ ] frontend: `cd frontend && npm run build`
 
 ## スクリーンショット（UI変更がある場合）

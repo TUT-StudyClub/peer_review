@@ -11,17 +11,18 @@ import {
 } from "chart.js";
 import { Radar } from "react-chartjs-2";
 
+import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import type { ReviewerSkill } from "@/lib/types";
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 export function RadarSkillChart({ skill }: { skill: ReviewerSkill }) {
   const data = {
-    labels: ["Logic", "Specificity", "Empathy", "Insight"],
+    labels: REVIEWER_SKILL_AXES.map((axis) => axis.label),
     datasets: [
       {
         label: "Reviewer Skill (1-5)",
-        data: [skill.logic, skill.specificity, skill.empathy, skill.insight],
+        data: REVIEWER_SKILL_AXES.map((axis) => skill[axis.key]),
         backgroundColor: "rgba(24, 24, 27, 0.12)",
         borderColor: "rgba(24, 24, 27, 0.7)",
         borderWidth: 2,
@@ -46,4 +47,3 @@ export function RadarSkillChart({ skill }: { skill: ReviewerSkill }) {
 
   return <Radar data={data} options={options} />;
 }
-

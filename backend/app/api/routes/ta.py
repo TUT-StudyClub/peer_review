@@ -1,28 +1,39 @@
-from datetime import datetime, timezone
+from datetime import UTC
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.review import ReviewAssignment, ReviewAssignmentStatus
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewAssignmentStatus
 from app.models.submission import Submission
-from app.models.ta_review_request import TAReviewRequest, TAReviewRequestStatus
-from app.models.user import User, UserRole
-from app.schemas.review import TAReviewRequestCreate, TAReviewRequestPublic
+from app.models.ta_review_request import TAReviewRequest
+from app.models.ta_review_request import TAReviewRequestStatus
+from app.models.user import User
+from app.models.user import UserRole
+from app.schemas.review import TAReviewRequestCreate
+from app.schemas.review import TAReviewRequestPublic
 from app.schemas.user import UserPublic
-from app.services.auth import get_current_user, require_teacher
+from app.services.auth import get_current_user
+from app.services.auth import require_teacher
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+current_user_dependency = Depends(get_current_user)
+teacher_dependency = Depends(require_teacher)
 
 
 @router.post("/submissions/{submission_id}/ta-requests", response_model=TAReviewRequestPublic)
 def create_ta_review_request(
     submission_id: UUID,
     payload: TAReviewRequestCreate,
-    db: Session = Depends(get_db),
-    _teacher: User = Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher: User = teacher_dependency,
 ) -> TAReviewRequest:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
@@ -73,8 +84,8 @@ def create_ta_review_request(
 @router.get("/assignments/{assignment_id}/ta-requests", response_model=list[TAReviewRequestPublic])
 def list_ta_requests_for_assignment(
     assignment_id: UUID,
-    _teacher: User = Depends(require_teacher),
-    db: Session = Depends(get_db),
+    _teacher: User = teacher_dependency,
+    db: Session = db_dependency,
 ) -> list[TAReviewRequest]:
     return (
         db.query(TAReviewRequest)
@@ -87,8 +98,8 @@ def list_ta_requests_for_assignment(
 @router.get("/ta-requests/me", response_model=list[TAReviewRequestPublic])
 def list_my_ta_review_requests(
     status: TAReviewRequestStatus | None = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> list[TAReviewRequest]:
     query = db.query(TAReviewRequest).filter(TAReviewRequest.ta_id == current_user.id)
     if status is not None:
@@ -99,8 +110,8 @@ def list_my_ta_review_requests(
 @router.post("/ta-requests/{request_id}/accept", response_model=TAReviewRequestPublic)
 def accept_ta_review_request(
     request_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> TAReviewRequest:
     request = db.query(TAReviewRequest).filter(TAReviewRequest.id == request_id).first()
     if request is None:
@@ -138,7 +149,7 @@ def accept_ta_review_request(
         request.review_assignment_id = existing_ra.id
 
     request.status = TAReviewRequestStatus.accepted
-    request.responded_at = datetime.now(timezone.utc)
+    request.responded_at = datetime.now(UTC)
     db.commit()
     db.refresh(request)
     return request
@@ -146,8 +157,8 @@ def accept_ta_review_request(
 
 @router.get("/ta/eligible", response_model=list[UserPublic])
 def list_eligible_tas(
-    _teacher: User = Depends(require_teacher),
-    db: Session = Depends(get_db),
+    _teacher: User = teacher_dependency,
+    db: Session = db_dependency,
 ) -> list[User]:
     return (
         db.query(User)
@@ -160,8 +171,8 @@ def list_eligible_tas(
 @router.post("/ta-requests/{request_id}/decline", response_model=TAReviewRequestPublic)
 def decline_ta_review_request(
     request_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> TAReviewRequest:
     request = db.query(TAReviewRequest).filter(TAReviewRequest.id == request_id).first()
     if request is None:
@@ -172,7 +183,7 @@ def decline_ta_review_request(
         raise HTTPException(status_code=400, detail="Request is already handled")
 
     request.status = TAReviewRequestStatus.declined
-    request.responded_at = datetime.now(timezone.utc)
+    request.responded_at = datetime.now(UTC)
     db.commit()
     db.refresh(request)
     return request

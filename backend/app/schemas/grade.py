@@ -6,4 +6,3 @@ class GradeMe(BaseModel):
     review_contribution: float
     final_score: float | None
     breakdown: dict
-

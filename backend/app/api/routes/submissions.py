@@ -1,32 +1,51 @@
 import logging
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter
+from fastapi import Depends
+from fastapi import File
+from fastapi import HTTPException
+from fastapi import UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models.assignment import Assignment, RubricCriterion
+from app.models.assignment import Assignment
+from app.models.review import Review
 from app.models.review import ReviewAssignment
-from app.models.submission import Submission, SubmissionFileType, SubmissionRubricScore
-from app.models.user import User, UserRole
-from app.schemas.submission import SubmissionPublic, TeacherGradeSubmit
-from app.services.auth import get_current_user, require_teacher
+from app.models.submission import Submission
+from app.models.submission import SubmissionFileType
+from app.models.submission import SubmissionRubricScore
+from app.models.user import User
+from app.models.user import UserRole
+from app.schemas.submission import SubmissionPublic
+from app.schemas.submission import TeacherGradeSubmit
+from app.services.ai import analyze_review_alignment
+from app.services.auth import get_current_user
+from app.services.auth import require_teacher
 from app.services.pdf import PDFExtractionService
-from app.services.storage import detect_file_type, ensure_storage_dir, save_upload_file
+from app.services.rubric import ensure_fixed_rubric
+from app.services.storage import build_download_response
+from app.services.storage import detect_file_type
+from app.services.storage import save_upload_file
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+db_dependency = Depends(get_db)
+current_user_dependency = Depends(get_current_user)
+teacher_dependency = Depends(require_teacher)
+upload_file_dependency = File(...)
 
 
 @router.post("/assignment/{assignment_id}", response_model=SubmissionPublic)
 def submit_report(
     assignment_id: UUID,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    file: UploadFile = upload_file_dependency,
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> Submission:
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment is None:
@@ -44,9 +63,8 @@ def submit_report(
     if file_type is None:
         raise HTTPException(status_code=400, detail="Only PDF or Markdown files are supported")
 
-    ensure_storage_dir()
     submission_id = uuid4()
-    stored_path = save_upload_file(
+    stored = save_upload_file(
         upload=file,
         assignment_id=assignment_id,
         submission_id=submission_id,
@@ -57,24 +75,27 @@ def submit_report(
     submission_text: str | None = None
     markdown_text: str | None = None
 
-    if file_type == SubmissionFileType.pdf:
-        # PDF形式：PDFExtractionServiceで抽出
-        try:
-            stored_path_obj = Path(stored_path)
-            extracted_text = PDFExtractionService.extract_text(
-                stored_path_obj,
-                max_pages=50,
-                max_chars=50000,
-            )
-            submission_text = extracted_text if extracted_text.strip() else None
-        except Exception as e:
-            # PDF抽出失敗時はログ記録しつつ提出を続行
-            logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
-            submission_text = None
-    elif file_type == SubmissionFileType.markdown:
-        # Markdown形式：ファイル内容を読み込み
-        markdown_text = stored_path.read_text(encoding="utf-8", errors="replace")
-        submission_text = markdown_text
+    try:
+        if file_type == SubmissionFileType.pdf:
+            # PDF形式：PDFExtractionServiceで抽出
+            try:
+                stored_path_obj = Path(stored.local_path)
+                extracted_text = PDFExtractionService.extract_text(
+                    stored_path_obj,
+                    max_pages=50,
+                    max_chars=50000,
+                )
+                submission_text = extracted_text if extracted_text.strip() else None
+            except Exception as e:
+                # PDF抽出失敗時はログ記録しつつ提出を続行
+                logger.warning(f"PDF text extraction failed for submission {submission_id}: {e}")
+                submission_text = None
+        elif file_type == SubmissionFileType.markdown:
+            # Markdown形式：ファイル内容を読み込み
+            markdown_text = stored.local_path.read_text(encoding="utf-8", errors="replace")
+            submission_text = markdown_text
+    finally:
+        stored.cleanup()
 
     submission = Submission(
         id=submission_id,
@@ -82,7 +103,7 @@ def submit_report(
         author_id=current_user.id,
         file_type=file_type,
         original_filename=file.filename or "upload",
-        storage_path=str(stored_path),
+        storage_path=stored.storage_path,
         markdown_text=markdown_text,
         submission_text=submission_text,
     )
@@ -95,8 +116,8 @@ def submit_report(
 @router.get("/assignment/{assignment_id}/me", response_model=SubmissionPublic)
 def get_my_submission(
     assignment_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> Submission:
     submission = (
         db.query(Submission)
@@ -111,8 +132,8 @@ def get_my_submission(
 @router.get("/{submission_id}", response_model=SubmissionPublic)
 def get_submission(
     submission_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> Submission:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
@@ -126,8 +147,8 @@ def get_submission(
 @router.get("/{submission_id}/file")
 def download_submission_file(
     submission_id: UUID,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
 ) -> FileResponse:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
@@ -149,25 +170,25 @@ def download_submission_file(
 
     filename = "submission.pdf" if submission.file_type == SubmissionFileType.pdf else "submission.md"
     media_type = "application/pdf" if submission.file_type == SubmissionFileType.pdf else "text/markdown"
-    return FileResponse(submission.storage_path, filename=filename, media_type=media_type)
+    return build_download_response(
+        storage_path=submission.storage_path,
+        filename=filename,
+        media_type=media_type,
+    )
 
 
 @router.post("/{submission_id}/teacher-grade", response_model=SubmissionPublic)
 def set_teacher_grade(
     submission_id: UUID,
     payload: TeacherGradeSubmit,
-    db: Session = Depends(get_db),
-    _teacher: User = Depends(require_teacher),
+    db: Session = db_dependency,
+    _teacher: User = teacher_dependency,
 ) -> Submission:
     submission = db.query(Submission).filter(Submission.id == submission_id).first()
     if submission is None:
         raise HTTPException(status_code=404, detail="Submission not found")
 
-    criteria = (
-        db.query(RubricCriterion)
-        .filter(RubricCriterion.assignment_id == submission.assignment_id)
-        .all()
-    )
+    criteria = ensure_fixed_rubric(db, submission.assignment_id)
     criteria_by_id = {c.id: c for c in criteria}
     if len(payload.rubric_scores) != len(criteria_by_id):
         raise HTTPException(status_code=400, detail="All rubric criteria must be scored")
@@ -191,6 +212,25 @@ def set_teacher_grade(
                 score=s.score,
             )
         )
+
+    if payload.teacher_feedback and payload.teacher_feedback.strip():
+        reviews = (
+            db.query(Review)
+            .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+            .filter(ReviewAssignment.submission_id == submission.id)
+            .all()
+        )
+        for review in reviews:
+            alignment = analyze_review_alignment(
+                teacher_review_text=payload.teacher_feedback,
+                student_review_text=review.comment,
+            )
+            if alignment is None:
+                review.ai_comment_alignment_score = None
+                review.ai_comment_alignment_reason = None
+            else:
+                review.ai_comment_alignment_score = alignment.alignment_score
+                review.ai_comment_alignment_reason = alignment.alignment_reason
 
     db.commit()
     db.refresh(submission)
