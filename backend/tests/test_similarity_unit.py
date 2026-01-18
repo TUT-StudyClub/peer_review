@@ -1,4 +1,6 @@
-from app.services.similarity import tokenize, jaccard_similarity, apply_similarity_penalty
+from app.services.similarity import apply_similarity_penalty
+from app.services.similarity import jaccard_similarity
+from app.services.similarity import tokenize
 
 
 def test_tokenize_basic():

@@ -4,14 +4,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
-from app.models.review import ReviewAssignment, ReviewAssignmentStatus
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewAssignmentStatus
 from app.models.submission import Submission
 from app.models.user import User
 
 
-def get_or_assign_review_assignment(
-    db: Session, assignment: Assignment, reviewer: User
-) -> ReviewAssignment | None:
+def get_or_assign_review_assignment(db: Session, assignment: Assignment, reviewer: User) -> ReviewAssignment | None:
     open_task = (
         db.query(ReviewAssignment)
         .filter(
@@ -40,12 +39,9 @@ def get_or_assign_review_assignment(
         .subquery()
     )
 
-    already_assigned_subq = (
-        db.query(ReviewAssignment.submission_id)
-        .filter(
-            ReviewAssignment.assignment_id == assignment.id,
-            ReviewAssignment.reviewer_id == reviewer.id,
-        )
+    already_assigned_subq = db.query(ReviewAssignment.submission_id).filter(
+        ReviewAssignment.assignment_id == assignment.id,
+        ReviewAssignment.reviewer_id == reviewer.id,
     )
 
     candidate = (
@@ -78,4 +74,3 @@ def get_or_assign_review_assignment(
     db.commit()
     db.refresh(review_assignment)
     return review_assignment
-

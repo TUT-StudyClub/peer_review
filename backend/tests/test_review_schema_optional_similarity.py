@@ -1,5 +1,6 @@
-from uuid import uuid4
+from datetime import UTC
 from datetime import datetime
+from uuid import uuid4
 
 from app.schemas.review import ReviewReceived
 
@@ -9,7 +10,7 @@ def test_review_received_allows_missing_similarity_fields():
         id=uuid4(),
         reviewer_alias="Rev",
         comment="Nice work",
-        created_at=datetime.utcnow(),
+        created_at=datetime.now(UTC),
         rubric_scores=[],
         meta_review=None,
         ai_quality_score=None,

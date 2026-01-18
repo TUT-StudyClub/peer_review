@@ -1,13 +1,17 @@
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-import pytest
-
 from app.db.base import Base
-from app.models.assignment import Assignment, RubricCriterion
-from app.models.submission import Submission, SubmissionRubricScore
+from app.models.assignment import Assignment
+from app.models.assignment import RubricCriterion
+from app.models.review import MetaReview
+from app.models.review import Review
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewRubricScore
+from app.models.submission import Submission
+from app.models.submission import SubmissionRubricScore
 from app.models.user import User
-from app.models.review import ReviewAssignment, Review, ReviewRubricScore, MetaReview
 from app.services.scoring import calculate_grade_for_user
 
 

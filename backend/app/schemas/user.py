@@ -1,7 +1,10 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel
+from pydantic import ConfigDict
+from pydantic import EmailStr
+from pydantic import Field
 
 from app.models.user import UserRole
 
@@ -21,12 +24,25 @@ class UserPublic(BaseModel):
     name: str
     role: UserRole
     credits: int
+    rank: str
+    title: str
     is_ta: bool
     created_at: datetime
+
+
+class UserRankingEntry(BaseModel):
+    id: UUID
+    name: str
+    credits: int
+    rank: str
+    title: str
+    is_ta: bool
+    period_credits: int | None = None
 
 
 class ReviewerSkill(BaseModel):
     logic: float
     specificity: float
-    empathy: float
-    insight: float
+    structure: float
+    evidence: float
+    overall: float

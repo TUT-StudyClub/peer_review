@@ -13,8 +13,22 @@ export type UserPublic = {
   name: string;
   role: UserRole;
   credits: number;
+  rank: string;
+  title: string;
   is_ta: boolean;
   created_at: string;
+};
+
+export type RankingPeriod = "total" | "monthly" | "weekly";
+
+export type UserRankingEntry = {
+  id: string;
+  name: string;
+  credits: number;
+  rank: string;
+  title: string;
+  is_ta: boolean;
+  period_credits?: number;
 };
 
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
@@ -33,6 +47,7 @@ export type TAReviewRequestPublic = {
 
 export type AssignmentPublic = {
   id: string;
+  course_id: string | null;
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
@@ -40,9 +55,33 @@ export type AssignmentPublic = {
 };
 
 export type AssignmentCreate = {
+  course_id: string;
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
+};
+
+export type CoursePublic = {
+  id: string;
+  title: string;
+  description?: string | null;
+  teacher_id: string;
+  created_at: string;
+  teacher_name?: string | null;
+  is_enrolled?: boolean | null;
+  student_count?: number | null;
+};
+
+export type CourseCreate = {
+  title: string;
+  description?: string | null;
+};
+
+export type CourseEnrollmentPublic = {
+  id: string;
+  course_id: string;
+  user_id: string;
+  created_at: string;
 };
 
 export type RubricCriterionPublic = {
@@ -114,6 +153,11 @@ export type ReviewPublic = {
   ai_specificity: number | null;
   ai_empathy: number | null;
   ai_insight: number | null;
+  ai_comment_alignment_score: number | null;
+  ai_comment_alignment_reason: string | null;
+  rubric_alignment_score: number | null;
+  total_alignment_score: number | null;
+  credit_awarded: number | null;
 };
 
 export type MetaReviewPublic = {
@@ -139,6 +183,11 @@ export type ReviewReceived = {
   meta_review: MetaReviewPublic | null;
   ai_quality_score: number | null;
   ai_quality_reason: string | null;
+  ai_comment_alignment_score: number | null;
+  ai_comment_alignment_reason: string | null;
+  rubric_alignment_score: number | null;
+  total_alignment_score: number | null;
+  credit_awarded: number | null;
 };
 
 export type TeacherReviewPublic = {
@@ -151,6 +200,11 @@ export type TeacherReviewPublic = {
   meta_review: MetaReviewPublic | null;
   ai_quality_score: number | null;
   ai_quality_reason: string | null;
+  ai_comment_alignment_score: number | null;
+  ai_comment_alignment_reason: string | null;
+  rubric_alignment_score: number | null;
+  total_alignment_score: number | null;
+  credit_awarded: number | null;
 };
 
 export type RephraseResponse = {
@@ -174,8 +228,9 @@ export type GradeMe = {
 export type ReviewerSkill = {
   logic: number;
   specificity: number;
-  empathy: number;
-  insight: number;
+  structure: number;
+  evidence: number;
+  overall: number;
 };
 
 export type TeacherGradeSubmit = {

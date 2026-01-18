@@ -1,5 +1,5 @@
 [project]
-name = "pure-review"
+name = "peer-review"
 version = "0.1.0"
 description = "Anonymous peer-review platform (FastAPI backend)"
 readme = "README.md"
@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
   "alembic>=1.14.0",
   "bcrypt>=4.2.0",
+  "boto3>=1.34.0",
   "email-validator>=2.2.0",
   "fastapi>=0.115.6",
   "httpx>=0.28.1",
@@ -21,18 +22,62 @@ dependencies = [
   "reportlab>=4.4.6",
   "ruff>=0.9.0",
   "sqlalchemy>=2.0.36",
+  "ty>=0.0.9",
   "uvicorn[standard]>=0.32.1",
 ]
 
 [tool.ruff]
-line-length = 100
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".import_linter_cache",
+    ".venv",
+    "third_party",
+]
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B"]
+fixable = ["ALL"]
+unfixable = []
+select = [
+    "A",  # flake8-builtin
+    "B",  # flake8-bugbear
+    "E",  # pycodestyle error
+    "F",  # Pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "W",  # pycodestyle warning
+    "PL", # Pylint
+    "UP", # pyupgrade
+]
 ignore = [
-  # FastAPIのDependsはデフォルト引数で使うのが標準のため、flake8-bugbearの指摘は無視する
-  "B008",
-  # 1行の長さはformatterや可読性の判断に委ねる（チーム運用でノイズになりやすい）
-  "E501",
+    "B905",    # Zip-without-explicit-strict
+    "F403",    # Unable to detect undefined names
+    "N812",    # Lowercase imported as non-lowercase
+    "N999",    # Invalid module name
+    "PLR0912", # Too many branches
+    "PLR0913", # Too many arguments in function definition
+    "PLR2004", # Magic value used in comparison
+]
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.format]
+quote-style = "double"
+line-ending = "auto"
+
+[tool.importlinter]
+root_packages = ["peer_review"]
+
+[[tool.importlinter.contracts]]
+name = "Layered architecture contract"
+type = "layers"
+layers = [
+    "peer_review.infrastructure",
+    "peer_review.adapters",
+    "peer_review.use_cases",
+    "peer_review.entities",
 ]

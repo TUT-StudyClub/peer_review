@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/app/providers";
 import {
   ApiError,
-  apiAddRubric,
   apiDownloadSubmissionFile,
   apiGetMyGrade,
   apiGetMySubmission,
@@ -42,6 +41,7 @@ import type {
   UserPublic,
   RephraseResponse,
 } from "@/lib/types";
+import { REVIEWER_SKILL_AXES } from "@/lib/reviewerSkill";
 import { ErrorMessages } from "@/components/ErrorMessages";
 import { RadarSkillChart } from "@/components/RadarSkillChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -62,8 +62,30 @@ const REVIEW_TEMPLATES: { key: string; label: string; text: string }[] = [
   { key: "example", label: "具体例", text: "【具体例】読者がイメージできる具体例を1つ追加すると説得力が増します。" },
 ];
 
+type ScoreInput = number | "";
+
+const parseScoreInput = (value: string): ScoreInput => {
+  if (value === "") return "";
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? "" : parsed;
+};
+
 function shortId(id: string) {
   return id.slice(0, 8);
+}
+
+function formatSkill(value: number) {
+  return value > 0 ? value.toFixed(2) : "-";
+}
+
+function formatScore(value: number | null, digits = 1, fallback = "-") {
+  if (value === null) return fallback;
+  return value.toFixed(digits);
+}
+
+function extractReviewCount(breakdown: Record<string, unknown>) {
+  const count = breakdown.reviews_count;
+  return typeof count === "number" ? count : null;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -120,7 +142,7 @@ export default function AssignmentDetailPage() {
 
   const [reviewTask, setReviewTask] = useState<ReviewAssignmentTask | null>(null);
   const [reviewComment, setReviewComment] = useState("");
-  const [reviewScores, setReviewScores] = useState<Record<string, number>>({});
+  const [reviewScores, setReviewScores] = useState<Record<string, ScoreInput>>({});
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const templateClicks = useRef<Record<string, number>>({});
 
@@ -138,7 +160,7 @@ export default function AssignmentDetailPage() {
   const [gradeTargetId, setGradeTargetId] = useState<string | null>(null);
   const [teacherTotalScore, setTeacherTotalScore] = useState<number>(80);
   const [teacherFeedback, setTeacherFeedback] = useState<string>("");
-  const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, number>>({});
+  const [teacherRubricScores, setTeacherRubricScores] = useState<Record<string, ScoreInput>>({});
   const [teacherReviewList, setTeacherReviewList] = useState<TeacherReviewPublic[]>([]);
   const [teacherReviewListLoading, setTeacherReviewListLoading] = useState(false);
   const [teacherReviewListTargetId, setTeacherReviewListTargetId] = useState<string | null>(null);
@@ -150,20 +172,21 @@ export default function AssignmentDetailPage() {
   const [taRequesting, setTaRequesting] = useState(false);
   const [taRequests, setTaRequests] = useState<TAReviewRequestPublic[]>([]);
   const [taRequestsLoading, setTaRequestsLoading] = useState(false);
-  const [paraphraseOpen, setParaphraseOpen] = useState(false);
   const [paraphrasePreview, setParaphrasePreview] = useState<RephraseResponse | null>(null);
   const [paraphraseLoading, setParaphraseLoading] = useState(false);
   const [paraphraseError, setParaphraseError] = useState<string | null>(null);
 
-  const [rubricName, setRubricName] = useState("");
-  const [rubricDesc, setRubricDesc] = useState("");
-  const [rubricMax, setRubricMax] = useState(5);
-  const [rubricOrder, setRubricOrder] = useState(0);
-  const [rubricAdding, setRubricAdding] = useState(false);
 
   const [notice, setNotice] = useState<string | null>(null);
 
   const totalRubricMax = useMemo(() => rubric.reduce((sum, c) => sum + c.max_score, 0), [rubric]);
+  const rubricNameById = useMemo(() => new Map(rubric.map((c) => [c.id, c.name])), [rubric]);
+  const backHref =
+    user?.role === "student"
+      ? "/mypage"
+      : assignment?.course_id
+        ? `/assignments?course_id=${assignment.course_id}`
+        : "/assignments";
   const taRequestsBySubmission = useMemo(() => {
     const map: Record<string, TAReviewRequestPublic[]> = {};
     for (const r of taRequests) {
@@ -199,14 +222,14 @@ export default function AssignmentDetailPage() {
     if (!rubric.length) return;
     setReviewScores((prev) => {
       if (Object.keys(prev).length) return prev;
-      const init: Record<string, number> = {};
-      for (const c of rubric) init[c.id] = 0;
+      const init: Record<string, ScoreInput> = {};
+      for (const c of rubric) init[c.id] = "";
       return init;
     });
     setTeacherRubricScores((prev) => {
       if (Object.keys(prev).length) return prev;
-      const init: Record<string, number> = {};
-      for (const c of rubric) init[c.id] = 0;
+      const init: Record<string, ScoreInput> = {};
+      for (const c of rubric) init[c.id] = "";
       return init;
     });
   }, [rubric]);
@@ -278,8 +301,8 @@ export default function AssignmentDetailPage() {
       const task = await apiNextReviewTask(token, assignmentId);
       setReviewTask(task);
       setReviewComment("");
-      const init: Record<string, number> = {};
-      for (const c of task.rubric) init[c.id] = 0;
+      const init: Record<string, ScoreInput> = {};
+      for (const c of task.rubric) init[c.id] = "";
       setReviewScores(init);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
@@ -317,10 +340,11 @@ export default function AssignmentDetailPage() {
           score: Number(reviewScores[c.id] ?? 0),
         })),
       };
-      await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
+      const res = await apiSubmitReview(token, reviewTask.review_assignment_id, payload);
       setReviewTask(null);
       setReviewComment("");
-      setNotice("レビューを提出しました（credits 加算）");
+      const creditLabel = res.credit_awarded ? `credits +${res.credit_awarded}` : "credits 加算";
+      setNotice(`レビューを提出しました（${creditLabel}）`);
       await refreshMe();
     } catch (err) {
       setNotice(formatApiError(err));
@@ -332,18 +356,15 @@ export default function AssignmentDetailPage() {
   const runParaphrase = async () => {
     if (!token) {
       setParaphraseError("ログインが必要です");
-      setParaphraseOpen(true);
       return;
     }
     if (!reviewComment.trim()) {
       setParaphraseError("言い換えるテキストを入力してください");
-      setParaphraseOpen(true);
       return;
     }
     setParaphraseLoading(true);
     setParaphraseError(null);
     setParaphrasePreview(null);
-    setParaphraseOpen(true);
     try {
       const res = await apiParaphrase(token, reviewComment);
       setParaphrasePreview(res);
@@ -399,7 +420,7 @@ export default function AssignmentDetailPage() {
     setSkillLoading(true);
     setNotice(null);
     try {
-      const s = await apiGetReviewerSkill(token);
+      const s = await apiGetReviewerSkill(token, assignmentId);
       setSkill(s);
     } catch (err) {
       setNotice(formatApiError(err));
@@ -477,8 +498,8 @@ export default function AssignmentDetailPage() {
     setGradeTargetId(submissionId);
     setTeacherFeedback("");
     setTeacherTotalScore(80);
-    const init: Record<string, number> = {};
-    for (const c of rubric) init[c.id] = 0;
+    const init: Record<string, ScoreInput> = {};
+    for (const c of rubric) init[c.id] = "";
     setTeacherRubricScores(init);
   };
 
@@ -499,32 +520,6 @@ export default function AssignmentDetailPage() {
     }
   };
 
-  const addRubric = async () => {
-    if (!token) {
-      setNotice("ルーブリック追加にはログインが必要です");
-      return;
-    }
-    setRubricAdding(true);
-    setNotice(null);
-    try {
-      await apiAddRubric(token, assignmentId, {
-        name: rubricName,
-        description: rubricDesc || null,
-        max_score: rubricMax,
-        order_index: rubricOrder,
-      });
-      setRubricName("");
-      setRubricDesc("");
-      setRubricMax(5);
-      setRubricOrder(rubricOrder + 1);
-      await loadBase();
-      setNotice("ルーブリックを追加しました");
-    } catch (err) {
-      setNotice(formatApiError(err));
-    } finally {
-      setRubricAdding(false);
-    }
-  };
 
   const openTeacherReviews = async (submissionId: string) => {
     if (!token) return;
@@ -573,7 +568,7 @@ export default function AssignmentDetailPage() {
           </AlertDescription>
         </Alert>
         <Button variant="link" asChild className="px-0">
-          <Link href="/assignments">課題一覧へ戻る</Link>
+          <Link href={backHref}>{user?.role === "student" ? "マイページへ戻る" : "課題一覧へ戻る"}</Link>
         </Button>
       </div>
     );
@@ -622,38 +617,8 @@ export default function AssignmentDetailPage() {
         )}
 
         {user?.role === "teacher" ? (
-          <div className="rounded-lg border bg-muted p-4">
-            <div className="text-sm font-semibold">（teacher）ルーブリックを追加</div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <Field label="項目名">
-                <Input value={rubricName} onChange={(e) => setRubricName(e.target.value)} />
-              </Field>
-              <Field label="max score">
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={rubricMax}
-                  onChange={(e) => setRubricMax(Number(e.target.value))}
-                />
-              </Field>
-              <Field label="表示順（order_index）">
-                <Input
-                  type="number"
-                  min={0}
-                  value={rubricOrder}
-                  onChange={(e) => setRubricOrder(Number(e.target.value))}
-                />
-              </Field>
-              <Field label="説明（任意）">
-                <Input value={rubricDesc} onChange={(e) => setRubricDesc(e.target.value)} />
-              </Field>
-            </div>
-            <div className="mt-3">
-              <Button onClick={addRubric} disabled={rubricAdding || !rubricName.trim()}>
-                追加
-              </Button>
-            </div>
+          <div className="rounded-lg border bg-muted p-4 text-xs text-muted-foreground">
+            固定ルーブリックは自動で設定されます。
           </div>
         ) : null}
       </SectionCard>
@@ -783,9 +748,12 @@ export default function AssignmentDetailPage() {
                         type="number"
                         min={0}
                         max={c.max_score}
-                        value={teacherRubricScores[c.id] ?? 0}
+                        value={teacherRubricScores[c.id] ?? ""}
                         onChange={(e) =>
-                          setTeacherRubricScores((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))
+                          setTeacherRubricScores((prev) => ({
+                            ...prev,
+                            [c.id]: parseScoreInput(e.target.value),
+                          }))
                         }
                       />
                     </Field>
@@ -839,7 +807,7 @@ export default function AssignmentDetailPage() {
                         ) : (
                           taCandidates.map((u) => (
                             <SelectItem key={u.id} value={u.id}>
-                              {u.name} / credits: {u.credits}
+                              {u.name} / {u.title} / ランク: {u.rank} / credits: {u.credits}
                             </SelectItem>
                           ))
                         )}
@@ -857,60 +825,6 @@ export default function AssignmentDetailPage() {
                 </DialogFooter>
               </DialogContent>
             ) : null}
-          </Dialog>
-
-          <Dialog open={paraphraseOpen} onOpenChange={setParaphraseOpen}>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle>言い換え</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 text-sm">
-                {!paraphrasePreview && !paraphraseError ? (
-                  <p className="text-muted-foreground">
-                    レビューコメントを簡易的に言い換えます。必要に応じて手動で調整してください。
-                  </p>
-                ) : null}
-                {paraphraseError ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>エラー</AlertTitle>
-                    <AlertDescription className="whitespace-pre-wrap">{paraphraseError}</AlertDescription>
-                  </Alert>
-                ) : null}
-                {paraphrasePreview ? (
-                  <div className="space-y-2">
-                    <div>
-                      <div className="text-xs text-muted-foreground">変換結果</div>
-                      <div className="rounded-md border bg-muted/50 p-3">{paraphrasePreview.rephrased}</div>
-                    </div>
-                    {paraphrasePreview.notice ? (
-                      <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {paraphraseLoading ? <p className="text-muted-foreground">変換中...</p> : null}
-              </div>
-              <DialogFooter className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => setParaphraseOpen(false)}>
-                  閉じる
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={runParaphrase}
-                  disabled={paraphraseLoading || !reviewComment.trim()}
-                >
-                  再変換
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
-                    setParaphraseOpen(false);
-                  }}
-                  disabled={!paraphrasePreview}
-                >
-                  反映する
-                </Button>
-              </DialogFooter>
-            </DialogContent>
           </Dialog>
 
           <Dialog
@@ -982,7 +896,7 @@ export default function AssignmentDetailPage() {
                                     <div className="font-semibold">Rubric</div>
                                     {r.rubric_scores.map((s) => (
                                       <div key={s.criterion_id}>
-                                        {s.criterion_id}: {s.score}
+                                        {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
                                       </div>
                                     ))}
                                   </div>
@@ -995,6 +909,21 @@ export default function AssignmentDetailPage() {
                                   {r.ai_quality_reason ? (
                                     <div className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
                                       {r.ai_quality_reason}
+                                    </div>
+                                  ) : null}
+                                  {r.rubric_alignment_score !== null ||
+                                  r.ai_comment_alignment_score !== null ||
+                                  r.total_alignment_score !== null ||
+                                  r.credit_awarded !== null ||
+                                  r.ai_comment_alignment_reason ? (
+                                    <div className="rounded-md bg-muted/60 p-2 text-xs text-muted-foreground space-y-1">
+                                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
+                                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
+                                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
+                                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
+                                      {r.ai_comment_alignment_reason ? (
+                                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                                      ) : null}
                                     </div>
                                   ) : null}
                                 </div>
@@ -1035,14 +964,41 @@ export default function AssignmentDetailPage() {
               <p className="text-sm text-muted-foreground">
                 まだ提出していません。Markdown（.md）推奨（AIの「本文＋レビュー」判定が効きやすいです）。
               </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="file"
-                  accept=".md,.pdf,text/markdown,application/pdf"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-                <Button onClick={upload} disabled={uploading || !file}>
-                  提出
+              <div className="space-y-3">
+                <div
+                  className="rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-4 transition-colors"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.add("border-muted-foreground/60", "bg-muted/60");
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove("border-muted-foreground/60", "bg-muted/60");
+                    const droppedFile = e.dataTransfer.files?.[0];
+                    if (droppedFile && (droppedFile.type === "text/markdown" || droppedFile.type === "application/pdf" || droppedFile.name.endsWith(".md") || droppedFile.name.endsWith(".pdf"))) {
+                      setFile(droppedFile);
+                    }
+                  }}
+                >
+                  <label className="flex flex-col items-center justify-center gap-2 cursor-pointer">
+                    <div className="text-sm font-medium">ファイルを選択またはドラッグ＆ドロップ</div>
+                    <div className="text-xs text-muted-foreground">
+                      {file ? file.name : "Markdown (.md) または PDF (.pdf)"}
+                    </div>
+                    <input
+                      type="file"
+                      accept=".md,.pdf,text/markdown,application/pdf"
+                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <Button onClick={upload} disabled={uploading || !file} className="w-full">
+                  {uploading ? "提出中..." : "提出"}
                 </Button>
               </div>
             </div>
@@ -1106,8 +1062,10 @@ export default function AssignmentDetailPage() {
                       type="number"
                       min={0}
                       max={c.max_score}
-                      value={reviewScores[c.id] ?? 0}
-                      onChange={(e) => setReviewScores((prev) => ({ ...prev, [c.id]: Number(e.target.value) }))}
+                      value={reviewScores[c.id] ?? ""}
+                      onChange={(e) =>
+                        setReviewScores((prev) => ({ ...prev, [c.id]: parseScoreInput(e.target.value) }))
+                      }
                     />
                   </div>
                 ))}
@@ -1126,11 +1084,48 @@ export default function AssignmentDetailPage() {
                     </div>
                   </div>
                   <Textarea value={reviewComment} onChange={(e) => setReviewComment(e.target.value)} rows={5} />
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
-                      言い換え
-                    </Button>
-                    {paraphraseLoading ? <span>変換中...</span> : null}
+                  <div className="space-y-2">
+                    <div className="">
+                      <Button size="sm" variant="outline" onClick={runParaphrase} disabled={paraphraseLoading}>
+                        言い換え
+                      </Button>
+                      {paraphraseLoading ? <span className="ml-2 text-sm text-muted-foreground">変換中...</span> : null}
+                    </div>
+                    {paraphraseError ? (
+                      <Alert variant="destructive">
+                        <AlertTitle>エラー</AlertTitle>
+                        <AlertDescription className="text-sm">{paraphraseError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    {paraphrasePreview ? (
+                      <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+                        <div>
+                          <div className="text-xs font-medium text-muted-foreground">変換結果</div>
+                          <div className="mt-1 whitespace-pre-wrap text-sm">{paraphrasePreview.rephrased}</div>
+                        </div>
+                        {paraphrasePreview.notice ? (
+                          <div className="text-xs text-muted-foreground">{paraphrasePreview.notice}</div>
+                        ) : null}
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              if (paraphrasePreview) setReviewComment(paraphrasePreview.rephrased);
+                            }}
+                          >
+                            反映する
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={runParaphrase}
+                            disabled={paraphraseLoading || !reviewComment.trim()}
+                          >
+                            再変換
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </Field>
@@ -1181,13 +1176,28 @@ export default function AssignmentDetailPage() {
                       {r.ai_quality_reason}
                     </div>
                   ) : null}
+                  {r.rubric_alignment_score !== null ||
+                  r.ai_comment_alignment_score !== null ||
+                  r.total_alignment_score !== null ||
+                  r.credit_awarded !== null ||
+                  r.ai_comment_alignment_reason ? (
+                    <div className="mt-2 rounded-md bg-muted/60 p-3 text-xs text-muted-foreground space-y-1">
+                      <div>ルーブリック一致: {r.rubric_alignment_score ?? "-"}/5</div>
+                      <div>レビュー文一致: {r.ai_comment_alignment_score ?? "-"}/5</div>
+                      <div>総合評価: {r.total_alignment_score ?? "-"}/5</div>
+                      <div>付与credits: {r.credit_awarded ?? "-"}</div>
+                      {r.ai_comment_alignment_reason ? (
+                        <div className="whitespace-pre-wrap">{r.ai_comment_alignment_reason}</div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-2 whitespace-pre-wrap text-sm">{r.comment}</div>
 
                   {r.rubric_scores?.length ? (
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       {r.rubric_scores.map((s) => (
                         <div key={s.criterion_id} className="text-xs text-muted-foreground">
-                          {shortId(s.criterion_id)}: {s.score}
+                          {rubricNameById.get(s.criterion_id) ?? shortId(s.criterion_id)}: {s.score}
                         </div>
                       ))}
                     </div>
@@ -1222,16 +1232,43 @@ export default function AssignmentDetailPage() {
           ) : gradeLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : grade ? (
-            <div className="space-y-2 text-sm">
-              <div>assignment_score: {grade.assignment_score ?? "-"}</div>
-              <div>review_contribution: {grade.review_contribution.toFixed(2)}</div>
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">課題スコア</div>
+                  <div className="text-lg font-semibold">
+                    {formatScore(grade.assignment_score, 1, "採点待ち")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">/100</div>
+                </div>
+                <div className="rounded-lg border bg-muted/40 p-3">
+                  <div className="text-xs text-muted-foreground">レビュー貢献</div>
+                  <div className="text-lg font-semibold">
+                    +{formatScore(grade.review_contribution, 2)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">加点</div>
+                </div>
+                <div className="rounded-lg border bg-primary/10 p-3">
+                  <div className="text-xs text-muted-foreground">最終スコア</div>
+                  <div className="text-2xl font-semibold text-primary">
+                    {formatScore(grade.final_score, 1, "未確定")}
+                  </div>
+                  <div className="text-xs text-muted-foreground">max 100</div>
+                </div>
+              </div>
               <p className="text-xs text-muted-foreground">
-                ※ review_contribution はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
+                ※ レビュー貢献はメタ評価/teacher採点との一致/AI品質の重み付けで算出し、未入力の項目は除外して残りの重みを再配分します。
               </p>
-              <div className="font-semibold">final_score: {grade.final_score ?? "-"}</div>
-              <details className="rounded-md border bg-muted p-3 text-xs">
-                <summary className="cursor-pointer">breakdown</summary>
-                <pre className="mt-2 whitespace-pre-wrap">{JSON.stringify(grade.breakdown, null, 2)}</pre>
+              <details className="rounded-md border bg-muted/60 p-3 text-xs">
+                <summary className="cursor-pointer font-medium">内訳（breakdown）</summary>
+                {extractReviewCount(grade.breakdown) !== null ? (
+                  <div className="mt-2 text-[11px] text-muted-foreground">
+                    レビュー数: {extractReviewCount(grade.breakdown)}
+                  </div>
+                ) : null}
+                <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap">
+                  {JSON.stringify(grade.breakdown, null, 2)}
+                </pre>
               </details>
             </div>
           ) : (
@@ -1242,7 +1279,7 @@ export default function AssignmentDetailPage() {
 
       {user?.role === "student" ? (
         <SectionCard
-          title="（student）レビュアースキル（Radar）"
+          title="（student）レビュアースキル（この課題 / teacher比較）"
           actions={
             <Button variant="outline" onClick={loadSkill} disabled={!token || skillLoading}>
               更新
@@ -1256,10 +1293,12 @@ export default function AssignmentDetailPage() {
           ) : skill ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1 text-sm text-muted-foreground">
-                <div>Logic: {skill.logic.toFixed(2)}</div>
-                <div>Specificity: {skill.specificity.toFixed(2)}</div>
-                <div>Empathy: {skill.empathy.toFixed(2)}</div>
-                <div>Insight: {skill.insight.toFixed(2)}</div>
+                {REVIEWER_SKILL_AXES.map((axis) => (
+                  <div key={axis.key}>
+                    {axis.label}: {formatSkill(skill[axis.key])}
+                  </div>
+                ))}
+                <div>総合: {formatSkill(skill.overall)}</div>
               </div>
               <div className="rounded-lg border bg-background p-3">
                 <RadarSkillChart skill={skill} />
