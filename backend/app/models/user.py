@@ -29,6 +29,8 @@ class User(Base):
     id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(200))
+    avatar_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    avatar_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.student)
     password_hash: Mapped[str] = mapped_column(String(255))
     credits: Mapped[int] = mapped_column(Integer, default=0)
@@ -38,6 +40,7 @@ class User(Base):
     review_assignments = relationship("ReviewAssignment", back_populates="reviewer")
     courses_taught = relationship("Course", back_populates="teacher")
     course_enrollments = relationship("CourseEnrollment", back_populates="user")
+    credit_histories = relationship("CreditHistory", back_populates="user")
 
     @property
     def is_ta(self) -> bool:
@@ -50,3 +53,9 @@ class User(Base):
     @property
     def title(self) -> str:
         return get_user_rank(self.credits).title
+
+    @property
+    def avatar_url(self) -> str | None:
+        if not self.avatar_path:
+            return None
+        return f"/users/{self.id}/avatar"
