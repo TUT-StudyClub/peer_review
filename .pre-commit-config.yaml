@@ -23,7 +23,7 @@ repos:
         files: ^backend/
       - id: eslint-frontend
         name: eslint (frontend)
-        entry: npm run lint
+        entry: npm --prefix frontend run lint
         language: system
         pass_filenames: false
         files: ^frontend/

@@ -1,8 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { useAuth } from "@/app/providers";
 
@@ -24,7 +23,17 @@ function NavLink({ href, label }: { href: string; label: string }) {
 
 export function NavBar() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, logout } = useAuth();
+  const showCourses = user?.role === "teacher" || user?.role === "student";
+  const isAssignments = pathname === "/assignments";
+  const isCreateView = isAssignments && searchParams.get("view") === "create";
+  const courseNavClass = (active: boolean) =>
+    [
+      "rounded-md px-3 py-2 text-sm font-medium transition",
+      active ? "bg-slate-900 text-white shadow-sm" : "text-foreground hover:bg-accent hover:text-accent-foreground",
+    ].join(" ");
 
   const handleLogout = () => {
     if (typeof window !== "undefined") {
@@ -43,7 +52,18 @@ export function NavBar() {
             Peer Review
           </Link>
           <nav className="flex items-center gap-1">
-            {user?.role === "teacher" ? <NavLink href="/assignments" label="課題" /> : null}
+            {showCourses ? (
+              <>
+                <Link href="/assignments" className={courseNavClass(isAssignments && !isCreateView)}>
+                  授業一覧
+                </Link>
+                {user?.role === "teacher" ? (
+                  <Link href="/assignments?view=create" className={courseNavClass(isAssignments && isCreateView)}>
+                    授業を作成
+                  </Link>
+                ) : null}
+              </>
+            ) : null}
             {user?.role === "student" ? <NavLink href="/mypage" label="マイページ" /> : null}
             {user?.is_ta ? <NavLink href="/ta/requests" label="TAリクエスト" /> : null}
             {user ? <NavLink href="/settings" label="設定" /> : null}

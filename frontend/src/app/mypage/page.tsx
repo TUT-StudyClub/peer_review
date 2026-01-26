@@ -1,15 +1,19 @@
 import MyPageClient from "./MyPageClient";
 
-type MyPagePageProps = {
-  searchParams?: Promise<{ course_id?: string | string[] }> | { course_id?: string | string[] };
+type MyPageProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function MyPagePage({ searchParams }: MyPagePageProps) {
-  const resolvedSearchParams = await Promise.resolve(searchParams);
-  const courseIdParam = resolvedSearchParams?.course_id;
-  const initialCourseId = Array.isArray(courseIdParam)
-    ? courseIdParam[0] ?? null
-    : courseIdParam ?? null;
+const getFirstParam = (value: string | string[] | undefined): string | null => {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+  return value ?? null;
+};
+
+export default async function MyPagePage({ searchParams }: MyPageProps) {
+  const resolvedSearchParams = await searchParams;
+  const initialCourseId = getFirstParam(resolvedSearchParams?.course_id);
 
   return <MyPageClient initialCourseId={initialCourseId} />;
 }

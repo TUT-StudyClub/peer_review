@@ -14,6 +14,7 @@ from sqlalchemy.orm import relationship
 
 from app.db.base import Base
 from app.db.base import UUIDType
+from app.models.review import ReviewAssignmentStatus
 
 
 class TAReviewRequestStatus(str, enum.Enum):
@@ -47,3 +48,9 @@ class TAReviewRequest(Base):
     teacher = relationship("User", foreign_keys=[teacher_id])
     ta = relationship("User", foreign_keys=[ta_id])
     review_assignment = relationship("ReviewAssignment", foreign_keys=[review_assignment_id])
+
+    @property
+    def review_submitted(self) -> bool:
+        if self.review_assignment is None:
+            return False
+        return self.review_assignment.status == ReviewAssignmentStatus.submitted

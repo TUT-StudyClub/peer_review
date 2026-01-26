@@ -183,7 +183,7 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 
 ### 徳（credits）
 - レビューを1本提出すると `credits +1`
-- マッチングは「まだレビューされていない提出物」を優先しつつ、同条件なら `credits` が高い提出物が先に回ります  
+- マッチングは「まだレビューされていない提出物」を優先しつつ、同条件なら `credits` が高い提出物が先に回ります
   → **レビューをサボると自分の提出物が後回しになりやすい** 仕組みです
 
 ### ランク（rank / 称号）
@@ -202,4 +202,3 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 - `period=weekly|monthly` を指定すると週間/月間ランキングを取得できます（省略時は `total`）。
 - 週間/月間は直近7日/30日（UTC）を集計し、`period_credits` に獲得creditsを返します。
 - 対象は **TA要件（`TA_QUALIFICATION_THRESHOLD`）を満たすユーザーのみ** です。
-- フロントの `/start` にランキング表を表示しています。
