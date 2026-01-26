@@ -48,6 +48,7 @@ from app.services.duplicate import hash_comment
 from app.services.matching import get_or_assign_review_assignment
 from app.services.rubric import ensure_fixed_rubric
 from app.services.similarity import check_similarity
+from app.services.push_notification import push_service
 
 router = APIRouter()
 db_dependency = Depends(get_db)
@@ -289,6 +290,23 @@ def submit_review(
 
     db.commit()
     db.refresh(review)
+
+    # 提出者にプッシュ通知を送信
+    assignment = (
+        db.query(Assignment)
+        .filter(Assignment.id == review_assignment.assignment_id)
+        .first()
+    )
+    if assignment and submission.author_id:
+        push_service.send_to_user(
+            db=db,
+            user_id=str(submission.author_id),
+            title="レビューが届きました",
+            body=f"課題「{assignment.title}」に新しいレビューが届きました",
+            url=f"/assignments/{assignment.id}",
+            notification_type="review_received",
+        )
+
     return review
 
 

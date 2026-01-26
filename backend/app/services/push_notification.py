@@ -58,8 +58,6 @@ class PushNotificationService:
         Returns:
             {"success": int, "failed": int, "skipped": str | None}
         """
-        logger.info(f"[Push] send_to_user called: user_id={user_id}, type={notification_type}")
-        
         if not self.is_configured:
             logger.warning("VAPID keys not configured, skipping push notification")
             return {"success": 0, "failed": 0, "skipped": "not_configured"}
@@ -72,7 +70,6 @@ class PushNotificationService:
         )
 
         if pref and not self._is_notification_enabled(pref, notification_type):
-            logger.info(f"[Push] Notification disabled by user: {user_id}, type={notification_type}")
             return {"success": 0, "failed": 0, "skipped": "disabled_by_user"}
 
         # ユーザーの全購読情報を取得（複数デバイス対応）
@@ -81,8 +78,6 @@ class PushNotificationService:
             .filter(PushSubscription.user_id == user_id)
             .all()
         )
-
-        logger.info(f"[Push] Found {len(subscriptions)} subscriptions for user {user_id}")
 
         if not subscriptions:
             return {"success": 0, "failed": 0, "skipped": "no_subscription"}

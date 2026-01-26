@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "0002_add_push_notifications"
-down_revision = "0001_add_review_similarity"
+down_revision = '7ae773981d43'
 branch_labels = None
 depends_on = None
 

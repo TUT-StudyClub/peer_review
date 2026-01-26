@@ -9,6 +9,7 @@ from app.api.routes import reviews
 from app.api.routes import submissions
 from app.api.routes import ta
 from app.api.routes import users
+from app.api.routes import notifications
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])
