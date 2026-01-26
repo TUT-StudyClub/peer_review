@@ -71,6 +71,7 @@ class Review(Base):
     ai_insight: Mapped[int | None] = mapped_column(Integer, default=None)
     ai_comment_alignment_score: Mapped[int | None] = mapped_column(Integer, default=None)
     ai_comment_alignment_reason: Mapped[str | None] = mapped_column(Text, default=None)
+    credit_awarded: Mapped[int | None] = mapped_column(Integer, default=None)
 
     # 重複検知関連
     normalized_comment_hash: Mapped[str | None] = mapped_column(String(64), default=None, index=True)

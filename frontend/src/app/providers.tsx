@@ -9,7 +9,7 @@ type AuthContextValue = {
   token: string | null;
   user: UserPublic | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, remember?: boolean) => Promise<void>;
   register: (payload: UserCreate) => Promise<void>;
   logout: () => void;
   refreshMe: () => Promise<void>;
@@ -25,7 +25,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const stored = typeof window !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+    const stored =
+      typeof window !== "undefined"
+        ? localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+        : null;
     if (!stored) {
       setLoading(false);
       return;
@@ -41,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // 無効なトークンをブラウザから削除
         localStorage.removeItem(TOKEN_KEY);
+        sessionStorage.removeItem(TOKEN_KEY);
 
         setToken(null);
         setUser(null);
@@ -56,11 +60,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(me);
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string, remember = true) => {
     setLoading(true);
     try {
       const nextToken = await apiLogin(email, password);
-      localStorage.setItem(TOKEN_KEY, nextToken);
+      if (typeof window !== "undefined") {
+        if (remember) {
+          localStorage.setItem(TOKEN_KEY, nextToken);
+          sessionStorage.removeItem(TOKEN_KEY);
+        } else {
+          sessionStorage.setItem(TOKEN_KEY, nextToken);
+          localStorage.removeItem(TOKEN_KEY);
+        }
+      }
       setToken(nextToken);
       const me = await apiGetMe(nextToken);
       setUser(me);
@@ -81,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setUser(null);
   };

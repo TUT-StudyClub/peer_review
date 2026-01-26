@@ -11,6 +11,7 @@ export type UserPublic = {
   id: string;
   email: string;
   name: string;
+  avatar_url: string | null;
   role: UserRole;
   credits: number;
   rank: string;
@@ -31,6 +32,18 @@ export type UserRankingEntry = {
   period_credits?: number;
 };
 
+export type CreditHistoryPublic = {
+  id: string;
+  user_id: string;
+  delta: number;
+  total_credits: number;
+  reason: string;
+  review_id?: string | null;
+  assignment_id?: string | null;
+  submission_id?: string | null;
+  created_at: string;
+};
+
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
 
 export type TAReviewRequestPublic = {
@@ -41,6 +54,7 @@ export type TAReviewRequestPublic = {
   ta_id: string;
   status: TAReviewRequestStatus;
   review_assignment_id: string | null;
+  review_submitted: boolean;
   created_at: string;
   responded_at: string | null;
 };
@@ -52,6 +66,7 @@ export type AssignmentPublic = {
   description?: string | null;
   target_reviews_per_submission: number;
   created_at: string;
+  due_at?: string | null;
 };
 
 export type AssignmentCreate = {
@@ -59,12 +74,14 @@ export type AssignmentCreate = {
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
+  due_at?: string | null;
 };
 
 export type CoursePublic = {
   id: string;
   title: string;
   description?: string | null;
+  theme?: string | null;
   teacher_id: string;
   created_at: string;
   teacher_name?: string | null;
@@ -75,6 +92,7 @@ export type CoursePublic = {
 export type CourseCreate = {
   title: string;
   description?: string | null;
+  theme?: string | null;
 };
 
 export type CourseEnrollmentPublic = {

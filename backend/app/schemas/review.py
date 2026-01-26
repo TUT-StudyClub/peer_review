@@ -163,6 +163,7 @@ class TAReviewRequestPublic(BaseModel):
     ta_id: UUID
     status: TAReviewRequestStatus
     review_assignment_id: UUID | None
+    review_submitted: bool = False
     created_at: datetime
     responded_at: datetime | None
 
