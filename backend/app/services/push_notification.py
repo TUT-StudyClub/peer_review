@@ -116,8 +116,8 @@ class PushNotificationService:
             {
                 "title": title,
                 "body": body,
-                "icon": "/icon-192.png",
-                "badge": "/badge-72.png",
+                #"icon": "/icon-192.png",
+                #"badge": "/badge-72.png",
                 "url": url or "/",
             }
         )
