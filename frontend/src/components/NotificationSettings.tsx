@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react"; // useCallbackを追加
 
 import { useAuth } from "@/app/providers";
 import {
@@ -30,48 +30,16 @@ export function NotificationSettings() {
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // 初期化
-  useEffect(() => {
-    const init = async () => {
-      // プッシュ通知のサポート確認
-      const supported = isPushSupported();
-      setPushSupported(supported);
-
-      if (supported) {
-        await registerServiceWorker();
-        setPushPermission(getPermissionState());
-        setPushSubscribed(await isSubscribed());
-      }
-
-      // 通知設定を取得
-      if (token) {
-        try {
-          const prefs = await getNotificationPreferences(token);
-          setPreferences(prefs);
-        } catch (e) {
-          console.error("Failed to load preferences:", e);
-          setPreferences(null);
-        }
-      }
-
-      setLoading(false);
-    };
-
-    init();
-  }, [token]);
-
-  // プッシュ通知を有効化
-  const handleEnablePush = async () => {
+  // --- 1. handleEnablePush を useCallback で定義 (useEffectより先に定義するため) ---
+  const handleEnablePush = useCallback(async () => {
     if (!token) return;
-    console.log("[NotificationSettings] handleEnablePush called");
+    console.log("[NotificationSettings] 同期処理を開始...");
     setSaving(true);
 
     const success = await subscribePush(token);
-    console.log("[NotificationSettings] subscribePush result:", success);
     if (success) {
       setPushPermission("granted");
       setPushSubscribed(true);
-      // 設定を再取得
       try {
         const prefs = await getNotificationPreferences(token);
         setPreferences(prefs);
@@ -79,37 +47,72 @@ export function NotificationSettings() {
         console.error("Failed to load preferences:", e);
       }
     }
-
     setSaving(false);
-  };
+  }, [token]);
 
-  // プッシュ通知を無効化
+  // --- 2. 初期化 useEffect ---
+  useEffect(() => {
+    const init = async () => {
+      const supported = isPushSupported();
+      setPushSupported(supported);
+
+      let browserSubscribed = false;
+
+      if (supported) {
+        await registerServiceWorker();
+        setPushPermission(getPermissionState());
+        browserSubscribed = await isSubscribed();
+        setPushSubscribed(browserSubscribed);
+      }
+
+      if (token) {
+        try {
+          // サーバーの設定を取得
+          const prefs = await getNotificationPreferences(token);
+          setPreferences(prefs);
+
+          // 【自動同期の肝】
+          // ブラウザは登録済み（鍵を持っている）なのに、サーバー側に設定がない場合
+          if (browserSubscribed && !prefs) {
+            console.log("[PushSync] サーバーとの不整合を検知。自動同期します。");
+            await handleEnablePush();
+          }
+        } catch (e) {
+          console.error("Failed to load preferences:", e);
+          // エラー（404等）で設定が取れないが、ブラウザに鍵がある場合も同期を試みる
+          if (browserSubscribed) {
+            await handleEnablePush();
+          }
+        }
+      }
+      setLoading(false);
+    };
+
+    init();
+  }, [token, handleEnablePush]); // handleEnablePushを依存配列に追加
+
+  // --- 3. その他のハンドラー (handleDisablePushなどはそのまま) ---
   const handleDisablePush = async () => {
     if (!token) return;
     setSaving(true);
-
     await unsubscribePush(token);
     setPushSubscribed(false);
-
     setSaving(false);
   };
 
-  // 設定を更新
   const updatePreference = async (key: keyof Preferences, value: boolean) => {
     if (!token || !preferences) return;
-
     const newPrefs = { ...preferences, [key]: value };
     setPreferences(newPrefs);
-
     try {
       await updateNotificationPreferences(token, { [key]: value });
     } catch (e) {
       console.error("Failed to update preference:", e);
-      // 失敗したら戻す
       setPreferences(preferences);
     }
   };
 
+  // --- 4. 表示部分 ---
   if (loading) {
     return (
       <div className="rounded-xl border bg-white p-6">
@@ -203,7 +206,7 @@ export function NotificationSettings() {
   );
 }
 
-// トグルスイッチコンポーネント
+// トグルスイッチコンポーネント (これはファイルの最後に残しておいてください)
 function ToggleItem({
   label,
   description,
