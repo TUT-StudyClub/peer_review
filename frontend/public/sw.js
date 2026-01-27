@@ -23,6 +23,7 @@ self.addEventListener("push", (event) => {
       url: data.url || "/",
     },
     requireInteraction: true,
+    renotify: true,
     silent: false,
     vibrate: [200, 100, 200],
     tag: data.tag || "default",
