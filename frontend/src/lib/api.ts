@@ -409,6 +409,19 @@ export async function apiEnrollCourse(token: string, courseId: string): Promise<
   return apiFetch<CourseEnrollmentPublic>(`/courses/${courseId}/enroll`, { method: "POST" }, token);
 }
 
+export async function apiUnenrollCourse(token: string, courseId: string): Promise<void> {
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(`${API_BASE_URL}/courses/${courseId}/enroll`, {
+    method: "DELETE",
+    headers,
+  });
+  if (!res.ok) {
+    const { message } = await parseErrorDetail(res);
+    throw new ApiError(message, res.status);
+  }
+}
+
 export async function apiListCourseStudents(token: string, courseId: string): Promise<UserPublic[]> {
   return apiFetch<UserPublic[]>(`/courses/${courseId}/students`, {}, token);
 }

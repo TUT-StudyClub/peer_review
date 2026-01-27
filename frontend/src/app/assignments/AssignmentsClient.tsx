@@ -322,8 +322,7 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
           course.id === courseId ? { ...course, is_enrolled: true } : course
         )
       );
-      setActiveCourseId(courseId);
-      router.push(`/assignments?course_id=${courseId}`);
+      router.push(`/courses/${courseId}`);
     } catch (err) {
       setCoursesError(formatApiError(err));
     } finally {
@@ -481,10 +480,12 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
             </Card>
           ) : (
             <ul className="grid gap-4 lg:grid-cols-2">
-              {filteredCourses.map((course, index) => {
+              {filteredCourses.map((course) => {
                 const canSelect = user?.role !== "student" || course.is_enrolled;
                 const isEnrolled = user?.role === "student" && course.is_enrolled;
-                const fallbackThemeKey = index % 2 === 0 ? "sky" : "violet";
+                // courseId の最初の文字を使用してテーマを決定（講義ページと統一）
+                const themeKeys = ["sky", "emerald", "amber", "rose", "slate", "violet"];
+                const fallbackThemeKey = themeKeys[course.id.charCodeAt(0) % themeKeys.length];
                 const theme =
                   COURSE_THEME_BY_VALUE[course.theme ?? fallbackThemeKey] ??
                   COURSE_THEME_BY_VALUE.sky;
@@ -548,7 +549,7 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
                           最終更新: {formatShortDate(latestDate)}
                         </div>
                       </div>
-                      <div className="pt-2">
+                      <div className="grid gap-2 pt-2">
                         {user?.role === "student" && !course.is_enrolled ? (
                           <Button
                             className="w-full"
@@ -560,16 +561,10 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
                         ) : (
                           <Button
                             variant="outline"
-                            className="w-full"
-                            onClick={() => {
-                              if (!canSelect) return;
-                              setActiveCourseId(course.id);
-                              router.push(`/assignments?course_id=${course.id}`);
-                            }}
-                            disabled={!canSelect}
-                            title={!canSelect ? "受講してから選択できます" : undefined}
+                            className="w-full px-6 py-3 text-base"
+                            asChild
                           >
-                            選択
+                            <Link href={`/courses/${course.id}`}>講義ページへ</Link>
                           </Button>
                         )}
                       </div>

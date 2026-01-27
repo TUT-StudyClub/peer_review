@@ -183,6 +183,27 @@ def enroll_course(
     return enrollment
 
 
+@router.delete("/{course_id}/enroll", status_code=204)
+def unenroll_course(
+    course_id: UUID,
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
+) -> None:
+    if current_user.role != UserRole.student:
+        raise HTTPException(status_code=403, detail="Student role required")
+
+    enrollment = (
+        db.query(CourseEnrollment)
+        .filter(CourseEnrollment.course_id == course_id, CourseEnrollment.user_id == current_user.id)
+        .first()
+    )
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+
+    db.delete(enrollment)
+    db.commit()
+
+
 @router.get("/{course_id}/students", response_model=list[UserPublic])
 def list_course_students(
     course_id: UUID,

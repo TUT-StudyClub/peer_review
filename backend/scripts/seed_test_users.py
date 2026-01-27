@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -34,6 +35,15 @@ class AssignmentSeed(TypedDict):
     days_from_now: int
 
 
+class CompletedAssignmentSeed(TypedDict):
+    course_title: str
+    assignment_title: str
+    student_email: str
+    teacher_email: str
+    teacher_score: int
+    feedback: str
+
+
 # Ensure project root (backend/) is on sys.path when running as a script
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -52,8 +62,18 @@ def main() -> int:  # noqa: PLR0915
     from app.db.session import SessionLocal  # noqa: PLC0415
     from app.models.assignment import Assignment  # noqa: PLC0415
     from app.models.course import Course  # noqa: PLC0415
+    from app.models.course import CourseEnrollment  # noqa: PLC0415
+    from app.models.review import MetaReview  # noqa: PLC0415
+    from app.models.review import Review  # noqa: PLC0415
+    from app.models.review import ReviewAssignment  # noqa: PLC0415
+    from app.models.review import ReviewAssignmentStatus  # noqa: PLC0415
+    from app.models.review import ReviewRubricScore  # noqa: PLC0415
+    from app.models.submission import Submission  # noqa: PLC0415
+    from app.models.submission import SubmissionFileType  # noqa: PLC0415
+    from app.models.submission import SubmissionRubricScore  # noqa: PLC0415
     from app.models.user import User  # noqa: PLC0415
     from app.models.user import UserRole  # noqa: PLC0415
+    from app.services.rubric import ensure_fixed_rubric  # noqa: PLC0415
 
     password = os.getenv("TEST_USER_PASSWORD")
     if not password:
@@ -72,6 +92,7 @@ def main() -> int:  # noqa: PLR0915
         {"email": "ta1@example.com", "name": "TA 1", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta2@example.com", "name": "TA 2", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta3@example.com", "name": "TA 3", "role": UserRole.student, "credits": ta_credits},
+        {"email": "student_completed@example.com", "name": "Student Completed", "role": UserRole.student},
         *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
     ]
 
@@ -200,6 +221,157 @@ def main() -> int:  # noqa: PLR0915
             created_assignments += 1
 
         db.commit()
+
+        # 事前完了課題の作成 (提出・採点済み)
+        print("Creating completed assignment seeds...")
+        seed_dir = Path(settings.storage_dir) / "seed-submissions"
+        seed_dir.mkdir(parents=True, exist_ok=True)
+
+        assignments_by_key = {
+            (assignment.course_id, assignment.title): assignment for assignment in db.query(Assignment).all()
+        }
+
+        completed_specs: list[CompletedAssignmentSeed] = [
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "student_completed@example.com",
+                "teacher_email": "teacher1@example.com",
+                "teacher_score": 18,
+                "feedback": "基本要件は満たしています。次回は根拠をもう一段具体的に。",
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "student_completed@example.com",
+                "teacher_email": "teacher2@example.com",
+                "teacher_score": 19,
+                "feedback": "整理された構成です。計算量の比較を追記するとさらに良くなります。",
+            },
+        ]
+
+        for spec in completed_specs:
+            print(f"Processing completed: {spec['course_title']} - {spec['assignment_title']}")
+            course = courses_by_title.get(spec["course_title"])
+            assignment = assignments_by_key.get((course.id, spec["assignment_title"])) if course else None
+            student = db.query(User).filter(User.email == spec["student_email"]).first()
+            teacher = db.query(User).filter(User.email == spec["teacher_email"]).first()
+            print(
+                f"  course={bool(course)} assignment={bool(assignment)} student={bool(student)} teacher={bool(teacher)}"
+            )
+            if not course or not assignment or not student or not teacher:
+                print("  skip (missing data)")
+                continue
+            print("  Creating enrollment, submission, review...")
+
+            enrollment = (
+                db.query(CourseEnrollment)
+                .filter(CourseEnrollment.course_id == course.id, CourseEnrollment.user_id == student.id)
+                .first()
+            )
+            if enrollment is None:
+                db.add(CourseEnrollment(course_id=course.id, user_id=student.id))
+
+            submission = (
+                db.query(Submission)
+                .filter(Submission.assignment_id == assignment.id, Submission.author_id == student.id)
+                .first()
+            )
+            if submission is None:
+                file_path = seed_dir / f"{assignment.id}-{student.id}.md"
+                file_path.write_text(
+                    "# Seed submission\n\nこの提出はシードデータとして自動生成されました。",
+                    encoding="utf-8",
+                )
+                submission = Submission(
+                    assignment_id=assignment.id,
+                    author_id=student.id,
+                    file_type=SubmissionFileType.markdown,
+                    original_filename="seed.md",
+                    storage_path=str(file_path),
+                    markdown_text=file_path.read_text(encoding="utf-8"),
+                    submission_text=file_path.read_text(encoding="utf-8"),
+                )
+                db.add(submission)
+                db.flush()
+                db.refresh(submission)
+                print(f"    Created submission: {submission.id}")
+
+            criteria = ensure_fixed_rubric(db, assignment.id)
+            db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id == submission.id).delete()
+
+            # rubric得点を均等配分（上限をmax_scoreに抑制）
+            base_score = max(1, spec["teacher_score"] // max(len(criteria), 1))
+            remaining = spec["teacher_score"]
+            for idx, criterion in enumerate(criteria):
+                raw = base_score if idx < len(criteria) - 1 else remaining
+                score = int(min(raw, criterion.max_score))
+                remaining -= score
+                db.add(
+                    SubmissionRubricScore(
+                        submission_id=submission.id,
+                        criterion_id=criterion.id,
+                        score=score,
+                    )
+                )
+
+            submission.teacher_total_score = spec["teacher_score"]
+            submission.teacher_feedback = spec["feedback"]
+            print(f"    Updated submission: score={spec['teacher_score']}")
+
+            reviewer = db.query(User).filter(User.email == "ta1@example.com").first()
+            if reviewer:
+                review_assignment = (
+                    db.query(ReviewAssignment)
+                    .filter(
+                        ReviewAssignment.submission_id == submission.id,
+                        ReviewAssignment.reviewer_id == reviewer.id,
+                    )
+                    .first()
+                )
+                if review_assignment is None:
+                    review_assignment = ReviewAssignment(
+                        assignment_id=assignment.id,
+                        submission_id=submission.id,
+                        reviewer_id=reviewer.id,
+                        status=ReviewAssignmentStatus.submitted,
+                        submitted_at=datetime.now(UTC),
+                    )
+                    db.add(review_assignment)
+                    db.flush()
+
+                review = db.query(Review).filter(Review.review_assignment_id == review_assignment.id).first()
+                if review is None:
+                    review = Review(
+                        review_assignment_id=review_assignment.id,
+                        comment="全体的に読みやすく、要点が整理されています。",
+                        ai_quality_score=5,
+                        ai_logic=5,
+                        ai_specificity=4,
+                        ai_comment_alignment_score=5,
+                        ai_toxic=False,
+                    )
+                    db.add(review)
+                    db.flush()
+
+                db.query(ReviewRubricScore).filter(ReviewRubricScore.review_id == review.id).delete()
+                for criterion in criteria:
+                    db.add(
+                        ReviewRubricScore(
+                            review_id=review.id,
+                            criterion_id=criterion.id,
+                            score=min(criterion.max_score, 4),
+                        )
+                    )
+
+                meta = db.query(MetaReview).filter(MetaReview.review_id == review.id).first()
+                if meta is None:
+                    db.add(MetaReview(review_id=review.id, rater_id=teacher.id, helpfulness=5))
+                    print("    Created meta-review")
+
+        print("Committing completed assignment seeds...")
+        db.commit()
+        print("Completed assignment seeds committed successfully.")
 
     print(
         "done:"
