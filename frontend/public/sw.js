@@ -19,13 +19,13 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "",
-    icon: data.icon || "/icon-192.png",
-    badge: data.badge || "/badge-72.png",
+    //icon: data.icon || "/icon-192.png",
+    //badge: data.badge || "/badge-72.png",
     data: {
       url: data.url || "/",
     },
     // 通知の動作設定
-    requireInteraction: false, // 自動で消える
+    requireInteraction: true, // 自動で消さず、ユーザーが気づくまで残す
     silent: false, // 音を鳴らす
     vibrate: [200, 100, 200], // バイブレーション（モバイル）
     tag: data.tag || "default", // 同じtagの通知は上書き
