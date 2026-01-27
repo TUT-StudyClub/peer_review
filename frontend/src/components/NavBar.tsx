@@ -66,6 +66,7 @@ export function NavBar() {
             ) : null}
             {user?.role === "student" ? <NavLink href="/mypage" label="マイページ" /> : null}
             {user?.is_ta ? <NavLink href="/ta/requests" label="TAリクエスト" /> : null}
+            {user ? <NavLink href="/settings" label="設定" /> : null}
           </nav>
         </div>
         <div className="flex items-center gap-3">

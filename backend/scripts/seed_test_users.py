@@ -72,8 +72,11 @@ def main() -> int:  # noqa: PLR0915
         {"email": "ta1@example.com", "name": "TA 1", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta2@example.com", "name": "TA 2", "role": UserRole.student, "credits": ta_credits},
         {"email": "ta3@example.com", "name": "TA 3", "role": UserRole.student, "credits": ta_credits},
-        *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
     ]
+    # 学生を追加 (型チェッカー対応のため分離)
+    users.extend(
+        [{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)]
+    )
 
     created_users = 0
     skipped_users = 0

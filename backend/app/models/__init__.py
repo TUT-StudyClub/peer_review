@@ -20,6 +20,8 @@ __all__ = [
     "CourseEnrollment",
     "CreditHistory",
     "MetaReview",
+    "NotificationPreference",
+    "PushSubscription",
     "Review",
     "ReviewAssignment",
     "ReviewRubricScore",
