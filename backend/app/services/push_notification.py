@@ -3,6 +3,7 @@
 import json
 import logging
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from pywebpush import WebPushException
 from pywebpush import webpush
@@ -34,7 +35,7 @@ class PushNotificationService:
     def send_to_user(
         self,
         db: Session,
-        user_id: str,
+        user_id: UUID,
         title: str,
         body: str,
         url: str | None = None,
@@ -45,7 +46,7 @@ class PushNotificationService:
 
         Args:
             db: DBセッション
-            user_id: 送信先ユーザーID
+            user_id: 送信先ユーザーID（UUID）
             title: 通知タイトル
             body: 通知本文
             url: クリック時の遷移先URL
@@ -63,21 +64,13 @@ class PushNotificationService:
             return {"success": 0, "failed": 0, "skipped": "not_configured"}
 
         # 通知設定を確認
-        pref = (
-            db.query(NotificationPreference)
-            .filter(NotificationPreference.user_id == user_id)
-            .first()
-        )
+        pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == user_id).first()
 
         if pref and not self._is_notification_enabled(pref, notification_type):
             return {"success": 0, "failed": 0, "skipped": "disabled_by_user"}
 
         # ユーザーの全購読情報を取得（複数デバイス対応）
-        subscriptions = (
-            db.query(PushSubscription)
-            .filter(PushSubscription.user_id == user_id)
-            .all()
-        )
+        subscriptions = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
 
         if not subscriptions:
             return {"success": 0, "failed": 0, "skipped": "no_subscription"}
@@ -116,8 +109,8 @@ class PushNotificationService:
             {
                 "title": title,
                 "body": body,
-                #"icon": "/icon-192.png",
-                #"badge": "/badge-72.png",
+                # "icon": "/icon-192.png",
+                # "badge": "/badge-72.png",
                 "url": url or "/",
             }
         )

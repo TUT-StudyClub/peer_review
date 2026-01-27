@@ -5,12 +5,13 @@ Revises: 0001_add_review_similarity
 Create Date: 2026-01-17 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "0002_add_push_notifications"
-down_revision = '7ae773981d43'
+down_revision = "7ae773981d43"
 branch_labels = None
 depends_on = None
 
@@ -19,8 +20,8 @@ def upgrade() -> None:
     # Create push_subscriptions table
     op.create_table(
         "push_subscriptions",
-        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False, primary_key=True),
-        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False, primary_key=True),  # type: ignore[no-matching-overload]
+        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False),  # type: ignore[no-matching-overload]
         sa.Column("endpoint", sa.Text(), nullable=False, unique=True),
         sa.Column("p256dh_key", sa.String(255), nullable=False),
         sa.Column("auth_key", sa.String(255), nullable=False),
@@ -33,8 +34,8 @@ def upgrade() -> None:
     # Create notification_preferences table
     op.create_table(
         "notification_preferences",
-        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False, primary_key=True),
-        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False, unique=True),
+        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False, primary_key=True),  # type: ignore[no-matching-overload]
+        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False, unique=True),  # type: ignore[no-matching-overload]
         sa.Column("push_review_received", sa.Boolean(), nullable=False, default=True),
         sa.Column("push_deadline_reminder", sa.Boolean(), nullable=False, default=True),
         sa.Column("push_feedback_received", sa.Boolean(), nullable=False, default=True),

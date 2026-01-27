@@ -5,12 +5,12 @@ from uuid import uuid4
 
 from sqlalchemy import Boolean
 from sqlalchemy import ForeignKey
-from sqlalchemy import Uuid as SAUuid
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
+from app.db.base import UUIDType
 
 
 class NotificationPreference(Base):
@@ -22,9 +22,9 @@ class NotificationPreference(Base):
 
     __tablename__ = "notification_preferences"
 
-    id: Mapped[UUID] = mapped_column(SAUuid(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(
-        SAUuid(as_uuid=True),
+        UUIDType,
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,

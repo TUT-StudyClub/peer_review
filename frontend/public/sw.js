@@ -1,6 +1,6 @@
 // Service Worker for Push Notifications
 
-// プッシュ通知を受信したとき
+// プッシュ通知を受信したとき（eventを使うのでそのまま）
 self.addEventListener("push", (event) => {
   console.log("[SW] Push received:", event);
 
@@ -19,16 +19,13 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body || "",
-    //icon: data.icon || "/icon-192.png",
-    //badge: data.badge || "/badge-72.png",
     data: {
       url: data.url || "/",
     },
-    // 通知の動作設定
-    requireInteraction: true, // 自動で消さず、ユーザーが気づくまで残す
-    silent: false, // 音を鳴らす
-    vibrate: [200, 100, 200], // バイブレーション（モバイル）
-    tag: data.tag || "default", // 同じtagの通知は上書き
+    requireInteraction: true,
+    silent: false,
+    vibrate: [200, 100, 200],
+    tag: data.tag || "default",
   };
 
   event.waitUntil(
@@ -36,7 +33,7 @@ self.addEventListener("push", (event) => {
   );
 });
 
-// 通知をクリックしたとき
+// 通知をクリックしたとき（eventを使うのでそのまま）
 self.addEventListener("notificationclick", (event) => {
   console.log("[SW] Notification clicked:", event);
 
@@ -49,7 +46,6 @@ self.addEventListener("notificationclick", (event) => {
     clients
       .matchAll({ type: "window", includeUncontrolled: true })
       .then((clientList) => {
-        // 既に開いているタブがあればフォーカス
         for (const client of clientList) {
           if (client.url.startsWith(self.location.origin) && "focus" in client) {
             return client.focus().then(() => {
@@ -59,7 +55,6 @@ self.addEventListener("notificationclick", (event) => {
             });
           }
         }
-        // なければ新しいタブで開く
         if (clients.openWindow) {
           return clients.openWindow(fullUrl);
         }
@@ -67,13 +62,13 @@ self.addEventListener("notificationclick", (event) => {
   );
 });
 
-// Service Workerがインストールされたとき
-self.addEventListener("install", (event) => {
+// 引数を使わないので () にする
+self.addEventListener("install", () => {
   console.log("[SW] Installing...");
   self.skipWaiting();
 });
 
-// Service Workerがアクティブになったとき
+// event.waitUntil を使っているので (event) に戻し、名前を一致させる
 self.addEventListener("activate", (event) => {
   console.log("[SW] Activated");
   event.waitUntil(clients.claim());

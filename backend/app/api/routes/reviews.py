@@ -48,14 +48,24 @@ from app.services.credits import score_1_to_5_from_norm
 from app.services.duplicate import detect_duplicate_review
 from app.services.duplicate import hash_comment
 from app.services.matching import get_or_assign_review_assignment
+from app.services.push_notification import push_service
 from app.services.rubric import ensure_fixed_rubric
 from app.services.similarity import check_similarity
-from app.services.push_notification import push_service
 
 router = APIRouter()
 db_dependency = Depends(get_db)
 current_user_dependency = Depends(get_current_user)
 teacher_dependency = Depends(require_teacher)
+
+
+def _validate_review_assignment(review_assignment, current_user):
+    """レビューの権限と状態をチェックするヘルパー関数"""
+    if review_assignment is None:
+        raise HTTPException(status_code=404, detail="Review assignment not found")
+    if review_assignment.reviewer_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    if review_assignment.status != ReviewAssignmentStatus.assigned:
+        raise HTTPException(status_code=400, detail="This task is not open")
 
 
 def _evaluation_fields(credit: object | None) -> dict:
@@ -152,13 +162,11 @@ def submit_review(
     current_user: User = current_user_dependency,
 ) -> ReviewPublic:
     review_assignment = db.query(ReviewAssignment).filter(ReviewAssignment.id == review_assignment_id).first()
-    if review_assignment is None:
-        raise HTTPException(status_code=404, detail="Review assignment not found")
-    if review_assignment.reviewer_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Not allowed")
-    if review_assignment.status != ReviewAssignmentStatus.assigned:
-        raise HTTPException(status_code=400, detail="This task is not open")
 
+    # --- ここでヘルパー関数を呼び出す ---
+    _validate_review_assignment(review_assignment, current_user)
+
+    # 既存のレビューチェック
     existing_review = db.query(Review).filter(Review.review_assignment_id == review_assignment_id).first()
     if existing_review is not None:
         raise HTTPException(status_code=400, detail="Review already submitted")
@@ -307,22 +315,18 @@ def submit_review(
     db.refresh(review)
 
     # 提出者にプッシュ通知を送信
-    assignment = (
-        db.query(Assignment)
-        .filter(Assignment.id == review_assignment.assignment_id)
-        .first()
-    )
+    assignment = db.query(Assignment).filter(Assignment.id == review_assignment.assignment_id).first()
     if assignment and submission.author_id:
         push_service.send_to_user(
             db=db,
-            user_id=str(submission.author_id),
+            user_id=submission.author_id,
             title="レビューが届きました",
             body=f"課題「{assignment.title}」に新しいレビューが届きました",
             url=f"/assignments/{assignment.id}",
             notification_type="review_received",
         )
 
-    return review
+    return ReviewPublic.model_validate(review)
 
 
 def _simple_rephrase(text: str) -> RephraseResponse:

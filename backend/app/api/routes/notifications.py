@@ -31,9 +31,7 @@ def get_vapid_public_key():
     フロントエンドでプッシュ通知を購読する際に使用
     """
     if not settings.vapid_public_key:
-        raise HTTPException(
-            status_code=503, detail="Push notifications are not configured"
-        )
+        raise HTTPException(status_code=503, detail="Push notifications are not configured")
     return VapidPublicKeyResponse(public_key=settings.vapid_public_key)
 
 
@@ -49,11 +47,7 @@ def subscribe_push(
     ブラウザから取得した購読情報をサーバーに登録
     """
     # 既存の購読を確認（同じendpointなら更新）
-    existing = (
-        db.query(PushSubscription)
-        .filter(PushSubscription.endpoint == data.endpoint)
-        .first()
-    )
+    existing = db.query(PushSubscription).filter(PushSubscription.endpoint == data.endpoint).first()
 
     if existing:
         # 既存の購読を更新（別ユーザーの可能性もあるので上書き）
@@ -76,11 +70,7 @@ def subscribe_push(
         subscription_id = str(subscription.id)
 
     # 通知設定がなければデフォルトで作成
-    pref = (
-        db.query(NotificationPreference)
-        .filter(NotificationPreference.user_id == current_user.id)
-        .first()
-    )
+    pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
 
     if not pref:
         pref = NotificationPreference(user_id=current_user.id)
@@ -128,11 +118,7 @@ def get_preferences(
 
     未作成の場合はデフォルト値で新規作成
     """
-    pref = (
-        db.query(NotificationPreference)
-        .filter(NotificationPreference.user_id == current_user.id)
-        .first()
-    )
+    pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
 
     # 未作成なら新規作成
     if not pref:
@@ -155,11 +141,7 @@ def update_preferences(
 
     送信されたフィールドのみ更新
     """
-    pref = (
-        db.query(NotificationPreference)
-        .filter(NotificationPreference.user_id == current_user.id)
-        .first()
-    )
+    pref = db.query(NotificationPreference).filter(NotificationPreference.user_id == current_user.id).first()
 
     if not pref:
         pref = NotificationPreference(user_id=current_user.id)
@@ -184,11 +166,7 @@ def get_subscriptions(
     """
     現在の購読一覧を取得（デバッグ用）
     """
-    subscriptions = (
-        db.query(PushSubscription)
-        .filter(PushSubscription.user_id == current_user.id)
-        .all()
-    )
+    subscriptions = db.query(PushSubscription).filter(PushSubscription.user_id == current_user.id).all()
 
     return {
         "count": len(subscriptions),
