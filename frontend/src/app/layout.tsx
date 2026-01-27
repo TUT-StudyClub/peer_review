@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./providers";
-import { NavBar } from "@/components/NavBar";
+import { AppShell } from "@/components/AppShell";
 import { PageTransition } from "@/components/PageTransition";
 
 const geistSans = Geist({
@@ -32,14 +32,11 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
         <AuthProvider>
-          <Suspense fallback={<div className="h-14 border-b border-border bg-background" />}>
-            <NavBar />
-          </Suspense>
-          <main className="mx-auto w-full max-w-5xl px-4 py-8">
+          <AppShell>
             <Suspense fallback={<div className="page-transition">{children}</div>}>
               <PageTransition>{children}</PageTransition>
             </Suspense>
-          </main>
+          </AppShell>
         </AuthProvider>
       </body>
     </html>
