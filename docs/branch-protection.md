@@ -1,6 +1,6 @@
 # ブランチ保護（main直push禁止 / PR必須 / CI必須 / approve必須）
 
-このリポジトリは **設定ファイルだけでは「main直push禁止」を完全に強制できません**。  
+このリポジトリは **設定ファイルだけでは「main直push禁止」を完全に強制できません**。
 GitHub / GitLab のリポジトリ設定（ブランチ保護・ルールセット）で有効化してください。
 
 ---
@@ -59,4 +59,3 @@ GitHubは「管理者を例外にできる（bypass）」仕組みがありま�
 - **Allowed to merge**: 運用に合わせて（例：`Developers + Maintainers` か `Maintainers` のみ）
 - Merge request approvals: `1` を必須に設定
 - Pipeline must succeed: 有効化（CIがある場合）
-
