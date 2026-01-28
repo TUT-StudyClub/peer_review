@@ -14,12 +14,13 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/app/providers";
 import { cn } from "@/lib/utils";
+import type { ComponentType } from "react";
 
 // ナビゲーションアイテムの型定義
 type NavItem = {
     label: string;
     href: string;
-    icon: React.ComponentType<{ className?: string }>;
+    icon: ComponentType<{ className?: string }>;
     show: boolean;
     isActive?: (path: string) => boolean;
     className?: string;
