@@ -11,9 +11,14 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import sessionmaker
 
 from app.api.routes.courses import get_course_detail
+from app.api.routes.courses import unenroll_course
 from app.db.base import Base
+from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course import CourseEnrollment
+from app.models.review import ReviewAssignment
+from app.models.submission import Submission
+from app.models.submission import SubmissionFileType
 from app.models.user import User
 from app.models.user import UserRole
 
@@ -154,3 +159,155 @@ class TestGetCourseDetail:
         assert "reviewer_skill" not in schema_fields
         assert "logic" not in schema_fields
         assert "specificity" not in schema_fields
+
+
+class TestUnenrollCourse:
+    """DELETE /courses/{course_id}/enroll のテスト"""
+
+    def test_unenroll_course_success(
+        self,
+        db_session: Session,
+        course: Course,
+        student: User,
+    ) -> None:
+        """正常系：学生が受講を取り消せる"""
+        # 学生を授業に登録
+        enrollment = CourseEnrollment(course_id=course.id, user_id=student.id)
+        db_session.add(enrollment)
+        db_session.commit()
+
+        # 受講を取り消し
+        unenroll_course(course.id, db_session, student)
+
+        # 登録が削除されていることを確認
+        remaining = (
+            db_session.query(CourseEnrollment)
+            .filter(
+                CourseEnrollment.course_id == course.id,
+                CourseEnrollment.user_id == student.id,
+            )
+            .first()
+        )
+        assert remaining is None
+
+    def test_unenroll_course_not_enrolled(
+        self,
+        db_session: Session,
+        course: Course,
+        student: User,
+    ) -> None:
+        """異常系：受講していない授業を取り消そうとした場合、404エラーが返される"""
+        with pytest.raises(HTTPException) as exc_info:
+            unenroll_course(course.id, db_session, student)
+
+        assert exc_info.value.status_code == 404
+        assert "Enrollment not found" in exc_info.value.detail
+
+    def test_unenroll_course_teacher_forbidden(
+        self,
+        db_session: Session,
+        course: Course,
+        teacher: User,
+    ) -> None:
+        """異常系：教師が受講の取り消しを試した場合、403エラーが返される"""
+        with pytest.raises(HTTPException) as exc_info:
+            unenroll_course(course.id, db_session, teacher)
+
+        assert exc_info.value.status_code == 403
+        assert "Student role required" in exc_info.value.detail
+
+    def test_unenroll_course_not_found(
+        self,
+        db_session: Session,
+        student: User,
+    ) -> None:
+        """異常系：存在しない授業の受講を取り消そうとした場合、404エラーが返される"""
+        with pytest.raises(HTTPException) as exc_info:
+            unenroll_course(uuid4(), db_session, student)
+
+        assert exc_info.value.status_code == 404
+        assert "Enrollment not found" in exc_info.value.detail
+
+    def test_unenroll_course_rejected_when_submission_exists(
+        self,
+        db_session: Session,
+        course: Course,
+        student: User,
+    ) -> None:
+        """異常系：提出済み課題がある場合は取り消しできない"""
+        # 受講登録
+        enrollment = CourseEnrollment(course_id=course.id, user_id=student.id)
+        db_session.add(enrollment)
+        db_session.commit()
+
+        assignment = Assignment(course_id=course.id, title="課題1", description="", target_reviews_per_submission=2)
+        db_session.add(assignment)
+        db_session.commit()
+
+        submission = Submission(
+            assignment_id=assignment.id,
+            author_id=student.id,
+            file_type=SubmissionFileType.markdown,
+            original_filename="report.md",
+            storage_path="/tmp/report.md",
+            markdown_text="# report",
+        )
+        db_session.add(submission)
+        db_session.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            unenroll_course(course.id, db_session, student)
+
+        assert exc_info.value.status_code == 400
+        assert "Cannot unenroll after submitting assignments" in exc_info.value.detail
+
+    def test_unenroll_course_rejected_when_review_assignment_exists(
+        self,
+        db_session: Session,
+        course: Course,
+        student: User,
+    ) -> None:
+        """異常系：レビュー割り当てが残っている場合は取り消しできない"""
+        # 受講登録
+        enrollment = CourseEnrollment(course_id=course.id, user_id=student.id)
+        db_session.add(enrollment)
+        db_session.commit()
+
+        assignment = Assignment(course_id=course.id, title="課題2", description="", target_reviews_per_submission=2)
+        db_session.add(assignment)
+        db_session.commit()
+
+        # レビュー対象となる他者の提出物
+        other_student = User(
+            email="other@example.com",
+            name="学生 次郎",
+            password_hash="hash_other",
+            role=UserRole.student,
+        )
+        db_session.add(other_student)
+        db_session.commit()
+
+        submission = Submission(
+            assignment_id=assignment.id,
+            author_id=other_student.id,
+            file_type=SubmissionFileType.markdown,
+            original_filename="other.md",
+            storage_path="/tmp/other.md",
+            markdown_text="# other",
+        )
+        db_session.add(submission)
+        db_session.commit()
+
+        review_assignment = ReviewAssignment(
+            assignment_id=assignment.id,
+            submission_id=submission.id,
+            reviewer_id=student.id,
+        )
+        db_session.add(review_assignment)
+        db_session.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            unenroll_course(course.id, db_session, student)
+
+        assert exc_info.value.status_code == 400
+        assert "Cannot unenroll while review assignments remain" in exc_info.value.detail
