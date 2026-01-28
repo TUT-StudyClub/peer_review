@@ -7,7 +7,7 @@ import tseslint from "typescript-eslint";
 export default [
   {
     // 共通の除外パターン
-    ignores: [".next/**", "out/**", "build/**", "node_modules/**", "*.config.*", "src/app/mypage/**"],
+    ignores: [".next/**", "out/**", "build/**", "node_modules/**", "*.config.*"],
   },
   {
     files: ["**/*.{ts,tsx,js,jsx}"],
@@ -31,7 +31,7 @@ export default [
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/prefer-nullish-coalescing": "off",
-      "react-hooks/exhaustive-deps": "off",
+      "react-hooks/exhaustive-deps": "error",
     },
   },
 ];
