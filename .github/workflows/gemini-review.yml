@@ -107,4 +107,4 @@ jobs:
                 ]
               }
             }
-          prompt: '/gemini-review'
+          prompt: '/gemini-review 日本語でレビューしてください。'
