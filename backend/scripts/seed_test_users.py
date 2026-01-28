@@ -111,7 +111,6 @@ def main() -> int:  # noqa: PLR0915
                 if "credits" in u and existing.credits < u["credits"]:
                     existing.credits = u["credits"]
                     updated_users += 1
-                print(f"skip (exists) {u['email']}")
                 skipped_users += 1
                 continue
 
@@ -224,7 +223,6 @@ def main() -> int:  # noqa: PLR0915
         db.commit()
 
         # 事前完了課題の作成 (提出・採点済み)
-        print("Creating completed assignment seeds...")
         seed_dir = Path(settings.storage_dir) / "seed-submissions"
         seed_dir.mkdir(parents=True, exist_ok=True)
 
@@ -290,7 +288,6 @@ def main() -> int:  # noqa: PLR0915
                 db.add(submission)
                 db.flush()
                 db.refresh(submission)
-                print(f"    Created submission: {submission.id}")
 
             criteria = ensure_fixed_rubric(db, assignment.id)
             db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id == submission.id).delete()
@@ -312,7 +309,6 @@ def main() -> int:  # noqa: PLR0915
 
             submission.teacher_total_score = spec["teacher_score"]
             submission.teacher_feedback = spec["feedback"]
-            print(f"    Updated submission: score={spec['teacher_score']}")
 
             reviewer = db.query(User).filter(User.email == "ta1@example.com").first()
             if reviewer:
@@ -362,11 +358,8 @@ def main() -> int:  # noqa: PLR0915
                 meta = db.query(MetaReview).filter(MetaReview.review_id == review.id).first()
                 if meta is None:
                     db.add(MetaReview(review_id=review.id, rater_id=teacher.id, helpfulness=5))
-                    print("    Created meta-review")
 
-        print("Committing completed assignment seeds...")
         db.commit()
-        print("Completed assignment seeds committed successfully.")
 
     print(
         "done:"
