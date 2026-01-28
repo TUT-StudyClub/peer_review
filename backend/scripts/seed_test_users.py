@@ -77,13 +77,8 @@ def main() -> int:  # noqa: PLR0915
     from app.services.rubric import ensure_fixed_rubric
 
     password = os.getenv("TEST_USER_PASSWORD")
-    if not password:
-        print("ERROR: TEST_USER_PASSWORD is not set. Add it to backend/.env or export it before running.")
-        return 1
-
-    if not settings.allow_teacher_registration:
-        print("ERROR: Teacher registration is disabled (ALLOW_TEACHER_REGISTRATION=false).")
-        return 1
+    assert password, "TEST_USER_PASSWORD is required"
+    assert settings.allow_teacher_registration, "Teacher registration must be enabled"
 
     ta_credits = settings.ta_qualification_threshold + 5
     users: list[UserSeed] = [
@@ -148,25 +143,23 @@ def main() -> int:  # noqa: PLR0915
 
         courses_by_title: dict[str, Course] = {}
         for spec in course_specs:
-            teacher = teacher_lookup.get(spec["teacher_email"])
-            if not teacher:
-                continue
+            teacher = teacher_lookup[spec["teacher_email"]]
             existing_course = (
                 db.query(Course).filter(Course.title == spec["title"], Course.teacher_id == teacher.id).first()
             )
             if existing_course:
                 courses_by_title[spec["title"]] = existing_course
                 skipped_courses += 1
-                continue
-            course = Course(
-                title=spec["title"],
-                description=spec["description"],
-                teacher_id=teacher.id,
-            )
-            db.add(course)
-            db.flush()
-            courses_by_title[spec["title"]] = course
-            created_courses += 1
+            else:
+                course = Course(
+                    title=spec["title"],
+                    description=spec["description"],
+                    teacher_id=teacher.id,
+                )
+                db.add(course)
+                db.flush()
+                courses_by_title[spec["title"]] = course
+                created_courses += 1
 
         now = datetime.now(timezone(timedelta(hours=9)))
         assignment_specs: list[AssignmentSeed] = [
@@ -197,9 +190,7 @@ def main() -> int:  # noqa: PLR0915
         ]
 
         for spec in assignment_specs:
-            course = courses_by_title.get(spec["course_title"])
-            if not course:
-                continue
+            course = courses_by_title[spec["course_title"]]
             existing_assignment = (
                 db.query(Assignment)
                 .filter(Assignment.title == spec["title"], Assignment.course_id == course.id)
@@ -207,18 +198,18 @@ def main() -> int:  # noqa: PLR0915
             )
             if existing_assignment:
                 skipped_assignments += 1
-                continue
-            due_at = now + timedelta(days=spec["days_from_now"])
-            db.add(
-                Assignment(
-                    course_id=course.id,
-                    title=spec["title"],
-                    description=spec["description"],
-                    target_reviews_per_submission=2,
-                    due_at=due_at,
+            else:
+                due_at = now + timedelta(days=spec["days_from_now"])
+                db.add(
+                    Assignment(
+                        course_id=course.id,
+                        title=spec["title"],
+                        description=spec["description"],
+                        target_reviews_per_submission=2,
+                        due_at=due_at,
+                    )
                 )
-            )
-            created_assignments += 1
+                created_assignments += 1
 
         db.commit()
 
@@ -250,12 +241,12 @@ def main() -> int:  # noqa: PLR0915
         ]
 
         for spec in completed_specs:
-            course = courses_by_title.get(spec["course_title"])
-            assignment = assignments_by_key.get((course.id, spec["assignment_title"])) if course else None
+            course = courses_by_title[spec["course_title"]]
+            assignment = assignments_by_key[(course.id, spec["assignment_title"])]
             student = db.query(User).filter(User.email == spec["student_email"]).first()
+            assert student, f"Student not found: {spec['student_email']}"
             teacher = db.query(User).filter(User.email == spec["teacher_email"]).first()
-            if not course or not assignment or not student or not teacher:
-                continue
+            assert teacher, f"Teacher not found: {spec['teacher_email']}"
 
             enrollment = (
                 db.query(CourseEnrollment)
