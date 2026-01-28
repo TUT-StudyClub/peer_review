@@ -1,6 +1,6 @@
 # Issue運用（タスク管理）
 
-このリポジトリでは、タスク管理を **GitHub Issues** に統一します。  
+このリポジトリでは、タスク管理を **GitHub Issues** に統一します。
 （チャットや個人メモに情報が散らばらないようにするため）
 
 Qiita記事の考え方（Issue + Projects / Epic > Story > Task）に合わせた運用です。

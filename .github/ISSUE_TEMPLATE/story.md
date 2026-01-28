@@ -12,6 +12,4 @@ assignees: ""
 
 ## 受け入れ条件（Acceptance Criteria）
 
-- [ ] 
-
-
+- [ ]
