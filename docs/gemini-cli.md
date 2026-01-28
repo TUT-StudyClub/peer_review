@@ -30,7 +30,7 @@
 ### 推奨（任意）
 - **Variables**
 - `GEMINI_MODEL`
-    使うモデル名。未設定の場合は `gemini-3-flash-preview` を使います。
+    使うモデル名。未設定の場合は `gemini-2.5-flash` を使います。
   - `GEMINI_CLI_VERSION`
     CLI バージョン固定（未設定なら Action 側のデフォルト）。
   - `GEMINI_DEBUG`
@@ -99,7 +99,7 @@
 ### `TerminalQuotaError` / 429 が出る
 - **モデルの無料枠が 0** になっている可能性があります。
 - 対応策：
-  - `GEMINI_MODEL` を `gemini-3-flash-preview` に変更
+  - `GEMINI_MODEL` を `gemini-2.5-flash` に変更
   - 課金/クォータを付与して再実行
 
 ### `GEMINI_API_KEY` が無い
