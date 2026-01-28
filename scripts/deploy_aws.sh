@@ -140,7 +140,7 @@ if [ -z "$DB_EXISTS" ]; then
         --backup-retention-period 0 \
         --no-publicly-accessible \
         --region "$REGION"
-    
+
     log "Waiting for DB instance to be available (this may take 5-10 mins)..."
     aws rds wait db-instance-available --db-instance-identifier "$DB_INSTANCE_IDENTIFIER"
     log "DB created and available."
