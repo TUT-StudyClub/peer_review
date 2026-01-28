@@ -57,24 +57,24 @@ def main() -> int:  # noqa: PLR0915
     _ensure_app_path()
     # JTC（日本標準時）を定義
     jst = timezone(timedelta(hours=9))
-    from app.core.config import COURSE_TITLE_CANDIDATES  # noqa: PLC0415
-    from app.core.config import settings  # noqa: PLC0415
-    from app.core.security import get_password_hash  # noqa: PLC0415
-    from app.db.session import SessionLocal  # noqa: PLC0415
-    from app.models.assignment import Assignment  # noqa: PLC0415
-    from app.models.course import Course  # noqa: PLC0415
-    from app.models.course import CourseEnrollment  # noqa: PLC0415
-    from app.models.review import MetaReview  # noqa: PLC0415
-    from app.models.review import Review  # noqa: PLC0415
-    from app.models.review import ReviewAssignment  # noqa: PLC0415
-    from app.models.review import ReviewAssignmentStatus  # noqa: PLC0415
-    from app.models.review import ReviewRubricScore  # noqa: PLC0415
-    from app.models.submission import Submission  # noqa: PLC0415
-    from app.models.submission import SubmissionFileType  # noqa: PLC0415
-    from app.models.submission import SubmissionRubricScore  # noqa: PLC0415
-    from app.models.user import User  # noqa: PLC0415
-    from app.models.user import UserRole  # noqa: PLC0415
-    from app.services.rubric import ensure_fixed_rubric  # noqa: PLC0415
+    from app.core.config import COURSE_TITLE_CANDIDATES
+    from app.core.config import settings
+    from app.core.security import get_password_hash
+    from app.db.session import SessionLocal
+    from app.models.assignment import Assignment
+    from app.models.course import Course
+    from app.models.course import CourseEnrollment
+    from app.models.review import MetaReview
+    from app.models.review import Review
+    from app.models.review import ReviewAssignment
+    from app.models.review import ReviewAssignmentStatus
+    from app.models.review import ReviewRubricScore
+    from app.models.submission import Submission
+    from app.models.submission import SubmissionFileType
+    from app.models.submission import SubmissionRubricScore
+    from app.models.user import User
+    from app.models.user import UserRole
+    from app.services.rubric import ensure_fixed_rubric
 
     password = os.getenv("TEST_USER_PASSWORD")
     if not password:
