@@ -1,7 +1,7 @@
 """add push notifications tables
 
 Revision ID: 0002_add_push_notifications
-Revises: 0001_add_review_similarity
+Revises: 7ae773981d43
 Create Date: 2026-01-17 00:00:00.000000
 """
 
