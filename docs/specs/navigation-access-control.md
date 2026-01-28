@@ -227,48 +227,48 @@
 import { Home, Book, Bell, User, Settings, HelpCircle, Star } from 'lucide-react';
 
 const navItems = [
-  { 
-    label: 'ホーム', 
-    href: '/', 
-    icon: Home, 
-    show: true 
+  {
+    label: 'ホーム',
+    href: '/',
+    icon: Home,
+    show: true
   },
-  { 
-    label: '授業一覧', 
-    href: '/assignments', 
-    icon: Book, 
-    show: user?.role === 'teacher' || user?.role === 'student' 
+  {
+    label: '授業一覧',
+    href: '/assignments',
+    icon: Book,
+    show: user?.role === 'teacher' || user?.role === 'student'
   },
-  { 
-    label: '通知', 
-    href: '/notifications', 
-    icon: Bell, 
+  {
+    label: '通知',
+    href: '/notifications',
+    icon: Bell,
     show: user !== null,
     badge: unreadCount > 0 ? unreadCount : undefined
   },
-  { 
-    label: 'マイページ', 
-    href: '/mypage', 
-    icon: User, 
-    show: user?.role === 'student' 
+  {
+    label: 'マイページ',
+    href: '/mypage',
+    icon: User,
+    show: user?.role === 'student'
   },
-  { 
-    label: 'TAリクエスト', 
-    href: '/ta/requests', 
-    icon: Star, 
-    show: user?.is_ta === true 
+  {
+    label: 'TAリクエスト',
+    href: '/ta/requests',
+    icon: Star,
+    show: user?.is_ta === true
   },
-  { 
-    label: '設定', 
-    href: '/settings', 
-    icon: Settings, 
+  {
+    label: '設定',
+    href: '/settings',
+    icon: Settings,
     show: user !== null,
     section: 'other'
   },
-  { 
-    label: '使い方', 
-    href: '/tutorial', 
-    icon: HelpCircle, 
+  {
+    label: '使い方',
+    href: '/tutorial',
+    icon: HelpCircle,
     show: true,
     section: 'other'
   },
@@ -321,5 +321,3 @@ if not allowed:
 | **設計思想** | DRYを保ちつつ、ロールベースで段階的に機能を開示 |
 
 ナビゲーションメニューは、ユーザーのロールとTA権限に応じて動的に構成され、不要な選択肢を非表示にすることでUXを向上させています。
-
-
