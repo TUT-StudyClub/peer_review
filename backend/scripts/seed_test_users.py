@@ -1,6 +1,5 @@
 import os
 import sys
-from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from datetime import timezone
@@ -56,6 +55,8 @@ def _ensure_app_path() -> None:
 def main() -> int:  # noqa: PLR0915
     load_dotenv()
     _ensure_app_path()
+    # JTC（日本標準時）を定義
+    jst = timezone(timedelta(hours=9))
     from app.core.config import COURSE_TITLE_CANDIDATES  # noqa: PLC0415
     from app.core.config import settings  # noqa: PLC0415
     from app.core.security import get_password_hash  # noqa: PLC0415
@@ -335,7 +336,7 @@ def main() -> int:  # noqa: PLR0915
                         submission_id=submission.id,
                         reviewer_id=reviewer.id,
                         status=ReviewAssignmentStatus.submitted,
-                        submitted_at=datetime.now(UTC),
+                        submitted_at=datetime.now(jst),
                     )
                     db.add(review_assignment)
                     db.flush()
