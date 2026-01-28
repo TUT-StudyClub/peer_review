@@ -53,6 +53,7 @@ def subscribe_push(
         if existing.user_id != current_user.id:
             db.delete(existing)
             db.flush()
+
             new_sub = PushSubscription(
                 user_id=current_user.id,
                 endpoint=data.endpoint,
@@ -60,6 +61,7 @@ def subscribe_push(
                 auth_key=data.auth_key,
                 user_agent=data.user_agent,
             )
+
             db.add(new_sub)
             db.flush()
             subscription_id = str(new_sub.id)
@@ -76,6 +78,7 @@ def subscribe_push(
             auth_key=data.auth_key,
             user_agent=data.user_agent,
         )
+
         db.add(subscription)
         db.flush()
         subscription_id = str(subscription.id)
