@@ -50,14 +50,25 @@ def subscribe_push(
     existing = db.query(PushSubscription).filter(PushSubscription.endpoint == data.endpoint).first()
 
     if existing:
-        # 既存の購読を更新（別ユーザーの可能性もあるので上書き）
-        existing.user_id = current_user.id
-        existing.p256dh_key = data.p256dh_key
-        existing.auth_key = data.auth_key
-        existing.user_agent = data.user_agent
-        subscription_id = str(existing.id)
+        if existing.user_id != current_user.id:
+            db.delete(existing)
+            db.flush()
+            new_sub = PushSubscription(
+                user_id=current_user.id,
+                endpoint=data.endpoint,
+                p256dh_key=data.p256dh_key,
+                auth_key=data.auth_key,
+                user_agent=data.user_agent,
+            )
+            db.add(new_sub)
+            db.flush()
+            subscription_id = str(new_sub.id)
+        else:
+            existing.p256dh_key = data.p256dh_key
+            existing.auth_key = data.auth_key
+            existing.user_agent = data.user_agent
+            subscription_id = str(existing.id)
     else:
-        # 新規購読を作成
         subscription = PushSubscription(
             user_id=current_user.id,
             endpoint=data.endpoint,
