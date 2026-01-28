@@ -139,6 +139,26 @@ def main() -> int:  # noqa: PLR0915
                 "description": "データ構造の理解を深める演習",
                 "teacher_email": "teacher2@example.com",
             },
+            {
+                "title": "脱退パターン検証: 提出なし・割当なし",
+                "description": "[テストケース] このコースから脱退可能（提出なし × レビュー割当なし）",
+                "teacher_email": "teacher1@example.com",
+            },
+            {
+                "title": "脱退パターン検証: 提出あり・割当なし",
+                "description": "[テストケース] このコースから脱退可能（提出あり × レビュー割当なし）",
+                "teacher_email": "teacher2@example.com",
+            },
+            {
+                "title": "脱退パターン検証: 提出なし・割当あり",
+                "description": "[テストケース] このコースから脱退不可（提出なし × レビュー割当あり）",
+                "teacher_email": "teacher1@example.com",
+            },
+            {
+                "title": "脱退パターン検証: 提出あり・割当あり",
+                "description": "[テストケース] このコースから脱退不可（提出あり × レビュー割当あり）",
+                "teacher_email": "teacher2@example.com",
+            },
         ]
 
         courses_by_title: dict[str, Course] = {}
@@ -186,6 +206,30 @@ def main() -> int:  # noqa: PLR0915
                 "title": "データ構造レポート 2",
                 "description": "木構造の利点を説明する",
                 "days_from_now": 14,
+            },
+            {
+                "course_title": "脱退パターン検証: 提出なし・割当なし",
+                "title": "テスト課題 1",
+                "description": "脱退テスト用: 提出なし × 割当なし",
+                "days_from_now": 5,
+            },
+            {
+                "course_title": "脱退パターン検証: 提出あり・割当なし",
+                "title": "テスト課題 2",
+                "description": "脱退テスト用: 提出あり × 割当なし",
+                "days_from_now": 5,
+            },
+            {
+                "course_title": "脱退パターン検証: 提出なし・割当あり",
+                "title": "テスト課題 3",
+                "description": "脱退テスト用: 提出なし × 割当あり",
+                "days_from_now": 5,
+            },
+            {
+                "course_title": "脱退パターン検証: 提出あり・割当あり",
+                "title": "テスト課題 4",
+                "description": "脱退テスト用: 提出あり × 割当あり",
+                "days_from_now": 5,
             },
         ]
 
@@ -237,6 +281,22 @@ def main() -> int:  # noqa: PLR0915
                 "teacher_email": "teacher2@example.com",
                 "teacher_score": 19,
                 "feedback": "整理された構成です。計算量の比較を追記するとさらに良くなります。",
+            },
+            {
+                "course_title": "脱退パターン検証: 提出あり・割当なし",
+                "assignment_title": "テスト課題 2",
+                "student_email": "student_completed@example.com",
+                "teacher_email": "teacher2@example.com",
+                "teacher_score": 15,
+                "feedback": "脱退テスト用: 提出済み × レビュー割当なし",
+            },
+            {
+                "course_title": "脱退パターン検証: 提出あり・割当あり",
+                "assignment_title": "テスト課題 4",
+                "student_email": "student_completed@example.com",
+                "teacher_email": "teacher2@example.com",
+                "teacher_score": 16,
+                "feedback": "脱退テスト用: 提出済み × レビュー割当あり",
             },
         ]
 
@@ -349,6 +409,119 @@ def main() -> int:  # noqa: PLR0915
                 meta = db.query(MetaReview).filter(MetaReview.review_id == review.id).first()
                 if meta is None:
                     db.add(MetaReview(review_id=review.id, rater_id=teacher.id, helpfulness=5))
+
+        # 脱退テスト用: レビュー割り当てのみ (提出なし・割当あり)
+        test_course_1 = courses_by_title.get("脱退パターン検証: 提出なし・割当あり")
+        test_assignment_1 = assignments_by_key.get((test_course_1.id, "テスト課題 3")) if test_course_1 else None
+        student_test = db.query(User).filter(User.email == "student_completed@example.com").first()
+        if test_course_1 and test_assignment_1 and student_test:
+            # コース登録
+            enrollment_test = (
+                db.query(CourseEnrollment)
+                .filter(CourseEnrollment.course_id == test_course_1.id, CourseEnrollment.user_id == student_test.id)
+                .first()
+            )
+            if enrollment_test is None:
+                db.add(CourseEnrollment(course_id=test_course_1.id, user_id=student_test.id))
+
+            # ダミー提出を作成（提出状態なしのテストケース）
+            submission_dummy_1 = (
+                db.query(Submission)
+                .filter(Submission.assignment_id == test_assignment_1.id, Submission.author_id == student_test.id)
+                .first()
+            )
+            if submission_dummy_1 is None:
+                file_path_dummy_1 = seed_dir / f"{test_assignment_1.id}-{student_test.id}-dummy1.md"
+                file_path_dummy_1.write_text(
+                    "# ダミー提出（割当テスト用）\n\nこれはレビュー割当テスト用のダミー提出です。",
+                    encoding="utf-8",
+                )
+                submission_dummy_1 = Submission(
+                    assignment_id=test_assignment_1.id,
+                    author_id=student_test.id,
+                    file_type=SubmissionFileType.markdown,
+                    original_filename="dummy1.md",
+                    storage_path=str(file_path_dummy_1),
+                    markdown_text=file_path_dummy_1.read_text(encoding="utf-8"),
+                    submission_text=file_path_dummy_1.read_text(encoding="utf-8"),
+                )
+                db.add(submission_dummy_1)
+                db.flush()
+
+            # レビュー割り当て (提出なし状態で割当)
+            review_assignment_1 = (
+                db.query(ReviewAssignment)
+                .filter(
+                    ReviewAssignment.assignment_id == test_assignment_1.id,
+                    ReviewAssignment.reviewer_id == student_test.id,
+                )
+                .first()
+            )
+            if review_assignment_1 is None:
+                db.add(
+                    ReviewAssignment(
+                        assignment_id=test_assignment_1.id,
+                        submission_id=submission_dummy_1.id,
+                        reviewer_id=student_test.id,
+                        status=ReviewAssignmentStatus.assigned,
+                    )
+                )
+
+        # 脱退テスト用: レビュー割り当てあり (提出あり・割当あり)
+        test_course_2 = courses_by_title.get("脱退パターン検証: 提出あり・割当あり")
+        test_assignment_2 = assignments_by_key.get((test_course_2.id, "テスト課題 4")) if test_course_2 else None
+        if test_course_2 and test_assignment_2 and student_test:
+            # コース登録
+            enrollment_test_2 = (
+                db.query(CourseEnrollment)
+                .filter(CourseEnrollment.course_id == test_course_2.id, CourseEnrollment.user_id == student_test.id)
+                .first()
+            )
+            if enrollment_test_2 is None:
+                db.add(CourseEnrollment(course_id=test_course_2.id, user_id=student_test.id))
+
+            # ダミー提出を作成（提出あり状態）
+            submission_dummy_2 = (
+                db.query(Submission)
+                .filter(Submission.assignment_id == test_assignment_2.id, Submission.author_id == student_test.id)
+                .first()
+            )
+            if submission_dummy_2 is None:
+                file_path_dummy_2 = seed_dir / f"{test_assignment_2.id}-{student_test.id}-dummy2.md"
+                file_path_dummy_2.write_text(
+                    "# ダミー提出（割当テスト用）\n\nこれはレビュー割当テスト用のダミー提出です。",
+                    encoding="utf-8",
+                )
+                submission_dummy_2 = Submission(
+                    assignment_id=test_assignment_2.id,
+                    author_id=student_test.id,
+                    file_type=SubmissionFileType.markdown,
+                    original_filename="dummy2.md",
+                    storage_path=str(file_path_dummy_2),
+                    markdown_text=file_path_dummy_2.read_text(encoding="utf-8"),
+                    submission_text=file_path_dummy_2.read_text(encoding="utf-8"),
+                )
+                db.add(submission_dummy_2)
+                db.flush()
+
+            # レビュー割り当て (提出あり状態で割当)
+            review_assignment_2 = (
+                db.query(ReviewAssignment)
+                .filter(
+                    ReviewAssignment.assignment_id == test_assignment_2.id,
+                    ReviewAssignment.reviewer_id == student_test.id,
+                )
+                .first()
+            )
+            if review_assignment_2 is None:
+                db.add(
+                    ReviewAssignment(
+                        assignment_id=test_assignment_2.id,
+                        submission_id=submission_dummy_2.id,
+                        reviewer_id=student_test.id,
+                        status=ReviewAssignmentStatus.assigned,
+                    )
+                )
 
         db.commit()
 
