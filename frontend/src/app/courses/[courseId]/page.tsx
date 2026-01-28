@@ -84,8 +84,10 @@ export default function CoursePage() {
     return assignments.slice(0, displayCount);
   }, [assignments, displayCount]);
 
+  const isEnrolled = course?.is_enrolled ?? false;
+
   const loadCompleted = useCallback(async () => {
-    if (!token || !course || !course.is_enrolled || targetAssignments.length === 0) {
+    if (!token || !course || !isEnrolled || targetAssignments.length === 0) {
       setCompletedAssignments([]);
       return;
     }
@@ -122,7 +124,7 @@ export default function CoursePage() {
     } finally {
       setCompletedLoading(false);
     }
-  }, [token, course, targetAssignments]);
+  }, [token, course, isEnrolled, targetAssignments]);
 
   useEffect(() => {
     if (loading) return;
@@ -132,8 +134,7 @@ export default function CoursePage() {
   useEffect(() => {
     if (!course) return;
     void loadCompleted();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course, token, targetAssignments]);
+  }, [course, loadCompleted]);
 
   const renderScore = (grade: GradeMe | null): string => {
     const score = grade?.final_score ?? grade?.assignment_score;
