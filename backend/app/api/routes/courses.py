@@ -12,6 +12,7 @@ from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course import CourseEnrollment
 from app.models.review import ReviewAssignment
+from app.models.review import ReviewAssignmentStatus
 from app.models.user import User
 from app.models.user import UserRole
 from app.schemas.course import CourseCreate
@@ -192,17 +193,24 @@ def unenroll_course(
     current_user: User = current_user_dependency,
 ) -> None:
     if current_user.role != UserRole.student:
-        raise HTTPException(status_code=403, detail="Student role required")
+        raise HTTPException(status_code=403, detail="学生アカウントのみ受講取り消しができます")
 
-    # レビュー割り当てが残っている場合は受講取り消し不可
-    has_review_assignments = (
+    # 未完了のレビュー割り当てが残っている場合は受講取り消し不可
+    has_pending_review_assignments = (
         db.query(ReviewAssignment.id)
         .join(Assignment, Assignment.id == ReviewAssignment.assignment_id)
-        .filter(Assignment.course_id == course_id, ReviewAssignment.reviewer_id == current_user.id)
+        .filter(
+            Assignment.course_id == course_id,
+            ReviewAssignment.reviewer_id == current_user.id,
+            ReviewAssignment.status != ReviewAssignmentStatus.submitted,
+        )
         .first()
     )
-    if has_review_assignments:
-        raise HTTPException(status_code=400, detail="Cannot unenroll while review assignments remain")
+    if has_pending_review_assignments:
+        raise HTTPException(
+            status_code=400,
+            detail="未完了のレビュー割り当てが残っています。レビューを完了してから受講を取り消してください。",
+        )
 
     enrollment = (
         db.query(CourseEnrollment)
@@ -210,7 +218,7 @@ def unenroll_course(
         .first()
     )
     if enrollment is None:
-        raise HTTPException(status_code=404, detail="Enrollment not found")
+        raise HTTPException(status_code=404, detail="受講登録が見つかりません")
 
     db.delete(enrollment)
     db.commit()
