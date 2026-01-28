@@ -85,27 +85,38 @@ export default function CoursePage() {
     }
     setCompletedLoading(true);
     try {
-      const results = await Promise.all(
-        assignments.map(async (assignment) => {
-          try {
-            const submission = await apiGetMySubmission(token, assignment.id);
-            let grade: GradeMe | null = null;
+      // チャンク処理でリクエストをバッチ化（一度に5件まで）
+      const CHUNK_SIZE = 5;
+      const results: ({ assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null } | null)[] = [];
+      
+      for (let i = 0; i < assignments.length; i += CHUNK_SIZE) {
+        const chunk = assignments.slice(i, i + CHUNK_SIZE);
+        const chunkResults = await Promise.all(
+          chunk.map(async (assignment) => {
             try {
-              grade = await apiGetMyGrade(token, assignment.id);
-            } catch {
-              grade = null;
+              const submission = await apiGetMySubmission(token, assignment.id);
+              let grade: GradeMe | null = null;
+              try {
+                grade = await apiGetMyGrade(token, assignment.id);
+              } catch (err) {
+                console.warn(`成績の取得に失敗しました (assignment: ${assignment.id}):`, err);
+                grade = null;
+              }
+              return { assignment, submission, grade };
+            } catch (err) {
+              console.warn(`提出物の取得に失敗しました (assignment: ${assignment.id}):`, err);
+              return null;
             }
-            return { assignment, submission, grade };
-          } catch {
-            return null;
-          }
-        })
-      );
+          })
+        );
+        results.push(...chunkResults);
+      }
+      
       setCompletedAssignments(results.filter((item): item is { assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null } => Boolean(item)));
     } finally {
       setCompletedLoading(false);
     }
-  }, [assignments, course, token]);
+  }, [token, course, assignments]);
 
   useEffect(() => {
     if (loading) return;
@@ -115,7 +126,8 @@ export default function CoursePage() {
   useEffect(() => {
     if (!course) return;
     void loadCompleted();
-  }, [course, assignments, loadCompleted]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [course, assignments, token]);
 
   const renderScore = (grade: GradeMe | null): string => {
     const score = grade?.final_score ?? grade?.assignment_score;
@@ -212,12 +224,15 @@ export default function CoursePage() {
                               if (!course) return;
                               const ok = window.confirm("受講を取り消します。提出や進捗が失われる場合があります。よろしいですか？");
                               if (!ok) return;
+                              setPageError(null);
                               try {
                                 setUnenrollPending(true);
                                 await apiUnenrollCourse(token, course.id);
                                 setCourse((prev) => (prev ? { ...prev, is_enrolled: false } : prev));
                                 setCompletedAssignments([]);
                                 router.push("/assignments");
+                              } catch (err) {
+                                setPageError(formatApiError(err));
                               } finally {
                                 setUnenrollPending(false);
                               }
