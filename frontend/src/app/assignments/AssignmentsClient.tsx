@@ -558,24 +558,13 @@ export default function AssignmentsClient({ initialCourseId, initialCourseView }
                           >
                             {enrollingCourseId === course.id ? "登録中..." : "受講する"}
                           </Button>
-                        ) : user?.role === "student" ? (
+                        ) : (
                           <Button
                             variant="outline"
                             className="w-full px-6 py-3 text-base"
                             asChild
                           >
                             <Link href={`/courses/${course.id}`}>講義ページへ</Link>
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            className="w-full px-6 py-3 text-base"
-                            onClick={() => {
-                              setActiveCourseId(course.id);
-                              router.push(`/assignments?course_id=${course.id}`);
-                            }}
-                          >
-                            課題管理
                           </Button>
                         )}
                       </div>
