@@ -22,7 +22,7 @@ self.addEventListener("push", (event) => {
     data: {
       url: data.url || "/",
     },
-    requireInteraction: true,
+    requireInteraction: false,
     renotify: true,
     silent: false,
     vibrate: [200, 100, 200],
