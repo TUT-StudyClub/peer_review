@@ -202,3 +202,17 @@ curl -sS "$BASE_URL/users/me/reviewer-skill" -H "$AUTH_S1" | jq
 - `period=weekly|monthly` を指定すると週間/月間ランキングを取得できます（省略時は `total`）。
 - 週間/月間は直近7日/30日（UTC）を集計し、`period_credits` に獲得creditsを返します。
 - 対象は **TA要件（`TA_QUALIFICATION_THRESHOLD`）を満たすユーザーのみ** です。
+
+### VAPID鍵の生成・設定方法
+
+プッシュ通知機能を利用するには、VAPID鍵（公開鍵と秘密鍵）の生成と設定が必要です。
+Python環境で `pywebpush` ライブラリを使用して生成できます。
+
+# ライブラリのインストール（未導入の場合）
+
+```bash
+pip install pywebpush
+```
+
+# 鍵の生成
+python -c "from pywebpush import webpush_rsa_tools; print(webpush_rsa_tools.generate_vapid_keys())"
