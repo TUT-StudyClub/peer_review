@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
 
@@ -49,6 +50,12 @@ class Settings(BaseSettings):
     vapid_public_key: str | None = None
     vapid_private_key: str | None = None
     vapid_claims_email: str = "admin@example.com"
+
+    @model_validator(mode="after")
+    def check_vapid_keys(self):
+        if (self.vapid_public_key or self.vapid_private_key) and not (self.vapid_public_key and self.vapid_private_key):
+            raise ValueError("VAPID public and private keys must both be set if using Web Push.")
+        return self
 
     # Comma-separated origins for browser-based frontends (e.g. "http://localhost:3000,http://127.0.0.1:3000")
     cors_allow_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
