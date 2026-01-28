@@ -51,6 +51,7 @@ export default function CoursePage() {
   const [pageLoading, setPageLoading] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [unenrollPending, setUnenrollPending] = useState(false);
+  const [unenrollError, setUnenrollError] = useState<string | null>(null);
   const [showScores, setShowScores] = useState(() => {
     if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('course-show-scores');
@@ -178,6 +179,15 @@ export default function CoursePage() {
         </Alert>
       ) : null}
 
+      {unenrollError ? (
+        <Alert variant="destructive">
+          <AlertTitle>受講取り消しできません</AlertTitle>
+          <AlertDescription>
+            <ErrorMessages message={unenrollError} />
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {pageLoading && !course ? (
         <p className="text-sm text-muted-foreground">読み込み中...</p>
       ) : !course ? (
@@ -231,7 +241,7 @@ export default function CoursePage() {
                               if (!course) return;
                               const ok = window.confirm("受講を取り消します。提出や進捗が失われる場合があります。よろしいですか？");
                               if (!ok) return;
-                              setPageError(null);
+                              setUnenrollError(null);
                               try {
                                 setUnenrollPending(true);
                                 await apiUnenrollCourse(token, course.id);
@@ -239,7 +249,7 @@ export default function CoursePage() {
                                 setCompletedAssignments([]);
                                 router.push("/assignments");
                               } catch (err) {
-                                setPageError(formatApiError(err));
+                                setUnenrollError(formatApiError(err));
                               } finally {
                                 setUnenrollPending(false);
                               }
