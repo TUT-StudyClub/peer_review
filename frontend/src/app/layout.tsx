@@ -32,11 +32,13 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
         <AuthProvider>
-          <AppShell>
-            <Suspense fallback={<div className="page-transition">{children}</div>}>
-              <PageTransition>{children}</PageTransition>
-            </Suspense>
-          </AppShell>
+          <Suspense fallback={<div>Loading...</div>}>
+            <AppShell>
+              <Suspense fallback={<div className="page-transition">{children}</div>}>
+                <PageTransition>{children}</PageTransition>
+              </Suspense>
+            </AppShell>
+          </Suspense>
         </AuthProvider>
       </body>
     </html>
