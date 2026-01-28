@@ -34,8 +34,8 @@ def upgrade() -> None:
     # Create notification_preferences table
     op.create_table(
         "notification_preferences",
-        sa.Column("id", sa.Uuid(as_uuid=True), nullable=False, primary_key=True),  # type: ignore[no-matching-overload]
-        sa.Column("user_id", sa.Uuid(as_uuid=True), nullable=False, unique=True),  # type: ignore[no-matching-overload]
+        sa.Column("id", sa.UUID(), nullable=False, primary_key=True),
+        sa.Column("user_id", sa.UUID(), nullable=False, unique=True),
         sa.Column("push_review_received", sa.Boolean(), nullable=False, default=True),
         sa.Column("push_deadline_reminder", sa.Boolean(), nullable=False, default=True),
         sa.Column("push_feedback_received", sa.Boolean(), nullable=False, default=True),
