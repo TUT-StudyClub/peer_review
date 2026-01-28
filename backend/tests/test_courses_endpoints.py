@@ -201,7 +201,7 @@ class TestUnenrollCourse:
             unenroll_course(course.id, db_session, student)
 
         assert exc_info.value.status_code == 404
-        assert "Enrollment not found" in exc_info.value.detail
+        assert "受講登録が見つかりません" in exc_info.value.detail
 
     def test_unenroll_course_teacher_forbidden(
         self,
@@ -214,7 +214,7 @@ class TestUnenrollCourse:
             unenroll_course(course.id, db_session, teacher)
 
         assert exc_info.value.status_code == 403
-        assert "Student role required" in exc_info.value.detail
+        assert "学生アカウントのみ受講取り消しができます" in exc_info.value.detail
 
     def test_unenroll_course_not_found(
         self,
@@ -226,7 +226,7 @@ class TestUnenrollCourse:
             unenroll_course(uuid4(), db_session, student)
 
         assert exc_info.value.status_code == 404
-        assert "Enrollment not found" in exc_info.value.detail
+        assert "受講登録が見つかりません" in exc_info.value.detail
 
     def test_unenroll_course_rejected_when_submission_exists(
         self,
@@ -315,4 +315,4 @@ class TestUnenrollCourse:
             unenroll_course(course.id, db_session, student)
 
         assert exc_info.value.status_code == 400
-        assert "Cannot unenroll while review assignments remain" in exc_info.value.detail
+        assert "未完了のレビュー割り当てが残っています" in exc_info.value.detail
