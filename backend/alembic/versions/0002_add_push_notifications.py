@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("p256dh_key", sa.String(255), nullable=False),
         sa.Column("auth_key", sa.String(255), nullable=False),
         sa.Column("user_agent", sa.String(500), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, default=sa.func.now()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
     )
     op.create_index("ix_push_subscriptions_user_id", "push_subscriptions", ["user_id"])
