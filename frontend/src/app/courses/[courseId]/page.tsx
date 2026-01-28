@@ -404,7 +404,7 @@ export default function CoursePage() {
                     ))}
                   </ul>
                 )}
-                {!completedLoading && completedAssignments.length > 0 && displayCount < assignments.length ? (
+                {!completedLoading && displayCount < assignments.length ? (
                   <div className="mt-4 text-center">
                     <Button
                       variant="outline"
