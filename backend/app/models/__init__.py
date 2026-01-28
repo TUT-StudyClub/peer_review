@@ -3,6 +3,8 @@ from app.models.assignment import RubricCriterion
 from app.models.course import Course
 from app.models.course import CourseEnrollment
 from app.models.credit_history import CreditHistory
+from app.models.notification_preference import NotificationPreference
+from app.models.push_subscription import PushSubscription
 from app.models.review import MetaReview
 from app.models.review import Review
 from app.models.review import ReviewAssignment
