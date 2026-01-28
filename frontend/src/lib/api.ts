@@ -408,7 +408,14 @@ export async function apiEnrollCourse(token: string, courseId: string): Promise<
 }
 
 export async function apiUnenrollCourse(token: string, courseId: string): Promise<void> {
-  await apiFetch<void>(`/courses/${courseId}/enroll`, { method: "DELETE" }, token);
+  const res = await fetch(`${API_BASE_URL}/courses/${courseId}/enroll`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const { message, detail } = await parseErrorDetail(res);
+    throw new ApiError(message, res.status, detail);
+  }
 }
 
 export async function apiListCourseStudents(token: string, courseId: string): Promise<UserPublic[]> {
