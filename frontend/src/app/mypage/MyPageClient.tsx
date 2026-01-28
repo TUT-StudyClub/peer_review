@@ -391,7 +391,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                     aria-label="アイコンを変更"
                   >
                     {showAvatarImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={avatarSrc}
                         alt={`${user.name} avatar`}
