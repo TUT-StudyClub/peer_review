@@ -859,6 +859,7 @@ export default function AssignmentDetailPage() {
     void loadGrade();
     void loadSkill();
     // NOTE: 初期表示時にだけロードしたいので、意図的に dependency を最小限にしています。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, user, assignmentId]);
 
   useEffect(() => {
