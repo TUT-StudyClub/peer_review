@@ -204,9 +204,19 @@ export async function isSubscribed(): Promise<boolean> {
 }
 
 /**
+ * 通知設定のインターフェース
+ */
+export interface NotificationPreferences {
+  push_review_received: boolean;
+  push_deadline_reminder: boolean;
+  push_feedback_received: boolean;
+  push_meta_review: boolean;
+}
+
+/**
  * 通知設定を取得
  */
-export async function getNotificationPreferences(token: string) {
+export async function getNotificationPreferences(token: string): Promise<NotificationPreferences> {
   const response = await fetch(`${API_BASE}/api/notifications/preferences`, {
     headers: {
       Authorization: `Bearer ${token}`,
@@ -217,7 +227,8 @@ export async function getNotificationPreferences(token: string) {
     throw new Error("Failed to get preferences");
   }
 
-  return response.json();
+  // response.json() の結果を定義した型としてキャストして返す
+  return response.json() as Promise<NotificationPreferences>;
 }
 
 /**
@@ -225,13 +236,8 @@ export async function getNotificationPreferences(token: string) {
  */
 export async function updateNotificationPreferences(
   token: string,
-  preferences: {
-    push_review_received?: boolean;
-    push_deadline_reminder?: boolean;
-    push_feedback_received?: boolean;
-    push_meta_review?: boolean;
-  }
-) {
+  preferences: Partial<NotificationPreferences> // Partialを使用して一部の更新にも対応
+): Promise<NotificationPreferences> {
   const response = await fetch(`${API_BASE}/api/notifications/preferences`, {
     method: "PATCH",
     headers: {
@@ -245,5 +251,5 @@ export async function updateNotificationPreferences(
     throw new Error("Failed to update preferences");
   }
 
-  return response.json();
+  return response.json() as Promise<NotificationPreferences>;
 }
