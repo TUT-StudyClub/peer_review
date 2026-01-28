@@ -287,9 +287,10 @@ async function parseErrorDetail(res: Response): Promise<{ message: string; detai
 async function apiFetch<T>(path: string, init: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(init.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  const url = path.startsWith("/api/") ? path : `${API_BASE_URL}${path}`;
   let res: Response;
   try {
-    res = await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+    res = await fetch(url, { ...init, headers });
   } catch (err) {
     const hint = [
       "APIに接続できませんでした。",
@@ -395,14 +396,11 @@ export async function apiGetCoursePage(
   token: string,
   courseId: string
 ): Promise<{ course: CoursePublic; assignments: AssignmentPublic[] }> {
-  const response = await fetch(`/api/courses/${courseId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) {
-    const { message } = await parseErrorDetail(response);
-    throw new ApiError(message, response.status);
-  }
-  return response.json();
+  return apiFetch<{ course: CoursePublic; assignments: AssignmentPublic[] }>(
+    `/api/courses/${courseId}`,
+    {},
+    token
+  );
 }
 
 export async function apiEnrollCourse(token: string, courseId: string): Promise<CourseEnrollmentPublic> {
@@ -410,16 +408,7 @@ export async function apiEnrollCourse(token: string, courseId: string): Promise<
 }
 
 export async function apiUnenrollCourse(token: string, courseId: string): Promise<void> {
-  const headers = new Headers();
-  headers.set("Authorization", `Bearer ${token}`);
-  const res = await fetch(`${API_BASE_URL}/courses/${courseId}/enroll`, {
-    method: "DELETE",
-    headers,
-  });
-  if (!res.ok) {
-    const { message } = await parseErrorDetail(res);
-    throw new ApiError(message, res.status);
-  }
+  await apiFetch<void>(`/courses/${courseId}/enroll`, { method: "DELETE" }, token);
 }
 
 export async function apiListCourseStudents(token: string, courseId: string): Promise<UserPublic[]> {
