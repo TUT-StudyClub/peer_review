@@ -189,8 +189,13 @@ export function Sidebar() {
                         <span className="text-[15px]">{user.name.slice(0, 1)}</span>
                     </div>
                     <div className="flex flex-col overflow-hidden">
-                        <div className="truncate text-sm font-medium text-slate-700" title={user.name}>
-                            {user.name}
+                        <div className="flex items-center gap-2 truncate text-sm font-medium text-slate-700">
+                            <span className="truncate" title={user.name}>{user.name}</span>
+                            {user.is_ta && (
+                                <span className="shrink-0 text-amber-500" title="ティーチングアシスタント">
+                                    TA⭐
+                                </span>
+                            )}
                         </div>
                         <div className="flex items-center gap-2 text-[11px] text-slate-500">
                             {user.role === "student" ? (
@@ -204,6 +209,11 @@ export function Sidebar() {
                                 <span>{user.role}</span>
                             )}
                         </div>
+                        {user.role !== "teacher" && (
+                            <div className="text-[11px] text-slate-500">
+                                credits: {user.credits ?? 0}
+                            </div>
+                        )}
                     </div>
                 </div>
 
