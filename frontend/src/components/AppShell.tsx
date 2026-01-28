@@ -27,17 +27,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
     return (
         <div className="min-h-screen bg-background">
-            {/* ログイン済み・PC画面: Sidebar表示 */}
             <Sidebar />
 
-            {/* ログイン済み・SP画面: NavBar表示 */}
             <div className="md:hidden">
                 <NavBar />
             </div>
 
-            {/* コンテンツエリア */}
-            {/* PC: Sidebarの幅(330px)分左側に余白を開ける(330+24=354px) */}
-            {/* SP: 余白なし（NavBarが上部にあるため） */}
             <main className="mx-auto w-full px-4 py-8 md:pl-[354px] md:pr-6 md:pt-12 md:max-w-7xl">
                 {children}
             </main>
