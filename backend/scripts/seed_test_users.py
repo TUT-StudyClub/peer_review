@@ -252,18 +252,12 @@ def main() -> int:  # noqa: PLR0915
         ]
 
         for spec in completed_specs:
-            print(f"Processing completed: {spec['course_title']} - {spec['assignment_title']}")
             course = courses_by_title.get(spec["course_title"])
             assignment = assignments_by_key.get((course.id, spec["assignment_title"])) if course else None
             student = db.query(User).filter(User.email == spec["student_email"]).first()
             teacher = db.query(User).filter(User.email == spec["teacher_email"]).first()
-            print(
-                f"  course={bool(course)} assignment={bool(assignment)} student={bool(student)} teacher={bool(teacher)}"
-            )
             if not course or not assignment or not student or not teacher:
-                print("  skip (missing data)")
                 continue
-            print("  Creating enrollment, submission, review...")
 
             enrollment = (
                 db.query(CourseEnrollment)
