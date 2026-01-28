@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "@/app/providers";
 import { apiGetCoursePage, apiGetMyGrade, apiGetMySubmission, apiUnenrollCourse, formatApiError } from "@/lib/api";
@@ -79,8 +79,13 @@ export default function CoursePage() {
     }
   }, [token, courseId]);
 
-  const loadCompleted = useCallback(async (count: number) => {
-    if (!token || !course || !course.is_enrolled || assignments.length === 0) {
+  // displayCountのもとで読み込み対象課题をキャ菃シュ
+  const targetAssignments = useMemo(() => {
+    return assignments.slice(0, displayCount);
+  }, [assignments, displayCount]);
+
+  const loadCompleted = useCallback(async () => {
+    if (!token || !course || !course.is_enrolled || targetAssignments.length === 0) {
       setCompletedAssignments([]);
       return;
     }
@@ -88,7 +93,6 @@ export default function CoursePage() {
     try {
       // ページネーション：指定件数までのみ読み込み
       const CHUNK_SIZE = 5; // チャンク単位で並列処理
-      const targetAssignments = assignments.slice(0, count);
       const results: ({ assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null } | null)[] = [];
 
       for (let i = 0; i < targetAssignments.length; i += CHUNK_SIZE) {
@@ -118,7 +122,7 @@ export default function CoursePage() {
     } finally {
       setCompletedLoading(false);
     }
-  }, [token, course, assignments]);
+  }, [token, course, targetAssignments]);
 
   useEffect(() => {
     if (loading) return;
@@ -127,9 +131,9 @@ export default function CoursePage() {
 
   useEffect(() => {
     if (!course) return;
-    void loadCompleted(displayCount);
+    void loadCompleted();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course, assignments, token, displayCount]);
+  }, [course, token, targetAssignments]);
 
   const renderScore = (grade: GradeMe | null): string => {
     const score = grade?.final_score ?? grade?.assignment_score;
