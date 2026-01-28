@@ -255,11 +255,16 @@ class TestUnenrollCourse:
         db_session.add(submission)
         db_session.commit()
 
-        with pytest.raises(HTTPException) as exc_info:
-            unenroll_course(course.id, db_session, student)
+        # 提出済みでも受講取り消し可能
+        unenroll_course(course.id, db_session, student)
 
-        assert exc_info.value.status_code == 400
-        assert "Cannot unenroll after submitting assignments" in exc_info.value.detail
+        # 受講が削除されたことを確認
+        enrollment_after = (
+            db_session.query(CourseEnrollment)
+            .filter(CourseEnrollment.course_id == course.id, CourseEnrollment.user_id == student.id)
+            .first()
+        )
+        assert enrollment_after is None
 
     def test_unenroll_course_rejected_when_review_assignment_exists(
         self,

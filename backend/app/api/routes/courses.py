@@ -12,7 +12,6 @@ from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course import CourseEnrollment
 from app.models.review import ReviewAssignment
-from app.models.submission import Submission
 from app.models.user import User
 from app.models.user import UserRole
 from app.schemas.course import CourseCreate
@@ -194,16 +193,6 @@ def unenroll_course(
 ) -> None:
     if current_user.role != UserRole.student:
         raise HTTPException(status_code=403, detail="Student role required")
-
-    # 既に提出済みの課題がある場合は受講取り消し不可
-    has_submissions = (
-        db.query(Submission.id)
-        .join(Assignment, Assignment.id == Submission.assignment_id)
-        .filter(Assignment.course_id == course_id, Submission.author_id == current_user.id)
-        .first()
-    )
-    if has_submissions:
-        raise HTTPException(status_code=400, detail="Cannot unenroll after submitting assignments")
 
     # レビュー割り当てが残っている場合は受講取り消し不可
     has_review_assignments = (
