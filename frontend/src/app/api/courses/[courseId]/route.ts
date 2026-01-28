@@ -19,7 +19,9 @@ export async function GET(
       fetch(`${API_BASE_URL}/courses/${courseId}`, {
         headers: { Authorization: authHeader },
       }),
-      fetch(`${API_BASE_URL}/assignments?course_id=${courseId}`),
+      fetch(`${API_BASE_URL}/assignments?course_id=${courseId}`, {
+        headers: { Authorization: authHeader },
+      }),
     ]);
 
     if (!courseResponse.ok) {
