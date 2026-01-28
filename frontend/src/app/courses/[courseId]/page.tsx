@@ -47,6 +47,7 @@ export default function CoursePage() {
     { assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null }[]
   >([]);
   const [completedLoading, setCompletedLoading] = useState(false);
+  const [displayCount, setDisplayCount] = useState(10); // ページネーション用：初期表示件数
   const [pageLoading, setPageLoading] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [unenrollPending, setUnenrollPending] = useState(false);
@@ -78,19 +79,20 @@ export default function CoursePage() {
     }
   }, [token, courseId]);
 
-  const loadCompleted = useCallback(async () => {
+  const loadCompleted = useCallback(async (count: number) => {
     if (!token || !course || !course.is_enrolled || assignments.length === 0) {
       setCompletedAssignments([]);
       return;
     }
     setCompletedLoading(true);
     try {
-      // チャンク処理でリクエストをバッチ化（一度に5件まで）
-      const CHUNK_SIZE = 5;
+      // ページネーション：指定件数までのみ読み込み
+      const CHUNK_SIZE = 5; // チャンク単位で並列処理
+      const targetAssignments = assignments.slice(0, count);
       const results: ({ assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null } | null)[] = [];
-      
-      for (let i = 0; i < assignments.length; i += CHUNK_SIZE) {
-        const chunk = assignments.slice(i, i + CHUNK_SIZE);
+
+      for (let i = 0; i < targetAssignments.length; i += CHUNK_SIZE) {
+        const chunk = targetAssignments.slice(i, i + CHUNK_SIZE);
         const chunkResults = await Promise.all(
           chunk.map(async (assignment) => {
             try {
@@ -111,7 +113,7 @@ export default function CoursePage() {
         );
         results.push(...chunkResults);
       }
-      
+
       setCompletedAssignments(results.filter((item): item is { assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null } => Boolean(item)));
     } finally {
       setCompletedLoading(false);
@@ -125,9 +127,9 @@ export default function CoursePage() {
 
   useEffect(() => {
     if (!course) return;
-    void loadCompleted();
+    void loadCompleted(displayCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [course, assignments, token]);
+  }, [course, assignments, token, displayCount]);
 
   const renderScore = (grade: GradeMe | null): string => {
     const score = grade?.final_score ?? grade?.assignment_score;
@@ -192,7 +194,7 @@ export default function CoursePage() {
                 themeKey = "sky";
               }
             }
-            
+
             const theme = COURSE_THEME_BY_VALUE[themeKey] ?? COURSE_THEME_BY_VALUE.sky;
             const cardTone = theme.cardTone;
 
@@ -397,6 +399,17 @@ export default function CoursePage() {
                     ))}
                   </ul>
                 )}
+                {!completedLoading && completedAssignments.length > 0 && displayCount < assignments.length ? (
+                  <div className="mt-4 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDisplayCount(prev => Math.min(prev + 10, assignments.length))}
+                    >
+                      もっと見る (+{Math.min(10, assignments.length - displayCount)}件)
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
