@@ -1,15 +1,34 @@
 """通知関連のスキーマ"""
 
+import re
+from typing import Any
+from typing import cast
+
 from pydantic import BaseModel
+from pydantic import Field
+from pydantic import HttpUrl
+from pydantic import field_validator
 
 
 class PushSubscriptionCreate(BaseModel):
     """購読登録リクエスト"""
 
-    endpoint: str
-    p256dh_key: str
-    auth_key: str
-    user_agent: str | None = None
+    endpoint: HttpUrl = Field(..., description="ブラウザから発行された通知用URL")
+    p256dh_key: str = Field(..., min_length=20, max_length=200)
+    auth_key: str = Field(..., min_length=10, max_length=100)
+    user_agent: str | None = Field(None, max_length=500)
+
+    @field_validator("p256dh_key", "auth_key")
+    @classmethod
+    def validate_base64(cls, v: str) -> str:
+        """Base64/Base64URLで使用される文字種のみであることを検証"""
+        if not re.match(r"^[A-Za-z0-9\-_=]+$", v):
+            raise ValueError("Invalid characters in key: must be Base64 format")
+        return v
+
+    def model_post_init(self, __context: Any) -> None:
+        """バリデーション後にHttpUrlオブジェクトを文字列に戻す"""
+        self.endpoint = cast(Any, str(self.endpoint))
 
 
 class PushSubscriptionResponse(BaseModel):
