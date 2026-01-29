@@ -80,15 +80,16 @@ export default function CoursePage() {
     }
   }, [token, courseId]);
 
-  // displayCountのもとで読み込み対象課题をキャ菃シュ
-  const targetAssignments = useMemo(() => {
+  // 表示対象の課題（ページネーション）
+  const displayAssignments = useMemo(() => {
     return assignments.slice(0, displayCount);
   }, [assignments, displayCount]);
 
   const isEnrolled = course?.is_enrolled ?? false;
 
   const loadCompleted = useCallback(async () => {
-    if (!token || !course || !isEnrolled || targetAssignments.length === 0) {
+    // 表示対象の課題の完了状況を読み込み
+    if (!token || !course || !isEnrolled || displayAssignments.length === 0) {
       setCompletedAssignments([]);
       return;
     }
@@ -98,8 +99,8 @@ export default function CoursePage() {
       const CHUNK_SIZE = 5; // チャンク単位で並列処理
       const results: ({ assignment: AssignmentPublic; submission: SubmissionPublic; grade: GradeMe | null } | null)[] = [];
 
-      for (let i = 0; i < targetAssignments.length; i += CHUNK_SIZE) {
-        const chunk = targetAssignments.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < displayAssignments.length; i += CHUNK_SIZE) {
+        const chunk = displayAssignments.slice(i, i + CHUNK_SIZE);
         const chunkResults = await Promise.all(
           chunk.map(async (assignment) => {
             try {
@@ -125,7 +126,7 @@ export default function CoursePage() {
     } finally {
       setCompletedLoading(false);
     }
-  }, [token, course, isEnrolled, targetAssignments]);
+  }, [token, course, isEnrolled, displayAssignments]);
 
   useEffect(() => {
     if (loading) return;
