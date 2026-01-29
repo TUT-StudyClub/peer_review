@@ -3,6 +3,8 @@
 import { useAuth } from "@/app/providers";
 import { NavBar } from "@/components/NavBar";
 import { Sidebar } from "@/components/Sidebar";
+import { Book } from "lucide-react";
+import Link from "next/link";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const { user } = useAuth();
@@ -29,11 +31,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="min-h-screen bg-background">
             <Sidebar />
 
-            <div className="md:hidden">
-                <NavBar />
-            </div>
+            {/* モバイル用ヘッダー */}
+            <header className="fixed left-0 right-0 top-0 z-10 bg-white px-6 py-4 md:hidden">
+                <Link href="/" className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                        <Book className="h-5 w-5" />
+                    </div>
+                    <span className="text-[17px] font-bold text-slate-900">Peer Review</span>
+                </Link>
+            </header>
 
-            <main className="mx-auto w-full px-4 py-8 md:pl-[354px] md:pr-6 md:pt-12 md:max-w-7xl">
+            <main className="mx-auto w-full px-4 pb-24 pt-20 md:pb-8 md:pt-12 md:pl-[354px] md:pr-6 md:max-w-7xl">
                 {children}
             </main>
         </div>
