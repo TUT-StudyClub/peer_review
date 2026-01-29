@@ -65,7 +65,7 @@ jobs:
           use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
           upload_artifacts: '${{ vars.UPLOAD_ARTIFACTS }}'
           workflow_name: 'gemini-review'
-          settings: |-
+          settings: >-
             {
               "model": {
                 "maxSessionTurns": 25
