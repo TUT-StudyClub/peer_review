@@ -41,70 +41,24 @@ jobs:
       - name: 'Checkout repository'
         uses: 'actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8' # ratchet:actions/checkout@v6
 
-      - name: 'Run Gemini pull request review'
-        uses: 'google-github-actions/run-gemini-cli@v0' # ratchet:exclude
-        id: 'gemini_pr_review'
+      - name: 'Setup Node.js'
+        uses: 'actions/setup-node@v4'
+        with:
+          node-version: '20'
+
+      - name: 'Install Gemini CLI'
+        run: npm install -g @google/gemini-cli
+
+      - name: 'Setup Python'
+        uses: 'actions/setup-python@v5'
+        with:
+          python-version: '3.10'
+
+      - name: 'Run Gemini Batched Review'
         env:
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
-          ISSUE_TITLE: '${{ github.event.pull_request.title || github.event.issue.title }}'
-          ISSUE_BODY: '${{ github.event.pull_request.body || github.event.issue.body }}'
+          GEMINI_API_KEY: '${{ secrets.GEMINI_API_KEY }}'
           PULL_REQUEST_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
-          REPOSITORY: '${{ github.repository }}'
-          ADDITIONAL_CONTEXT: '${{ inputs.additional_context }}'
-        with:
-          gcp_location: '${{ vars.GOOGLE_CLOUD_LOCATION }}'
-          gcp_project_id: '${{ vars.GOOGLE_CLOUD_PROJECT }}'
-          gcp_service_account: '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
-          gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
-          gemini_api_key: '${{ secrets.GEMINI_API_KEY }}'
-          gemini_cli_version: '${{ vars.GEMINI_CLI_VERSION }}'
-          gemini_debug: '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
-          gemini_model: "${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}"
-          google_api_key: '${{ secrets.GOOGLE_API_KEY }}'
-          use_gemini_code_assist: '${{ vars.GOOGLE_GENAI_USE_GCA }}'
-          use_vertex_ai: '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
-          upload_artifacts: '${{ vars.UPLOAD_ARTIFACTS }}'
-          workflow_name: 'gemini-review'
-          settings: >-
-            {
-              "model": {
-                "maxSessionTurns": 25
-              },
-              "telemetry": {
-                "enabled": true,
-                "target": "local",
-                "outfile": ".gemini/telemetry.log"
-              },
-              "mcpServers": {
-                "github": {
-                  "command": "docker",
-                  "args": [
-                    "run",
-                    "-i",
-                    "--rm",
-                    "-e",
-                    "GITHUB_PERSONAL_ACCESS_TOKEN",
-                    "ghcr.io/github/github-mcp-server:v0.18.0"
-                  ],
-                  "includeTools": [
-                    "add_comment_to_pending_review",
-                    "create_pending_pull_request_review",
-                    "pull_request_read",
-                    "submit_pending_pull_request_review"
-                  ],
-                  "env": {
-                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}"
-                  }
-                }
-              },
-              "tools": {
-                "core": [
-                  "run_shell_command(cat)",
-                  "run_shell_command(echo)",
-                  "run_shell_command(grep)",
-                  "run_shell_command(head)",
-                  "run_shell_command(tail)"
-                ]
-              }
-            }
-          prompt: '/gemini-review 日本語でレビューしてください。'
+          GEMINI_MODEL: "${{ vars.GEMINI_MODEL || 'gemini-3-flash-preview' }}"
+        run: |
+          python scripts/gemini_review.py
