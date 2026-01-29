@@ -153,7 +153,7 @@ function PCSidebar({
 }: {
     pathname: string;
     searchParams: URLSearchParams;
-    user: ReturnType<typeof useAuth>["user"];
+    user: NonNullable<ReturnType<typeof useAuth>["user"]>;
     logout: ReturnType<typeof useAuth>["logout"];
     mainNavItems: NavItem[];
     otherNavItems: NavItem[];
