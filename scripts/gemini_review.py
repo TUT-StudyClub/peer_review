@@ -4,34 +4,58 @@ import sys
 import time
 
 
-def get_changed_files():
-    """Retrieves a list of changed files in the pull request."""
+def get_full_diff(pr_number):
+    """Retrieves the full diff of the pull request."""
     try:
         # Check if running in a PR context
-        pr_number = os.environ.get("PULL_REQUEST_NUMBER")
         if not pr_number:
             print("Not running in a PR context.", file=sys.stderr)
-            return []
+            return None
 
-        # gh pr diff --name-only returns file paths, one per line
-        cmd = ["gh", "pr", "diff", pr_number, "--name-only"]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        files = result.stdout.strip().split("\n")
-        return [f for f in files if f]
-    except subprocess.CalledProcessError as e:
-        print(f"Error getting changed files: {e}", file=sys.stderr)
-        return []
-
-
-def get_file_diff(pr_number, file_path):
-    """Retrieves the diff for a specific file."""
-    try:
-        cmd = ["gh", "pr", "diff", pr_number, "--path", file_path]
+        # Fetch the entire diff
+        cmd = ["gh", "pr", "diff", pr_number]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout
     except subprocess.CalledProcessError as e:
-        print(f"Error getting diff for {file_path}: {e}", file=sys.stderr)
+        print(f"Error getting diff: {e}", file=sys.stderr)
         return None
+
+
+def parse_diff(diff_content):
+    """Parses the global diff into a dict of {filename: diff_chunk}."""
+    file_diffs = {}
+    current_file = None
+    current_lines = []
+
+    # Simple parser for git diff output
+    lines = diff_content.split("\n")
+    for line in lines:
+        if line.startswith("diff --git"):
+            # Save previous file
+            if current_file:
+                file_diffs[current_file] = "\n".join(current_lines)
+
+            # Start new file
+            current_lines = [line]
+            # Extract filename (simple heuristic)
+            parts = line.split(" ")
+            if len(parts) >= 4:
+                b_path = parts[-1]
+                if b_path.startswith("b/"):
+                    current_file = b_path[2:]
+                else:
+                    current_file = b_path
+            else:
+                current_file = "unknown_file"
+        else:
+            if current_file:
+                current_lines.append(line)
+
+    # Save last file
+    if current_file:
+        file_diffs[current_file] = "\n".join(current_lines)
+
+    return file_diffs
 
 
 def run_gemini_review(file_path, diff_content):
@@ -53,15 +77,6 @@ Diff:
     try:
         print(f"::: Reviewing {file_path} :::")
 
-        # Use simple text output, no JSON formatting needed for the basic review log
-        # We assume the `gemini` command is in PATH and configured via env vars
-        # The prompt is passed via --prompt argument.
-
-        # NOTE: If prompt is too long for CLI arg, we might need a temp file.
-        # But for batched file diffs (unless huge), it's likely okay.
-        # Ideally, we should check length or stream it.
-        # Let's try passing as arg first.
-
         process = subprocess.run(
             ["gemini", "--prompt", prompt],
             capture_output=True,
@@ -74,7 +89,6 @@ Diff:
                 f"Gemini verification failed for {file_path}: {process.stderr}",
                 file=sys.stderr,
             )
-            # If rate limited, we might want to wait longer here too, but the main loop sleep helps
             if "429" in process.stderr:
                 print("Rate limit hit inside subprocess. Sleeping extra 30s...")
                 time.sleep(30)
@@ -88,15 +102,18 @@ Diff:
 def main():
     pr_number = os.environ.get("PULL_REQUEST_NUMBER")
     if not pr_number:
-        # Fallback for manual run or testing
-        # Or try to get from GITHUB_EVENT_PATH if available
         print("PULL_REQUEST_NUMBER env var is required.", file=sys.stderr)
         sys.exit(1)
 
-    changed_files = get_changed_files()
-    if not changed_files:
-        print("No changed files found.")
+    print("Fetching full PR diff...")
+    full_diff = get_full_diff(pr_number)
+
+    if not full_diff:
+        print("No diff found or error fetching diff.")
         return
+
+    file_diffs = parse_diff(full_diff)
+    print(f"Parsed {len(file_diffs)} files from diff.")
 
     excluded_files = [
         "package-lock.json",
@@ -109,29 +126,21 @@ def main():
     ]
 
     files_to_review = [
-        f for f in changed_files if not any(f.endswith(ex) for ex in excluded_files)
+        f for f in file_diffs.keys() if not any(f.endswith(ex) for ex in excluded_files)
     ]
 
-    print(
-        f"Found {len(changed_files)} files. Reviewing {len(files_to_review)} files after exclusion."
-    )
+    print(f"Reviewing {len(files_to_review)} files after exclusion.")
 
     for file_path in files_to_review:
-        print(f"Fetching diff for: {file_path}")
-        diff = get_file_diff(pr_number, file_path)
+        diff = file_diffs[file_path]
 
-        # Skip if diff is empty or too large (simple heuristic, e.g. > 100kb char)
-        if not diff:
-            continue
-        if len(diff) > 100000:
+        if len(diff) > 50000:
             print(
                 f"Skipping {file_path} because diff is too large ({len(diff)} chars)."
             )
             continue
 
         run_gemini_review(file_path, diff)
-
-        # Sleep to respect rate limits (approx 15 RPM for free tier sometimes, or just to be safe)
         time.sleep(5)
 
 
