@@ -8,13 +8,16 @@ import {
     HelpCircle,
     Home,
     LogOut,
+    Menu,
     Settings,
     Star,
     User as UserIcon
 } from "lucide-react";
 import { useAuth } from "@/app/providers";
 import { cn } from "@/lib/utils";
+import { MobileMenu } from "./MobileMenu";
 import type { ComponentType } from "react";
+import { useState } from "react";
 
 // ナビゲーションアイテムの型定義
 type NavItem = {
@@ -28,14 +31,16 @@ type NavItem = {
 };
 
 /**
- * サイドバーコンポーネント (PC向け)
- * Figmaデザイン: https://www.figma.com/design/Ws14gkoX2at3X9IE60nZtr/sideber?node-id=11-496
+ * サイドバーコンポーネント (PC向けメニュー + モバイル向けボトムナビゲーション)
+ * PC: Figmaデザイン https://www.figma.com/design/Ws14gkoX2at3X9IE60nZtr/sideber?node-id=11-496
+ * Mobile: Figmaデザイン https://www.figma.com/design/Ws14gkoX2at3X9IE60nZtr/sideber?node-id=54-1889
  */
 export function Sidebar() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const { user, logout } = useAuth();
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // ナビゲーション項目定義
     // 順序: ホーム→授業一覧→通知→TAリクエスト→マイページ / 設定→使い方
@@ -108,6 +113,52 @@ export function Sidebar() {
 
     if (!user) return null;
 
+    return (
+        <>
+            {/* PC用サイドバー（768px以上） */}
+            <PCSidebar
+                pathname={pathname}
+                searchParams={searchParams}
+                user={user}
+                logout={logout}
+                mainNavItems={mainNavItems}
+                otherNavItems={otherNavItems}
+                handleLogout={handleLogout}
+            />
+
+            {/* モバイル用ボトムナビゲーション（768px未満） */}
+            <MobileBottomNav
+                pathname={pathname}
+                mainNavItems={mainNavItems}
+                onMenuClick={() => setIsMobileMenuOpen(true)}
+            />
+
+            {/* モバイル用メニュー（ボトムシート） */}
+            <MobileMenu isOpen={isMobileMenuOpen} onClose={() => setIsMobileMenuOpen(false)} />
+        </>
+    );
+}
+
+/**
+ * PC用サイドバー
+ */
+function PCSidebar({
+    pathname,
+    searchParams,
+    user,
+    logout,
+    mainNavItems,
+    otherNavItems,
+    handleLogout,
+}: {
+    pathname: string;
+    searchParams: URLSearchParams;
+    user: ReturnType<typeof useAuth>["user"];
+    logout: ReturnType<typeof useAuth>["logout"];
+    mainNavItems: NavItem[];
+    otherNavItems: NavItem[];
+    handleLogout: () => void;
+}) {
     return (
         <aside className="fixed left-0 top-0 hidden h-screen w-[330px] flex-col gap-4 overflow-hidden bg-white p-6 md:flex">
             {/* 1. Logo Card */}
@@ -228,4 +279,67 @@ export function Sidebar() {
             </div>
         </aside>
     );
+}
+
+/**
+ * モバイル用ボトムナビゲーション
+ */
+function MobileBottomNav({
+    pathname,
+    mainNavItems,
+    onMenuClick,
+}: {
+    pathname: string;
+    mainNavItems: NavItem[];
+    onMenuClick: () => void;
+}) {
+    return (
+        <nav className="fixed bottom-0 left-0 right-0 z-20 flex border-t border-slate-200 bg-white shadow-[0px_-2px_8px_rgba(0,0,0,0.04)] md:hidden">
+            {mainNavItems.filter(item => item.show && isMainNavVisible(item)).map((item) => {
+                const active = item.isActive ? item.isActive(pathname) : pathname === item.href;
+                return (
+                    <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                            "flex flex-1 flex-col items-center justify-center gap-1 py-2 text-xs transition-colors",
+                            active
+                                ? "text-slate-900"
+                                : "text-slate-500 hover:text-slate-700"
+                        )}
+                    >
+                        <div
+                            className={cn(
+                                "flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-1.5 transition-colors",
+                                active && "bg-[#e8eef9]"
+                            )}
+                        >
+                            <item.icon className={cn("h-6 w-6")} />
+                            <span>{item.label}</span>
+                        </div>
+                    </Link>
+                );
+            })}
+
+            {/* メニューボタン */}
+            <button
+                onClick={onMenuClick}
+                className="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-xs text-slate-500 transition-colors hover:text-slate-700"
+                aria-label="メニューを開く"
+            >
+                <div className="flex flex-col items-center justify-center gap-1 rounded-2xl px-3 py-1.5">
+                    <Menu className="h-6 w-6" />
+                    <span>メニュー</span>
+                </div>
+            </button>
+        </nav>
+    );
+}
+
+/**
+ * モバイル用ボトムナビゲーションに表示するアイテムの判定
+ */
+function isMainNavVisible(item: NavItem): boolean {
+    // ボトムナビに表示する主要なアイテムのみ
+    return ["ホーム", "授業一覧", "通知"].includes(item.label);
 }
