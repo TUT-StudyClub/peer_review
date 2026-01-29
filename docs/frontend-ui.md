@@ -1,6 +1,5 @@
 # Frontend UI方針（shadcn/ui）
-
-このリポジトリのフロントエンド（`frontend/`）は **Next.js(App Router) + Tailwind CSS** を使用しています。  
+このリポジトリのフロントエンド（`frontend/`）は **Next.js(App Router) + Tailwind CSS** を使用しています。
 UIコンポーネントは **shadcn/ui を優先**して追加・拡張します。
 
 ---

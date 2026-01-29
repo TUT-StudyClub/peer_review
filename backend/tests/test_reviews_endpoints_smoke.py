@@ -5,8 +5,10 @@ from app.api.routes.reviews import received_reviews
 from app.api.routes.reviews import submit_review
 from app.db.base import Base
 from app.models.assignment import Assignment
+from app.models.assignment import RubricCriterion
 from app.models.review import ReviewAssignment
 from app.models.submission import Submission
+from app.models.submission import SubmissionRubricScore
 from app.models.user import User
 from app.schemas.review import ReviewSubmit
 from app.schemas.review import RubricScore
@@ -29,6 +31,8 @@ def test_submit_and_receive_review_smoke():
 
     # 固定ルーブリックを作成
     criteria = ensure_fixed_rubric(db, assignment.id)
+    criterion = RubricCriterion(assignment_id=assignment.id, name="crit", max_score=5)
+    db.add(criterion)
 
     author = User(email="author@example.com", name="Author", password_hash="x")
     reviewer = User(email="rev@example.com", name="Rev", password_hash="y")
@@ -45,6 +49,9 @@ def test_submit_and_receive_review_smoke():
     db.add(submission)
     db.flush()
 
+    teacher_score = SubmissionRubricScore(submission_id=submission.id, criterion_id=criterion.id, score=4)
+    db.add(teacher_score)
+
     ra = ReviewAssignment(assignment_id=assignment.id, submission_id=submission.id, reviewer_id=reviewer.id)
     db.add(ra)
     db.flush()
@@ -52,6 +59,7 @@ def test_submit_and_receive_review_smoke():
     # 全ての基準に対してスコアを提供
     rubric_scores = [RubricScore(criterion_id=c.id, score=4) for c in criteria]
     payload = ReviewSubmit(comment="Nice job", rubric_scores=rubric_scores)
+    payload = ReviewSubmit(comment="Nice job", rubric_scores=[RubricScore(criterion_id=criterion.id, score=4)])
 
     # Call submit_review directly
     review = submit_review(ra.id, payload, db=db, current_user=reviewer)
