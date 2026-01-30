@@ -7,12 +7,9 @@ import time
 def get_full_diff(pr_number):
     """Retrieves the full diff of the pull request."""
     try:
-        # Check if running in a PR context
         if not pr_number:
             print("Not running in a PR context.", file=sys.stderr)
             return None
-
-        # Fetch the entire diff
         cmd = ["gh", "pr", "diff", pr_number]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         return result.stdout
@@ -27,55 +24,52 @@ def parse_diff(diff_content):
     current_file = None
     current_lines = []
 
-    # Simple parser for git diff output
     lines = diff_content.split("\n")
     for line in lines:
         if line.startswith("diff --git"):
-            # Save previous file
             if current_file:
                 file_diffs[current_file] = "\n".join(current_lines)
-
-            # Start new file
             current_lines = [line]
-            # Extract filename (simple heuristic)
             parts = line.split(" ")
             if len(parts) >= 4:
                 b_path = parts[-1]
-                if b_path.startswith("b/"):
-                    current_file = b_path[2:]
-                else:
-                    current_file = b_path
+                current_file = b_path[2:] if b_path.startswith("b/") else b_path
             else:
                 current_file = "unknown_file"
         else:
             if current_file:
                 current_lines.append(line)
 
-    # Save last file
     if current_file:
         file_diffs[current_file] = "\n".join(current_lines)
-
     return file_diffs
 
 
-def run_gemini_review(file_path, diff_content):
-    """Runs Gemini CLI to review the specific file diff."""
-    if not diff_content.strip():
+def run_gemini_review_batch(files_batch):
+    """Runs Gemini CLI to review a batch of files."""
+    if not files_batch:
         return
 
+    # Construct compiled prompt for the batch
+    prompt_content = ""
+    for fpath, fdiff in files_batch:
+        prompt_content += f"\n\n=== File: {fpath} ===\n```\n{fdiff}\n```\n"
+
     prompt = f"""
-You are an expert code reviewer. Review the following code diff for file `{file_path}`.
+You are an expert code reviewer. Review the following code changes from a Pull Request.
+The changes are provided as a list of files with their diffs.
 Focus on potential bugs, security issues, performance improvements, and code style.
+For each file, clearly state the filename and provide your review comments.
+If a file looks good, you can simply say "LGTM" or "No issues found".
 Output your review in Japanese / 日本語.
 
-Diff:
-```
-{diff_content}
-```
+Changes to review:
+{prompt_content}
 """
 
+    file_names = ", ".join([f[0] for f in files_batch])
     try:
-        print(f"::: Reviewing {file_path} :::")
+        print(f"::: Reviewing Batch: {file_names} :::")
 
         process = subprocess.run(
             ["gemini", "--prompt", prompt],
@@ -86,17 +80,17 @@ Diff:
 
         if process.returncode != 0:
             print(
-                f"Gemini verification failed for {file_path}: {process.stderr}",
+                f"Gemini verification failed for batch {file_names}: {process.stderr}",
                 file=sys.stderr,
             )
             if "429" in process.stderr:
-                print("Rate limit hit inside subprocess. Sleeping extra 30s...")
-                time.sleep(30)
+                print("Rate limit hit inside subprocess. Sleeping extra 60s...")
+                time.sleep(60)
         else:
             print(process.stdout)
 
     except Exception as e:
-        print(f"Failed to run Gemini for {file_path}: {e}", file=sys.stderr)
+        print(f"Failed to run Gemini for batch: {e}", file=sys.stderr)
 
 
 def main():
@@ -125,23 +119,52 @@ def main():
         "uv.lock",
     ]
 
-    files_to_review = [
-        f for f in file_diffs.keys() if not any(f.endswith(ex) for ex in excluded_files)
-    ]
-
-    print(f"Reviewing {len(files_to_review)} files after exclusion.")
-
-    for file_path in files_to_review:
-        diff = file_diffs[file_path]
-
-        if len(diff) > 50000:
-            print(
-                f"Skipping {file_path} because diff is too large ({len(diff)} chars)."
-            )
+    # Filter files
+    review_candidates = []
+    for fpath, fdiff in file_diffs.items():
+        if any(fpath.endswith(ex) for ex in excluded_files):
             continue
+        # Skip huge single files (e.g. > 30KB) to avoid context limit issues in a batch
+        if len(fdiff) > 30000:
+            print(f"Skipping {fpath} because diff is too large ({len(fdiff)} chars).")
+            continue
+        review_candidates.append((fpath, fdiff))
 
-        run_gemini_review(file_path, diff)
-        time.sleep(5)
+    print(f"Reviewing {len(review_candidates)} files after exclusion.")
+
+    # Batching Strategy
+    # Group files so that total char count is < 20000 OR max 5 files per batch
+    BATCH_CHAR_LIMIT = 20000
+    BATCH_FILE_LIMIT = 5
+
+    batches = []
+    current_batch = []
+    current_char_count = 0
+
+    for fpath, fdiff in review_candidates:
+        if (
+            len(current_batch) >= BATCH_FILE_LIMIT
+            or (current_char_count + len(fdiff)) > BATCH_CHAR_LIMIT
+        ):
+            batches.append(current_batch)
+            current_batch = []
+            current_char_count = 0
+
+        current_batch.append((fpath, fdiff))
+        current_char_count += len(fdiff)
+
+    if current_batch:
+        batches.append(current_batch)
+
+    print(f"Processing {len(batches)} batches.")
+
+    for i, batch in enumerate(batches):
+        print(f"--- Processing Batch {i + 1}/{len(batches)} ---")
+        run_gemini_review_batch(batch)
+
+        # Consistent sleep to avoid hitting RPM limits
+        # With batches, we make fewer requests, but let's safely sleep.
+        time.sleep(15)
 
 
 if __name__ == "__main__":
