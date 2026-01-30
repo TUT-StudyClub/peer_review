@@ -1,5 +1,6 @@
 """通知関連のデータベースモデル"""
 
+from datetime import UTC
 from datetime import datetime
 from uuid import UUID
 from uuid import uuid4
@@ -26,7 +27,11 @@ class PushSubscription(Base):
     endpoint: Mapped[str] = mapped_column(Text)
     p256dh_key: Mapped[str] = mapped_column(String(255), comment="公開鍵")
     auth_key: Mapped[str] = mapped_column(String(255), comment="認証シークレット")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+    )
 
     def __repr__(self) -> str:
         return f"<PushSubscription(id={self.id}, user_id={self.user_id})>"
