@@ -1,16 +1,33 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from alembic import command
+from alembic.config import Config
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.init_db import init_db
 
+logger = logging.getLogger(__name__)
+
+
+def run_migrations() -> None:
+    """起動時にAlembicマイグレーションを自動実行"""
+    try:
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to run migrations: {e}")
+        raise
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    run_migrations()
     init_db()
     yield
 
