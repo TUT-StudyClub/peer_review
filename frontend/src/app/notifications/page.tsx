@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { usePushNotification } from '@/hooks/usePushNotification';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell } from 'lucide-react';
 
 // 通知データの型定義
 type NotificationItem = {
@@ -53,7 +52,6 @@ const initialNotifications: NotificationItem[] = [
 ];
 
 export default function NotificationsPage() {
-    const { permission, isSupported, isLoading, isSubscribed, requestPermission, disableNotifications } = usePushNotification();
     const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
 
     // 既読にする
@@ -68,15 +66,6 @@ export default function NotificationsPage() {
         setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     };
 
-    // 通知トグルハンドラ
-    const handleToggle = async () => {
-        if (isSubscribed) {
-            await disableNotifications();
-        } else {
-            await requestPermission();
-        }
-    };
-
     const unreadCount = notifications.filter((n) => !n.isRead).length;
 
     return (
@@ -88,32 +77,7 @@ export default function NotificationsPage() {
                         <h1 className="text-xl font-bold text-slate-900">通知</h1>
                         <p className="mt-1 text-sm text-slate-500">未読の通知が表示されます</p>
                     </div>
-                    {/* 通知ON/OFFトグル */}
-                    {isSupported && (
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-600">
-                                {isSubscribed ? 'プッシュ通知ON' : 'プッシュ通知OFF'}
-                            </span>
-                            <button
-                                onClick={handleToggle}
-                                disabled={isLoading || permission === 'denied'}
-                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${isSubscribed ? 'bg-blue-600' : 'bg-slate-300'
-                                    }`}
-                                title={permission === 'denied' ? 'ブラウザの設定で通知がブロックされています' : ''}
-                            >
-                                <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isSubscribed ? 'translate-x-6' : 'translate-x-1'
-                                        }`}
-                                />
-                            </button>
-                        </div>
-                    )}
                 </div>
-                {permission === 'denied' && (
-                    <p className="mt-3 text-xs text-amber-600">
-                        ⚠️ ブラウザの設定で通知がブロックされています。ブラウザの設定から通知を許可してください。
-                    </p>
-                )}
             </div>
 
             {/* 通知一覧セクション */}
@@ -154,8 +118,8 @@ export default function NotificationsPage() {
                                 <div className="flex-1 min-w-0">
                                     <p
                                         className={`text-sm ${notification.isRead
-                                                ? 'text-slate-500'
-                                                : 'font-medium text-slate-900'
+                                            ? 'text-slate-500'
+                                            : 'font-medium text-slate-900'
                                             }`}
                                     >
                                         {notification.title}
