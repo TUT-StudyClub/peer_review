@@ -11,10 +11,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.notification import NotificationType
 from app.schemas.notification import PushSubscriptionCreate
 from app.schemas.notification import PushSubscriptionResponse
 from app.services import notification_service
 from app.services.auth import get_current_user
+from app.services.notification_service import send_push_notification
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -62,3 +64,21 @@ def unsubscribe_push_notifications(
 def get_vapid_public_key():
     """VAPID公開鍵を取得する（フロントエンドで使用）"""
     return {"publicKey": settings.vapid_public_key}
+
+
+@router.post("/test")
+def send_test_notification(
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """テスト通知を送信する"""
+    send_push_notification(
+        db=db,
+        user_id=current_user.id,
+        notification_type=NotificationType.REVIEW_RECEIVED,
+        context={
+            "assignment_title": "テスト課題",
+            "assignment_id": "test",
+        },
+    )
+    return {"message": "テスト通知を送信しました"}
