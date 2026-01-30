@@ -5,6 +5,7 @@ from app.api.routes import auth
 from app.api.routes import courses
 from app.api.routes import grades
 from app.api.routes import health
+from app.api.routes import notifications
 from app.api.routes import reviews
 from app.api.routes import submissions
 from app.api.routes import ta
@@ -20,3 +21,4 @@ api_router.include_router(submissions.router, prefix="/submissions", tags=["subm
 api_router.include_router(reviews.router, tags=["reviews"])
 api_router.include_router(ta.router, tags=["ta"])
 api_router.include_router(grades.router, tags=["grades"])
+api_router.include_router(notifications.router, tags=["notifications"])
