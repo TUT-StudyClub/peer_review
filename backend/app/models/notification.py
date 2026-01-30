@@ -5,6 +5,7 @@ from datetime import datetime
 from uuid import UUID
 from uuid import uuid4
 
+from sqlalchemy import Boolean
 from sqlalchemy import DateTime
 from sqlalchemy import ForeignKey
 from sqlalchemy import String
@@ -35,3 +36,25 @@ class PushSubscription(Base):
 
     def __repr__(self) -> str:
         return f"<PushSubscription(id={self.id}, user_id={self.user_id})>"
+
+
+class NotificationHistory(Base):
+    """通知履歴モデル"""
+
+    __tablename__ = "notification_history"
+
+    id: Mapped[UUID] = mapped_column(UUIDType, primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(UUIDType, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    notification_type: Mapped[str] = mapped_column(String(50), comment="通知タイプ")
+    title: Mapped[str] = mapped_column(String(255), comment="通知タイトル")
+    body: Mapped[str] = mapped_column(Text, comment="通知本文")
+    url: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="遷移先URL")
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, index=True, comment="既読フラグ")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=lambda: datetime.now(UTC),
+    )
+
+    def __repr__(self) -> str:
+        return f"<NotificationHistory(id={self.id}, user_id={self.user_id}, is_read={self.is_read})>"

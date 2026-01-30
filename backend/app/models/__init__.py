@@ -3,6 +3,8 @@ from app.models.assignment import RubricCriterion
 from app.models.course import Course
 from app.models.course import CourseEnrollment
 from app.models.credit_history import CreditHistory
+from app.models.notification import NotificationHistory
+from app.models.notification import PushSubscription
 from app.models.review import MetaReview
 from app.models.review import Review
 from app.models.review import ReviewAssignment
@@ -20,6 +22,8 @@ __all__ = [
     "CourseEnrollment",
     "CreditHistory",
     "MetaReview",
+    "NotificationHistory",
+    "PushSubscription",
     "Review",
     "ReviewAssignment",
     "ReviewRubricScore",

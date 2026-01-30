@@ -167,3 +167,120 @@ export async function checkSubscriptionExists(): Promise<boolean> {
         return false;
     }
 }
+
+// ==================== 通知履歴 ====================
+
+/**
+ * 通知履歴のレスポンス型
+ */
+export type NotificationItem = {
+    id: string;
+    notification_type: string;
+    title: string;
+    body: string;
+    url: string | null;
+    is_read: boolean;
+    created_at: string;
+};
+
+export type NotificationHistoryResponse = {
+    notifications: NotificationItem[];
+    unread_count: number;
+    total_count: number;
+};
+
+/**
+ * 通知履歴を取得する
+ */
+export async function getNotificationHistory(limit = 50, offset = 0): Promise<NotificationHistoryResponse | null> {
+    try {
+        const token = localStorage.getItem('pure-review-token') ?? sessionStorage.getItem('pure-review-token');
+        if (!token) {
+            console.error('No auth token found');
+            return null;
+        }
+
+        const response = await fetch(
+            `${API_BASE_URL}/notifications/history?limit=${limit}&offset=${offset}`,
+            {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch notification history: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('Failed to get notification history:', error);
+        return null;
+    }
+}
+
+/**
+ * 通知を既読にする
+ */
+export async function markNotificationAsRead(notificationId: string): Promise<boolean> {
+    try {
+        const token = localStorage.getItem('pure-review-token') ?? sessionStorage.getItem('pure-review-token');
+        if (!token) {
+            console.error('No auth token found');
+            return false;
+        }
+
+        const response = await fetch(
+            `${API_BASE_URL}/notifications/history/${notificationId}/read`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Failed to mark notification as read: ${response.status}`);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+        return false;
+    }
+}
+
+/**
+ * すべての通知を既読にする
+ */
+export async function markAllNotificationsAsRead(): Promise<boolean> {
+    try {
+        const token = localStorage.getItem('pure-review-token') ?? sessionStorage.getItem('pure-review-token');
+        if (!token) {
+            console.error('No auth token found');
+            return false;
+        }
+
+        const response = await fetch(
+            `${API_BASE_URL}/notifications/history/read-all`,
+            {
+                method: 'PATCH',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(`Failed to mark all notifications as read: ${response.status}`);
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Failed to mark all notifications as read:', error);
+        return false;
+    }
+}

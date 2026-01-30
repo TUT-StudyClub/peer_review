@@ -1,72 +1,81 @@
 'use client';
 
-import { useState } from 'react';
-import { Bell } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Bell, Loader2 } from 'lucide-react';
+import {
+    getNotificationHistory,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    type NotificationItem,
+} from '@/lib/notifications';
 
-// 通知データの型定義
-type NotificationItem = {
-    id: string;
-    title: string;
-    description: string;
-    time: string;
-    isRead: boolean;
-};
+/**
+ * 日時をフレンドリーな形式に変換する
+ */
+function formatTime(dateString: string): string {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-// ダミーデータ（将来的にはAPIから取得）
-const initialNotifications: NotificationItem[] = [
-    {
-        id: '1',
-        title: '新しい課題が割り当てられました',
-        description: 'プログラミング基礎の課題をレビューしてください',
-        time: '2時間前',
-        isRead: false,
-    },
-    {
-        id: '2',
-        title: 'レビュー期限が近づいています',
-        description: 'データベース設計のレビュー期限は明日です',
-        time: '5時間前',
-        isRead: false,
-    },
-    {
-        id: '3',
-        title: 'レビューが承認されました',
-        description: 'あなたのレビューが承認されました',
-        time: '1日前',
-        isRead: true,
-    },
-    {
-        id: '4',
-        title: 'クレジットが付与されました',
-        description: 'レビュー完了により5クレジットが付与されました',
-        time: '2日前',
-        isRead: true,
-    },
-    {
-        id: '5',
-        title: '新しいメッセージ',
-        description: '教員から新しいコメントがあります',
-        time: '3日前',
-        isRead: true,
-    },
-];
+    if (diffMinutes < 1) return 'たった今';
+    if (diffMinutes < 60) return `${diffMinutes}分前`;
+    if (diffHours < 24) return `${diffHours}時間前`;
+    if (diffDays < 7) return `${diffDays}日前`;
+    return date.toLocaleDateString('ja-JP');
+}
 
 export default function NotificationsPage() {
-    const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    // 通知履歴を取得する
+    const fetchNotifications = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const data = await getNotificationHistory();
+            if (data) {
+                setNotifications(data.notifications);
+                setUnreadCount(data.unread_count);
+            } else {
+                setError('通知の取得に失敗しました');
+            }
+        } catch (err) {
+            console.error('Failed to fetch notifications:', err);
+            setError('通知の取得に失敗しました');
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchNotifications();
+    }, [fetchNotifications]);
 
     // 既読にする
-    const markAsRead = (id: string) => {
-        setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-        );
+    const handleMarkAsRead = async (id: string) => {
+        const success = await markNotificationAsRead(id);
+        if (success) {
+            setNotifications((prev) =>
+                prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
+        }
     };
 
     // すべて既読にする
-    const markAllAsRead = () => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    const handleMarkAllAsRead = async () => {
+        const success = await markAllNotificationsAsRead();
+        if (success) {
+            setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+            setUnreadCount(0);
+        }
     };
-
-    const unreadCount = notifications.filter((n) => !n.isRead).length;
 
     return (
         <div className="mx-auto max-w-3xl space-y-6">
@@ -82,7 +91,7 @@ export default function NotificationsPage() {
                     <h2 className="text-lg font-bold text-slate-900">通知一覧</h2>
                     {unreadCount > 0 && (
                         <button
-                            onClick={markAllAsRead}
+                            onClick={handleMarkAllAsRead}
                             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
                         >
                             すべて既読にする
@@ -90,7 +99,22 @@ export default function NotificationsPage() {
                     )}
                 </div>
 
-                {notifications.length === 0 ? (
+                {isLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                        <Loader2 className="mb-4 h-8 w-8 animate-spin" />
+                        <p>読み込み中...</p>
+                    </div>
+                ) : error ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-red-400">
+                        <p>{error}</p>
+                        <button
+                            onClick={fetchNotifications}
+                            className="mt-4 text-blue-600 hover:underline"
+                        >
+                            再試行
+                        </button>
+                    </div>
+                ) : notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-slate-400">
                         <Bell className="mb-4 h-12 w-12" />
                         <p>通知はありません</p>
@@ -105,7 +129,7 @@ export default function NotificationsPage() {
                                 {/* 既読/未読マーカー */}
                                 <div className="mt-1.5 flex-shrink-0">
                                     <span
-                                        className={`inline-block h-2 w-2 rounded-full ${notification.isRead ? 'bg-slate-300' : 'bg-slate-900'
+                                        className={`inline-block h-2 w-2 rounded-full ${notification.is_read ? 'bg-slate-300' : 'bg-slate-900'
                                             }`}
                                     />
                                 </div>
@@ -113,23 +137,25 @@ export default function NotificationsPage() {
                                 {/* 通知内容 */}
                                 <div className="flex-1 min-w-0">
                                     <p
-                                        className={`text-sm ${notification.isRead
-                                            ? 'text-slate-500'
-                                            : 'font-medium text-slate-900'
+                                        className={`text-sm ${notification.is_read
+                                                ? 'text-slate-500'
+                                                : 'font-medium text-slate-900'
                                             }`}
                                     >
                                         {notification.title}
                                     </p>
                                     <p className="mt-0.5 text-xs text-slate-500 truncate">
-                                        {notification.description}
+                                        {notification.body}
                                     </p>
-                                    <p className="mt-1 text-xs text-slate-400">{notification.time}</p>
+                                    <p className="mt-1 text-xs text-slate-400">
+                                        {formatTime(notification.created_at)}
+                                    </p>
                                 </div>
 
                                 {/* 既読ボタン（未読の場合のみ） */}
-                                {!notification.isRead && (
+                                {!notification.is_read && (
                                     <button
-                                        onClick={() => markAsRead(notification.id)}
+                                        onClick={() => handleMarkAsRead(notification.id)}
                                         className="flex-shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 transition-colors"
                                     >
                                         既読にする

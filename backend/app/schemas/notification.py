@@ -13,7 +13,10 @@ class NotificationType(str, Enum):
     """通知タイプの定義"""
 
     REVIEW_RECEIVED = "review_received"  # レビューが届いた
+    REVIEW_APPROVED = "review_approved"  # レビューが承認された
+    CREDIT_AWARDED = "credit_awarded"  # クレジットが付与された
     SUBMISSION_DUE = "submission_due"  # 締め切り間近
+    NEW_ASSIGNMENT = "new_assignment"  # 新しい課題が割り当てられた
     SYSTEM_INFO = "system_info"  # システム通知
 
 
@@ -34,3 +37,25 @@ class PushSubscriptionResponse(BaseModel):
     user_id: UUID
     endpoint: str
     created_at: datetime
+
+
+class NotificationHistoryResponse(BaseModel):
+    """通知履歴レスポンススキーマ"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    notification_type: str
+    title: str
+    body: str
+    url: str | None
+    is_read: bool
+    created_at: datetime
+
+
+class NotificationHistoryListResponse(BaseModel):
+    """通知履歴一覧レスポンススキーマ"""
+
+    notifications: list[NotificationHistoryResponse]
+    unread_count: int
+    total_count: int

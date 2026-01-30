@@ -10,6 +10,7 @@ from pywebpush import webpush
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.notification import NotificationHistory
 from app.models.notification import PushSubscription
 from app.schemas.notification import NotificationType
 from app.schemas.notification import PushSubscriptionCreate
@@ -80,6 +81,139 @@ def delete_subscription(db: Session, user_id: UUID, endpoint: str) -> bool:
     return result > 0
 
 
+# ==================== 通知履歴関連 ====================
+
+
+def create_notification_history(
+    db: Session,
+    user_id: UUID,
+    notification_type: NotificationType,
+    title: str,
+    body: str,
+    url: str | None = None,
+) -> NotificationHistory:
+    """
+    通知履歴を作成する
+
+    Args:
+        db: データベースセッション
+        user_id: ユーザーID
+        notification_type: 通知タイプ
+        title: 通知タイトル
+        body: 通知本文
+        url: 遷移先URL
+
+    Returns:
+        作成されたNotificationHistoryオブジェクト
+    """
+    notification = NotificationHistory(
+        user_id=user_id,
+        notification_type=notification_type.value,
+        title=title,
+        body=body,
+        url=url,
+        is_read=False,
+    )
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    logger.info(f"Created notification history for user {user_id}: {title}")
+    return notification
+
+
+def get_notification_history(
+    db: Session,
+    user_id: UUID,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[NotificationHistory]:
+    """
+    ユーザーの通知履歴を取得する
+
+    Args:
+        db: データベースセッション
+        user_id: ユーザーID
+        limit: 取得件数
+        offset: オフセット
+
+    Returns:
+        通知履歴のリスト
+    """
+    return (
+        db.query(NotificationHistory)
+        .filter(NotificationHistory.user_id == user_id)
+        .order_by(NotificationHistory.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+def get_unread_count(db: Session, user_id: UUID) -> int:
+    """ユーザーの未読通知数を取得する"""
+    return (
+        db.query(NotificationHistory)
+        .filter(NotificationHistory.user_id == user_id, NotificationHistory.is_read == False)  # noqa: E712
+        .count()
+    )
+
+
+def get_total_count(db: Session, user_id: UUID) -> int:
+    """ユーザーの通知総数を取得する"""
+    return db.query(NotificationHistory).filter(NotificationHistory.user_id == user_id).count()
+
+
+def mark_as_read(db: Session, notification_id: UUID, user_id: UUID) -> bool:
+    """
+    通知を既読にする
+
+    Args:
+        db: データベースセッション
+        notification_id: 通知ID
+        user_id: ユーザーID（所有者確認用）
+
+    Returns:
+        成功した場合True
+    """
+    result = (
+        db.query(NotificationHistory)
+        .filter(
+            NotificationHistory.id == notification_id,
+            NotificationHistory.user_id == user_id,
+        )
+        .update({"is_read": True})
+    )
+    db.commit()
+    return result > 0
+
+
+def mark_all_as_read(db: Session, user_id: UUID) -> int:
+    """
+    すべての通知を既読にする
+
+    Args:
+        db: データベースセッション
+        user_id: ユーザーID
+
+    Returns:
+        更新された通知数
+    """
+    result = (
+        db.query(NotificationHistory)
+        .filter(
+            NotificationHistory.user_id == user_id,
+            NotificationHistory.is_read == False,  # noqa: E712
+        )
+        .update({"is_read": True})
+    )
+    db.commit()
+    return result
+
+
+# ==================== Push通知送信 ====================
+
+
 def send_push_notification(
     db: Session,
     user_id: UUID,
@@ -98,25 +232,35 @@ def send_push_notification(
     Returns:
         送信成功した通知の数
     """
+    # 1. コンテンツを生成
+    title, body, url = generate_notification_content(notification_type, context)
+
+    # 2. 通知履歴を保存
+    create_notification_history(
+        db=db,
+        user_id=user_id,
+        notification_type=notification_type,
+        title=title,
+        body=body,
+        url=url,
+    )
+
     # VAPIDキーが設定されていない場合はスキップ
     if not settings.vapid_private_key or not settings.vapid_public_key:
         logger.warning("VAPID keys not configured, skipping push notification")
         return 0
 
-    # 1. コンテンツを生成
-    title, body, url = generate_notification_content(notification_type, context)
-
-    # 2. 宛先取得
+    # 3. 宛先取得
     subscriptions = db.query(PushSubscription).filter(PushSubscription.user_id == user_id).all()
 
     if not subscriptions:
         logger.info(f"No push subscriptions found for user {user_id}")
         return 0
 
-    # 3. VAPID設定
+    # 4. VAPID設定
     vapid_claims = {"sub": settings.vapid_subject}
 
-    # 4. 各サブスクリプションに送信
+    # 5. 各サブスクリプションに送信
     success_count = 0
     for subscription in subscriptions:
         try:
