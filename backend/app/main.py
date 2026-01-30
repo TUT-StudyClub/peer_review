@@ -11,6 +11,8 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.db.init_db import init_db
 
+# ロギング設定
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:  %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +31,9 @@ def run_migrations() -> None:
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     run_migrations()
     init_db()
+    logger.info("Application startup complete")
     yield
+    logger.info("Application shutdown")
 
 
 def create_app() -> FastAPI:
