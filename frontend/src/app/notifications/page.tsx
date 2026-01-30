@@ -70,14 +70,10 @@ export default function NotificationsPage() {
 
     return (
         <div className="mx-auto max-w-3xl space-y-6">
-            {/* ヘッダーセクション */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-xl font-bold text-slate-900">通知</h1>
-                        <p className="mt-1 text-sm text-slate-500">未読の通知が表示されます</p>
-                    </div>
-                </div>
+            <div>
+                {/* ヘッダーセクション */}
+                <h1 className="text-2xl font-bold tracking-tight text-slate-900">通知</h1>
+                <p className="text-muted-foreground mt-1">未読の通知が表示されます</p>
             </div>
 
             {/* 通知一覧セクション */}
