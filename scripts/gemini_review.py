@@ -133,9 +133,10 @@ def main():
     print(f"Reviewing {len(review_candidates)} files after exclusion.")
 
     # Batching Strategy
-    # Group files so that total char count is < 20000 OR max 5 files per batch
-    BATCH_CHAR_LIMIT = 20000
-    BATCH_FILE_LIMIT = 5
+    # Group files so that total char count is < 4000 OR max 3 files per batch
+    # Reduced from 20000/5 to avoid timeouts and header size issues
+    BATCH_CHAR_LIMIT = 4000
+    BATCH_FILE_LIMIT = 3
 
     batches = []
     current_batch = []
@@ -164,7 +165,7 @@ def main():
 
         # Consistent sleep to avoid hitting RPM limits
         # With batches, we make fewer requests, but let's safely sleep.
-        time.sleep(15)
+        time.sleep(30)
 
 
 if __name__ == "__main__":
