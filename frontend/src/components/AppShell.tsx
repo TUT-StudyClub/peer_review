@@ -3,6 +3,7 @@
 import { useAuth } from "@/app/providers";
 import { NavBar } from "@/components/NavBar";
 import { Sidebar } from "@/components/Sidebar";
+import NotificationBanner from "@/components/NotificationBanner";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const { user } = useAuth();
@@ -36,6 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <main className="mx-auto w-full px-4 py-8 md:pl-[354px] md:pr-6 md:pt-12 md:max-w-7xl">
                 {children}
             </main>
+            <NotificationBanner />
         </div>
     );
 }
