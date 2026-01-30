@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter
+from fastapi import BackgroundTasks
 from fastapi import Depends
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -17,6 +18,7 @@ from app.models.submission import Submission
 from app.models.ta_review_request import TAReviewRequest
 from app.models.ta_review_request import TAReviewRequestStatus
 from app.models.user import User
+from app.schemas.notification import NotificationType
 from app.schemas.review import MetaReviewCreate
 from app.schemas.review import MetaReviewPublic
 from app.schemas.review import PolishRequest
@@ -48,6 +50,7 @@ from app.services.credits import score_1_to_5_from_norm
 from app.services.duplicate import detect_duplicate_review
 from app.services.duplicate import hash_comment
 from app.services.matching import get_or_assign_review_assignment
+from app.services.notification_service import send_push_notification
 from app.services.rubric import ensure_fixed_rubric
 from app.services.similarity import check_similarity
 
@@ -69,6 +72,41 @@ def _evaluation_fields(credit: object | None) -> dict:
         "total_alignment_score": score_1_to_5_from_norm(getattr(credit, "trust_score", None)),
         "credit_awarded": getattr(credit, "added", None),
     }
+
+
+def _schedule_review_notification(
+    background_tasks: BackgroundTasks,
+    db: Session,
+    submission: Submission | None,
+    assignment_id: UUID,
+) -> None:
+    """レビュー完了時に提出者へPush通知をスケジュールする"""
+    if not submission:
+        return
+    assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
+    if assignment:
+        background_tasks.add_task(
+            send_push_notification,
+            db=db,
+            user_id=submission.author_id,
+            notification_type=NotificationType.REVIEW_RECEIVED,
+            context={
+                "assignment_title": assignment.title,
+                "assignment_id": str(assignment.id),
+            },
+        )
+
+
+def _validate_rubric_scores(payload_scores: list, criteria_by_id: dict) -> None:
+    """ルーブリックスコアのバリデーション"""
+    if len(payload_scores) != len(criteria_by_id):
+        raise HTTPException(status_code=400, detail="All rubric criteria must be scored")
+    for s in payload_scores:
+        criterion = criteria_by_id.get(s.criterion_id)
+        if criterion is None:
+            raise HTTPException(status_code=400, detail="Invalid criterion_id in rubric_scores")
+        if not (0 <= s.score <= criterion.max_score):
+            raise HTTPException(status_code=400, detail="Rubric score out of range")
 
 
 @router.get("/assignments/{assignment_id}/reviews/next", response_model=ReviewAssignmentTask | None)
@@ -147,6 +185,7 @@ def api_polish_review(
 def submit_review(
     review_assignment_id: UUID,
     payload: ReviewSubmit,
+    background_tasks: BackgroundTasks,
     db: Session = db_dependency,
     current_user: User = current_user_dependency,
 ) -> ReviewPublic:
@@ -168,16 +207,7 @@ def submit_review(
 
     rubric_criteria = ensure_fixed_rubric(db, review_assignment.assignment_id)
     criteria_by_id = {c.id: c for c in rubric_criteria}
-
-    if len(payload.rubric_scores) != len(criteria_by_id):
-        raise HTTPException(status_code=400, detail="All rubric criteria must be scored")
-
-    for s in payload.rubric_scores:
-        criterion = criteria_by_id.get(s.criterion_id)
-        if criterion is None:
-            raise HTTPException(status_code=400, detail="Invalid criterion_id in rubric_scores")
-        if not (0 <= s.score <= criterion.max_score):
-            raise HTTPException(status_code=400, detail="Rubric score out of range")
+    _validate_rubric_scores(payload.rubric_scores, criteria_by_id)
 
     # submission_text を優先、なければ markdown_text、それもなければ空文字列を使用
     submission_text = submission.submission_text or submission.markdown_text or ""
@@ -304,6 +334,10 @@ def submit_review(
 
     db.commit()
     db.refresh(review)
+
+    # レビュー完了時に提出者へPush通知を送信
+    _schedule_review_notification(background_tasks, db, submission, review_assignment.assignment_id)
+
     review_public = ReviewPublic.model_validate(review)
     return review_public.model_copy(update=_evaluation_fields(credit))
 
