@@ -15,8 +15,9 @@ export default function NotificationBanner() {
         setIsTesting(true);
         setTestMessage(null);
         try {
-            const token = localStorage.getItem('token');
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/notifications/test`, {
+            const token = localStorage.getItem('pure-review-token') ?? sessionStorage.getItem('pure-review-token');
+            const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
+            const response = await fetch(`${apiUrl}/notifications/test`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
