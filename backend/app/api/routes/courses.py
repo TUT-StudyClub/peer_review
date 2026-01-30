@@ -8,8 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import COURSE_TITLE_CANDIDATES
 from app.db.session import get_db
+from app.models.assignment import Assignment
 from app.models.course import Course
 from app.models.course import CourseEnrollment
+from app.models.review import ReviewAssignment
+from app.models.review import ReviewAssignmentStatus
 from app.models.user import User
 from app.models.user import UserRole
 from app.schemas.course import CourseCreate
@@ -115,6 +118,47 @@ def list_courses(
     ]
 
 
+@router.get("/{course_id}", response_model=CoursePublic)
+def get_course_detail(
+    course_id: UUID,
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
+) -> CoursePublic:
+    """講義の詳細情報を取得（講師名、受講生数、ユーザーの登録状況を含む）"""
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if course is None:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # 受講生数を取得
+    student_count_result = (
+        db.query(func.count(CourseEnrollment.id)).filter(CourseEnrollment.course_id == course_id).one()
+    )
+    student_count: int = student_count_result[0] if student_count_result else 0
+
+    # ユーザーが登録しているかチェック
+    is_enrolled = (
+        db.query(CourseEnrollment)
+        .filter(
+            CourseEnrollment.course_id == course_id,
+            CourseEnrollment.user_id == current_user.id,
+        )
+        .first()
+        is not None
+    )
+
+    return CoursePublic(
+        id=course.id,
+        title=course.title,
+        description=course.description,
+        theme=course.theme,
+        teacher_id=course.teacher_id,
+        created_at=course.created_at,
+        teacher_name=course.teacher.name if course.teacher else None,
+        is_enrolled=is_enrolled,
+        student_count=student_count,
+    )
+
+
 @router.post("/{course_id}/enroll", response_model=CourseEnrollmentPublic)
 def enroll_course(
     course_id: UUID,
@@ -140,6 +184,44 @@ def enroll_course(
     db.commit()
     db.refresh(enrollment)
     return enrollment
+
+
+@router.delete("/{course_id}/enroll", status_code=204)
+def unenroll_course(
+    course_id: UUID,
+    db: Session = db_dependency,
+    current_user: User = current_user_dependency,
+) -> None:
+    if current_user.role != UserRole.student:
+        raise HTTPException(status_code=403, detail="学生アカウントのみ受講取り消しができます")
+
+    # 未完了のレビュー割り当てが残っている場合は受講取り消し不可
+    has_pending_review_assignments = (
+        db.query(ReviewAssignment.id)
+        .join(Assignment, Assignment.id == ReviewAssignment.assignment_id)
+        .filter(
+            Assignment.course_id == course_id,
+            ReviewAssignment.reviewer_id == current_user.id,
+            ReviewAssignment.status != ReviewAssignmentStatus.submitted,
+        )
+        .first()
+    )
+    if has_pending_review_assignments:
+        raise HTTPException(
+            status_code=400,
+            detail="未完了のレビュー割り当てが残っています。レビューを完了してから受講を取り消してください。",
+        )
+
+    enrollment = (
+        db.query(CourseEnrollment)
+        .filter(CourseEnrollment.course_id == course_id, CourseEnrollment.user_id == current_user.id)
+        .first()
+    )
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="受講登録が見つかりません")
+
+    db.delete(enrollment)
+    db.commit()
 
 
 @router.get("/{course_id}/students", response_model=list[UserPublic])
