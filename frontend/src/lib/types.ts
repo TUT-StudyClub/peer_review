@@ -48,6 +48,17 @@ export type CreditHistoryPublic = {
   created_at: string;
 };
 
+export type MetricHistoryPoint = {
+  user_id: string;
+  value: number;
+  created_at: string;
+};
+
+export type AverageSeriesPoint = {
+  created_at: string;
+  value: number;
+};
+
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
 
 export type TAReviewRequestPublic = {
