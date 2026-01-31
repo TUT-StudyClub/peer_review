@@ -34,7 +34,7 @@ def generate_notification_content(
             assignment_id = context.get("assignment_id")
             return (
                 "課題の締め切りが近づいています",
-                f"あと{days}日で提出締め切りです。準備はできていますか？",
+                f"あと{days}日で提出締め切りです。",
                 f"/assignments/{assignment_id}" if assignment_id else "/assignments",
             )
 
