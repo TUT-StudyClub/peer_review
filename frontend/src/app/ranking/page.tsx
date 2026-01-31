@@ -1,18 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { apiGetRanking } from "@/lib/api";
+import { useMemo, useState, useEffect, useCallback } from "react";
+import { useAuth } from "@/app/providers";
+import {
+    apiGetAverageCreditSeries,
+    apiGetAverageScoreHistory,
+    apiGetMetricAverage,
+    apiGetMetricAverageSeries,
+    apiGetRanking,
+    apiGetUsersCreditHistory,
+    formatApiError,
+} from "@/lib/api";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { UserRankingEntry, RankingPeriod, RankingMetric } from "@/lib/types";
+import { RankingCreditTrendChart } from "@/components/RankingCreditTrendChart";
+import type {
+    AverageSeriesPoint,
+    CreditHistoryPublic,
+    MetricHistoryPoint,
+    UserRankingEntry,
+    RankingPeriod,
+    RankingMetric,
+} from "@/lib/types";
 import { Trophy, Medal, Award, TrendingUp } from "lucide-react";
 
 export default function RankingPage() {
+    const { token, user } = useAuth();
     const [rankings, setRankings] = useState<UserRankingEntry[]>([]);
+    const [topRankers, setTopRankers] = useState<UserRankingEntry[]>([]);
     const [period, setPeriod] = useState<RankingPeriod>("total");
     const [metric, setMetric] = useState<RankingMetric>("credits");
     const [limit, setLimit] = useState(10);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [trendHistory, setTrendHistory] = useState<CreditHistoryPublic[]>([]);
+    const [metricSeries, setMetricSeries] = useState<MetricHistoryPoint[]>([]);
+    const [averageValue, setAverageValue] = useState<number | null>(null);
+    const [averageSeries, setAverageSeries] = useState<AverageSeriesPoint[]>([]);
+    const [trendLoading, setTrendLoading] = useState(false);
+    const [trendError, setTrendError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchRankings = async () => {
@@ -30,6 +55,106 @@ export default function RankingPage() {
 
         fetchRankings();
     }, [period, limit, metric]);
+
+    useEffect(() => {
+        const fetchTopRankers = async () => {
+            try {
+                const data = await apiGetRanking(limit, period, metric);
+                setTopRankers(data);
+            } catch (err) {
+                setTopRankers([]);
+                setTrendError(formatApiError(err));
+            }
+        };
+
+        fetchTopRankers();
+    }, [period, metric, limit]);
+
+    const trendUsers = useMemo(() => topRankers, [topRankers]);
+
+    useEffect(() => {
+        const fetchTrendHistory = async () => {
+            if (!token || trendUsers.length === 0) {
+                setTrendHistory([]);
+                setTrendError(null);
+                return;
+            }
+            setTrendLoading(true);
+            setTrendError(null);
+            try {
+                const ids = trendUsers.map((entry) => entry.id);
+                const history = await apiGetUsersCreditHistory(token, ids, 120);
+                setTrendHistory(history);
+            } catch (err) {
+                setTrendError(formatApiError(err));
+            } finally {
+                setTrendLoading(false);
+            }
+        };
+
+        fetchTrendHistory();
+    }, [token, trendUsers]);
+
+    useEffect(() => {
+        const fetchMetricSeries = async () => {
+            if (!token || trendUsers.length === 0 || metric !== "average_score") {
+                setMetricSeries([]);
+                return;
+            }
+            setTrendLoading(true);
+            setTrendError(null);
+            try {
+                const ids = trendUsers.map((entry) => entry.id);
+                const series = await apiGetAverageScoreHistory(token, ids, period);
+                setMetricSeries(series);
+            } catch (err) {
+                setTrendError(formatApiError(err));
+            } finally {
+                setTrendLoading(false);
+            }
+        };
+
+        fetchMetricSeries();
+    }, [token, trendUsers, period, metric]);
+
+    useEffect(() => {
+        const fetchAverageValue = async () => {
+            if (!token) {
+                setAverageValue(null);
+                return;
+            }
+            try {
+                const value = await apiGetMetricAverage(token, metric, period);
+                setAverageValue(value);
+            } catch (err) {
+                setAverageValue(null);
+                setTrendError(formatApiError(err));
+            }
+        };
+
+        fetchAverageValue();
+    }, [token, metric, period]);
+
+    useEffect(() => {
+        const fetchAverageSeries = async () => {
+            if (!token) {
+                setAverageSeries([]);
+                return;
+            }
+            try {
+                const series =
+                    metric === "credits"
+                        ? await apiGetAverageCreditSeries(token, period)
+                        : await apiGetMetricAverageSeries(token, metric, period);
+                setAverageSeries(series);
+            } catch (err) {
+                setAverageSeries([]);
+                setTrendError(formatApiError(err));
+            }
+        };
+
+        fetchAverageSeries();
+    }, [token, metric, period]);
 
     const getRankIcon = (index: number) => {
         if (index === 0) return <Trophy className="h-6 w-6 text-yellow-500" />;
@@ -71,7 +196,7 @@ export default function RankingPage() {
 
     const isCreditsMetric = metric === "credits";
 
-    const metricValue = (entry: UserRankingEntry) => {
+    const metricValue = useCallback((entry: UserRankingEntry) => {
         if (metric === "credits") {
             return period === "total" ? entry.credits : entry.period_credits ?? 0;
         }
@@ -82,7 +207,7 @@ export default function RankingPage() {
             return entry.average_score ?? 0;
         }
         return entry.helpful_reviews ?? 0;
-    };
+    }, [metric, period]);
 
     const metricValueLabel = () => {
         if (metric === "credits") {
@@ -90,6 +215,23 @@ export default function RankingPage() {
         }
         return period === "total" ? metricLabels[metric] : `${metricLabels[metric]}（期間内）`;
     };
+
+    const trendChartUsers = useMemo(
+        () => trendUsers.map((entry) => ({ id: entry.id, name: entry.name })),
+        [trendUsers]
+    );
+
+    const trendMetricValues = useMemo(() => {
+        if (metric === "credits") return undefined;
+        const valueMap: Record<string, number | null> = {};
+        for (const entry of trendUsers) {
+            const source =
+                rankings.find((item) => item.id === entry.id) ??
+                topRankers.find((item) => item.id === entry.id);
+            valueMap[entry.id] = source ? metricValue(source) : null;
+        }
+        return valueMap;
+    }, [metric, rankings, topRankers, trendUsers, metricValue]);
 
     return (
         <div className="min-h-screen bg-background">
@@ -141,10 +283,9 @@ export default function RankingPage() {
                             onChange={(e) => setLimit(Number(e.target.value))}
                             className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                         >
+                            <option value={3}>3件</option>
                             <option value={5}>5件</option>
                             <option value={10}>10件</option>
-                            <option value={20}>20件</option>
-                            <option value={50}>50件</option>
                         </select>
                     </div>
                 </div>
@@ -223,15 +364,48 @@ export default function RankingPage() {
                     </div>
                 )}
 
-                {/* 説明文 */}
-                <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="text-sm font-semibold text-blue-900 mb-2">ランキングについて</h3>
-                    <p className="text-sm text-blue-800">
-                        {isCreditsMetric
-                            ? "ランキングは、レビュー活動によって獲得したクレジットに基づいて算出されます。質の高いレビューを提供することで、より多くのクレジットを獲得できます。"
-                            : "ランキングは選択中の指標に基づいて算出されます。"}
-                    </p>
+                <div className="mt-8 rounded-xl border border-border bg-card p-5 shadow-sm">
+                    <div className="mb-4">
+                        <h2 className="text-lg font-semibold text-foreground">ランキングトレンド</h2>
+                        <p className="text-sm text-muted-foreground">
+                            {isCreditsMetric
+                                ? "選択中のランキング上位3名と自分のクレジット推移"
+                                : `選択中のランキング上位3名と自分の${metricLabels[metric]}比較`}
+                        </p>
+                    </div>
+                    {!token ? (
+                        <div className="rounded-lg border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+                            トレンドグラフはログイン後に表示されます。
+                        </div>
+                    ) : trendLoading ? (
+                        <div className="flex items-center justify-center py-10">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                        </div>
+                    ) : trendError ? (
+                        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                            {trendError}
+                        </div>
+                    ) : trendChartUsers.length === 0 ? (
+                        <div className="rounded-lg border border-border bg-background p-4 text-sm text-muted-foreground">
+                            表示できるユーザーがいません。
+                        </div>
+                    ) : (
+                        <div className="h-72">
+                            <RankingCreditTrendChart
+                                users={trendChartUsers}
+                                histories={trendHistory}
+                                currentUserId={user?.id}
+                                period={period}
+                                metric={metric}
+                                metricValues={trendMetricValues}
+                                metricSeries={metricSeries}
+                                averageValue={averageValue}
+                                averageSeries={averageSeries}
+                            />
+                        </div>
+                    )}
                 </div>
+
             </div>
         </div>
     );
