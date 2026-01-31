@@ -21,6 +21,18 @@ class UserSeed(TypedDict):
     credits: NotRequired[int]
 
 
+class SpecialSubmissionSpec(TypedDict):
+    """特別な提出物の仕様"""
+
+    course_title: str
+    assignment_title: str
+    student_email: str
+    days_ago: int
+    seed_name: str
+    teacher_score: int
+    feedback: str
+
+
 class CourseSeed(TypedDict):
     title: str
     description: str
@@ -78,6 +90,7 @@ def main() -> int:  # noqa: PLR0915
     from app.models.assignment import Assignment
     from app.models.course import Course
     from app.models.course import CourseEnrollment
+    from app.models.credit_history import CreditHistory
     from app.models.review import MetaReview
     from app.models.review import Review
     from app.models.review import ReviewAssignment
@@ -94,14 +107,16 @@ def main() -> int:  # noqa: PLR0915
     assert password, "TEST_USER_PASSWORD is required"
     assert settings.allow_teacher_registration, "Teacher registration must be enabled"
 
-    ta_credits_base = settings.ta_qualification_threshold + 5
-    ta_credits_low = settings.ta_qualification_threshold + 15
-    ta_credits_mid = settings.ta_qualification_threshold + 30
-    ta_credits_high = settings.ta_qualification_threshold + 45
-    ta_credits_top = settings.ta_qualification_threshold + 60
+    ta_credits_base = 60
+    ta_credits_low = 70
+    ta_credits_mid = 90
+    ta_credits_high = 105
+    ta_credits_top = 120
+    student_credits = 22
+    special_tester_credits = 48
     users: list[UserSeed] = [
         {"email": "teacher@example.com", "name": "Teacher", "role": UserRole.teacher},
-        {"email": "student@example.com", "name": "Student", "role": UserRole.student},
+        {"email": "student@example.com", "name": "Student", "role": UserRole.student, "credits": student_credits},
         {"email": "other@example.com", "name": "Other Student", "role": UserRole.student},
         {"email": "author@example.com", "name": "Author", "role": UserRole.student},
         {"email": "rev@example.com", "name": "Reviewer", "role": UserRole.student},
@@ -118,8 +133,16 @@ def main() -> int:  # noqa: PLR0915
         {"email": "grade1_student2@example.com", "name": "Grade 1 Student 2", "role": UserRole.student},
         {"email": "grade2_student1@example.com", "name": "Grade 2 Student 1", "role": UserRole.student},
         {"email": "grade3_student1@example.com", "name": "Grade 3 Student 1", "role": UserRole.student},
-        {"email": "special_tester@example.com", "name": "Special Tester", "role": UserRole.student},
-        *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
+        {
+            "email": "special_tester@example.com",
+            "name": "Special Tester",
+            "role": UserRole.student,
+            "credits": special_tester_credits,
+        },
+        {"email": "student1@example.com", "name": "Student 1", "role": UserRole.student, "credits": 28},
+        {"email": "student2@example.com", "name": "Student 2", "role": UserRole.student, "credits": 32},
+        {"email": "student3@example.com", "name": "Student 3", "role": UserRole.student, "credits": 26},
+        *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(4, 11)],
     ]
 
     created_users = 0
@@ -133,7 +156,7 @@ def main() -> int:  # noqa: PLR0915
         for u in users:
             existing = db.query(User).filter_by(email=u["email"]).first()
             if existing:
-                if "credits" in u and existing.credits < u["credits"]:
+                if "credits" in u and existing.credits != u["credits"]:
                     existing.credits = u["credits"]
                     updated_users += 1
                 skipped_users += 1
@@ -788,6 +811,188 @@ def main() -> int:  # noqa: PLR0915
                 "helpfulness": 3,
                 "quality_score": 3,
             },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "student9@example.com",
+                "reviewer_email": "special_tester@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 4,
+                "comment": "指標表示テスト用レビュー。論点が整理されています。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 5,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 2",
+                "student_email": "student10@example.com",
+                "reviewer_email": "special_tester@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 9,
+                "comment": "指標表示テスト用レビュー。具体性が高い指摘です。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 5,
+                "quality_score": 4,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student2@example.com",
+                "reviewer_email": "ta1@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 3,
+                "comment": "平均評価スコアの変化確認用。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 4,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "student3@example.com",
+                "reviewer_email": "ta4@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 5,
+                "comment": "役立つレビュー数の変化確認用。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 5,
+                "quality_score": 4,
+            },
+            {
+                "course_title": "1年生コース: 基礎",
+                "assignment_title": "1年生レビュー課題",
+                "student_email": "grade1_student1@example.com",
+                "reviewer_email": "ta3@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 2,
+                "comment": "レビュー提出数の変化確認用。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 4,
+                "quality_score": 4,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "student4@example.com",
+                "reviewer_email": "ta1@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 28,
+                "comment": "平均評価スコア推移用（高評価）。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 4,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "student5@example.com",
+                "reviewer_email": "ta1@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 14,
+                "comment": "平均評価スコア推移用（中評価）。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 3,
+                "quality_score": 3,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student6@example.com",
+                "reviewer_email": "ta1@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 6,
+                "comment": "平均評価スコア推移用（高評価）。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 5,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 2",
+                "student_email": "student7@example.com",
+                "reviewer_email": "ta2@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 25,
+                "comment": "平均評価スコア推移用（低評価）。",
+                "comment_alignment": 3,
+                "rubric_score": 3,
+                "helpfulness": 2,
+                "quality_score": 2,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student8@example.com",
+                "reviewer_email": "ta2@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 11,
+                "comment": "平均評価スコア推移用（中評価）。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 3,
+                "quality_score": 3,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "student9@example.com",
+                "reviewer_email": "ta2@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 4,
+                "comment": "平均評価スコア推移用（高評価）。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 4,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "student10@example.com",
+                "reviewer_email": "special_tester@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 22,
+                "comment": "平均評価スコア推移用（低評価）。",
+                "comment_alignment": 3,
+                "rubric_score": 3,
+                "helpfulness": 2,
+                "quality_score": 2,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 2",
+                "student_email": "student2@example.com",
+                "reviewer_email": "special_tester@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 13,
+                "comment": "平均評価スコア推移用（中評価）。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 3,
+                "quality_score": 3,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student3@example.com",
+                "reviewer_email": "special_tester@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 5,
+                "comment": "平均評価スコア推移用（高評価）。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 4,
+                "quality_score": 5,
+            },
         ]
 
         utc_now = datetime.now(jst)
@@ -819,6 +1024,122 @@ def main() -> int:  # noqa: PLR0915
                 helpfulness=spec["helpfulness"],
                 quality_score=spec["quality_score"],
             )
+
+        special_submission_specs: list[SpecialSubmissionSpec] = [
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "special_tester@example.com",
+                "days_ago": 21,
+                "seed_name": "special-review-1",
+                "teacher_score": 86,
+                "feedback": "要点が整理されており、改善点も明確です。",
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "special_tester@example.com",
+                "days_ago": 10,
+                "seed_name": "special-review-2",
+                "teacher_score": 74,
+                "feedback": "具体例が追加されるとさらに良くなります。",
+            },
+        ]
+
+        for spec in special_submission_specs:
+            course = courses_by_title[spec["course_title"]]
+            assignment = assignments_by_key[(course.id, spec["assignment_title"])]
+            student = user_lookup.get(spec["student_email"])
+            if not student:
+                continue
+            ensure_enrollment(course=course, student=student)
+            submission = ensure_submission(
+                assignment=assignment,
+                student=student,
+                seed_name=spec["seed_name"],
+            )
+            submission.created_at = utc_now - timedelta(days=spec["days_ago"])
+            ensure_teacher_scores(submission=submission, base_score=spec["teacher_score"] // 20 or 3)
+            submission.teacher_total_score = spec["teacher_score"]
+            submission.teacher_feedback = spec["feedback"]
+
+        def ensure_credit_history_series(
+            user: User,
+            total: int,
+            now: datetime,
+            deltas: list[int] | None = None,
+        ) -> None:
+            existing = db.query(CreditHistory).filter(CreditHistory.user_id == user.id).all()
+            if total <= 0:
+                return
+            if existing:
+                if any(history.reason != "seed_history" for history in existing):
+                    return
+                db.query(CreditHistory).filter(CreditHistory.user_id == user.id).delete()
+
+            if deltas:
+                safe_deltas = [max(0, int(delta)) for delta in deltas if delta > 0]
+                if not safe_deltas:
+                    return
+                offsets = [90, 60, 45, 30, 21, 14, 7, 3][-len(safe_deltas) :]
+                running_total = 0
+                for idx, delta_value in enumerate(safe_deltas):
+                    delta_original = delta_value
+                    running_total += delta_value
+                    adjusted_delta = delta_value
+                    if idx == len(safe_deltas) - 1 and running_total != total:
+                        adjusted_delta = max(0, delta_value + (total - running_total))
+                        running_total = running_total - delta_original + adjusted_delta
+                    db.add(
+                        CreditHistory(
+                            user_id=user.id,
+                            delta=adjusted_delta,
+                            total_credits=running_total,
+                            reason="seed_history",
+                            created_at=now - timedelta(days=offsets[idx]),
+                        )
+                    )
+                return
+
+            step_count = min(6, total)
+            base = total // step_count
+            remainder = total % step_count
+            offsets = [60, 45, 30, 14, 7, 2][-step_count:]
+
+            running_total = 0
+            for idx in range(step_count):
+                delta = base + (1 if idx < remainder else 0)
+                running_total += delta
+                db.add(
+                    CreditHistory(
+                        user_id=user.id,
+                        delta=delta,
+                        total_credits=running_total,
+                        reason="seed_history",
+                        created_at=now - timedelta(days=offsets[idx]),
+                    )
+                )
+
+        trend_seed_map = {
+            "ta1@example.com": [10, 20, 15, 30, 25, 20],
+            "ta2@example.com": [12, 18, 22, 10, 25, 18],
+            "ta3@example.com": [8, 16, 24, 12, 14, 16],
+            "ta4@example.com": [5, 10, 15, 8, 12, 20],
+            "ta5@example.com": [6, 9, 12, 7, 11, 15],
+            "student@example.com": [2, 4, 6, 3, 4, 3],
+            "student1@example.com": [4, 6, 5, 4, 5, 4],
+            "student2@example.com": [5, 7, 6, 4, 5, 5],
+            "student3@example.com": [3, 5, 4, 3, 5, 6],
+            "special_tester@example.com": [4, 9, 5, 12, 6, 12],
+        }
+        enrollment_course = courses_by_title.get(COURSE_TITLE_CANDIDATES[0])
+        for email, deltas in trend_seed_map.items():
+            target_user = user_lookup.get(email)
+            if not target_user:
+                continue
+            if enrollment_course:
+                ensure_enrollment(course=enrollment_course, student=target_user)
+            ensure_credit_history_series(target_user, target_user.credits, utc_now, deltas=deltas)
 
         db.commit()
 
