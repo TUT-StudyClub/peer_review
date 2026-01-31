@@ -28,13 +28,11 @@ tasks:
         desc: "Ensure Python 3.12.x is installed"
         silent: true
         cmds:
-            - |
-              uv run --python {{.PYTHON_VERSION}} python - <<'PY'
-              import sys
-              major, minor = sys.version_info[:2]
-              if (major, minor) != (3, 12):
-                  raise SystemExit(f"Expected Python 3.12.x but found {sys.version.split()[0]}")
-              PY
+            - >
+              uv run --python {{.PYTHON_VERSION}} python -c "import sys; major, minor = sys.version_info[:2];
+              expected = (3, 12); actual = (major, minor);
+              sys.stderr.write(f'Expected Python 3.12.x but found {sys.version.split()[0]}\n')
+              if actual != expected else None; sys.exit(0 if actual == expected else 1)"
 
     test:
         desc: "Run tests"
