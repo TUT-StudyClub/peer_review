@@ -113,7 +113,7 @@ export function Sidebar() {
             {/* 1. Logo Card */}
             <div className="flex h-20 shrink-0 items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 shadow-sm">
                 <Link href="/" className="flex items-center gap-3">
-                    <span className="font-[family-name:var(--font-encode-sans)] text-[24px] font-bold tracking-[-1px] text-slate-900">Peer Review</span>
+                    <span className="font-encode-sans text-[24px] font-bold tracking-[-1px] text-slate-900">Peer Review</span>
                 </Link>
             </div>
 
