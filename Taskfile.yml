@@ -1,5 +1,11 @@
 version: "3"
 
+vars:
+    PYTHON_VERSION: "3.12"
+
+env:
+    UV_PYTHON: "{{.PYTHON_VERSION}}"
+
 tasks:
     default:
         desc: "Default task"
@@ -11,6 +17,22 @@ tasks:
         deps:
             - backend:install
             - frontend:install
+
+    node:check:
+        desc: "Ensure Node.js 24.x is installed"
+        cmds:
+            - |
+              node -e "const major = process.versions.node.split('.')[0]; if (major !== '24') { console.error('Expected Node.js 24.x but found ' + process.versions.node); process.exit(1); }"
+
+    python:check:
+        desc: "Ensure Python 3.12.x is installed"
+        silent: true
+        cmds:
+            - >
+              uv run --python {{.PYTHON_VERSION}} python -c "import sys; major, minor = sys.version_info[:2];
+              expected = (3, 12); actual = (major, minor);
+              sys.stderr.write(f'Expected Python 3.12.x but found {sys.version.split()[0]}\n')
+              if actual != expected else None; sys.exit(0 if actual == expected else 1)"
 
     test:
         desc: "Run tests"
@@ -26,26 +48,56 @@ tasks:
     backend:install:
         desc: "Install backend dependencies"
         dir: backend
+        deps:
+            - python:check
         cmds:
-            - uv sync --python 3.12
+            - uv sync --frozen --python 3.12
 
     backend:test:
         desc: "Run backend tests"
         dir: backend
+        deps:
+            - python:check
         cmds:
             - uv run pytest
 
     backend:check:
         desc: "Run backend static analysis"
+        deps:
+            - python:check
+            - backend:ruff
+            - backend:ruff-format
+            - backend:ty
+
+    backend:ruff:
+        desc: "Run backend ruff check"
         dir: backend
+        deps:
+            - python:check
         cmds:
             - uv run ruff check .
+
+    backend:ruff-format:
+        desc: "Run backend ruff format check"
+        dir: backend
+        deps:
+            - python:check
+        cmds:
             - uv run ruff format --check .
+
+    backend:ty:
+        desc: "Run backend ty check"
+        dir: backend
+        deps:
+            - python:check
+        cmds:
             - uv run ty check .
 
     backend:dev:
         desc: "Run backend dev server"
         dir: backend
+        deps:
+            - python:check
         cmds:
             - uv run uvicorn app.main:app --reload
 
@@ -64,16 +116,29 @@ tasks:
     frontend:install:
         desc: "Install frontend dependencies"
         dir: frontend
+        deps:
+            - node:check
         cmds:
-            - npm install
+            - npm ci
 
     frontend:check:
         desc: "Run frontend lint"
+        deps:
+            - node:check
+            - frontend:eslint
+
+    frontend:eslint:
+        desc: "Run frontend eslint"
+        dir: frontend
+        deps:
+            - node:check
         cmds:
-            - npm --prefix frontend run lint
+            - npm run lint
 
     frontend:dev:
         desc: "Run frontend dev server"
         dir: frontend
+        deps:
+            - node:check
         cmds:
             - npm run dev

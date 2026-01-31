@@ -18,12 +18,10 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [isMounted, setIsMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-
-    setIsMounted(true);
+    setMounted(true);
   }, []);
 
   const onSubmit = async (e: FormEvent) => {
@@ -111,7 +109,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={!isMounted || loading}
+              disabled={!mounted || loading}
               className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500 px-6 py-4 text-base font-semibold text-white shadow-[0_18px_40px_-20px_rgba(37,99,235,0.75)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               ログイン

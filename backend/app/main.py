@@ -2,11 +2,11 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from alembic import command
-from alembic.config import Config
 from app.api.router import api_router
 from app.core.config import settings
 from app.db.init_db import init_db
@@ -54,10 +54,9 @@ def run_migrations() -> None:
 
     # マイグレーション状態の確認と実行
     try:
+        from alembic.script import ScriptDirectory
         from sqlalchemy import create_engine
         from sqlalchemy import text
-
-        from alembic.script import ScriptDirectory
 
         # 最新のマイグレーションリビジョンを取得
         script = ScriptDirectory.from_config(alembic_cfg)

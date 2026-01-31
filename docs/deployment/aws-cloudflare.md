@@ -8,7 +8,7 @@
 - ローカルに以下を用意
   - Git
   - Docker
-  - Node.js 18+（frontend 用）
+  - Node.js 24（frontend 用）
   - Python 3.12 + uv（backend 用）
   - AWS CLI（任意、あれば手順が短くなります）
 

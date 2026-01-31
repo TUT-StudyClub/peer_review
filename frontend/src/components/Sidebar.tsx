@@ -38,7 +38,7 @@ export function Sidebar() {
     const { user, logout } = useAuth();
 
     // ナビゲーション項目定義
-    // 順序: ホーム→授業一覧→通知→TAリクエスト→マイページ / 設定→使い方
+    // 順序: ホーム→授業一覧→通知→TAリクエスト→マイページ / 設定→FAQ
     const mainNavItems: NavItem[] = [
         {
             label: "ホーム",
@@ -90,8 +90,8 @@ export function Sidebar() {
             show: true,
         },
         {
-            label: "使い方",
-            href: "/tutorial",
+            label: "FAQ",
+            href: "/faq",
             icon: HelpCircle,
             show: true,
         },
