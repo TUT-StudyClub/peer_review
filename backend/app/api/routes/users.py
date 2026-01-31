@@ -1,10 +1,10 @@
 import enum
 from collections import defaultdict
-from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from typing import Annotated
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter
 from fastapi import Depends
@@ -45,6 +45,7 @@ router = APIRouter()
 db_dependency = Depends(get_db)
 current_user_dependency = Depends(get_current_user)
 avatar_file_dependency = File(...)
+JST = ZoneInfo("Asia/Tokyo")
 
 
 class RankingPeriod(str, enum.Enum):
@@ -61,7 +62,7 @@ class RankingMetric(str, enum.Enum):
 
 
 def _period_start(period: RankingPeriod) -> datetime:
-    now = datetime.now(UTC)
+    now = datetime.now(JST)
     if period == RankingPeriod.weekly:
         return now - timedelta(days=7)
     return now - timedelta(days=30)
@@ -275,7 +276,7 @@ def users_average_score_history(
 
     grouped: dict[tuple[UUID, datetime], list[float]] = {}
     for review, _, user in rows:
-        created = review.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        created = review.created_at.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
         key = (user.id, created)
         grouped.setdefault(key, []).append(float(review.ai_quality_score or 0))
 
@@ -410,7 +411,7 @@ def average_credit_series(
 
     date_to_user_total: dict[datetime, dict[UUID, int]] = defaultdict(dict)
     for row in rows:
-        created = row.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        created = row.created_at.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
         date_to_user_total[created][row.user_id] = row.total_credits
 
     all_dates = sorted(date_to_user_total.keys())
@@ -422,7 +423,7 @@ def average_credit_series(
         if period != RankingPeriod.total
         else min(all_dates)
     )
-    end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
     if start > end:
         return []
 
@@ -462,10 +463,10 @@ def _compute_count_series(
     for row in rows:
         if use_meta:
             _review, assignment, meta = row
-            created = meta.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            created = meta.created_at.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
         else:
             review, assignment = row
-            created = review.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+            created = review.created_at.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
         date_to_counts[created][assignment.reviewer_id] += 1
 
     if not date_to_counts:
@@ -497,7 +498,7 @@ def _compute_score_series(
     """スコア系メトリクスの時系列データを計算"""
     date_to_scores: dict[datetime, dict[UUID, list[float]]] = defaultdict(lambda: defaultdict(list))
     for review, assignment in rows:
-        created = review.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        created = review.created_at.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
         date_to_scores[created][assignment.reviewer_id].append(float(review.ai_quality_score or 0))
 
     if not date_to_scores:
@@ -544,7 +545,7 @@ def metric_average_series(
         if period != RankingPeriod.total
         else None
     )
-    end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    end = datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
 
     if metric == RankingMetric.review_count:
         rows = (

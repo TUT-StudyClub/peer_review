@@ -43,6 +43,7 @@ type TrendChartProps = {
 const MAX_LABELS = 30;
 // 「全期間」モードで扱う最大日数レンジ（直近90日を想定）。
 const TOTAL_RANGE_DAYS = 90;
+const JST_OFFSET_MINUTES = 9 * 60;
 
 const palette = [
   "#3B82F6",
@@ -62,24 +63,38 @@ function toDateKey(value: string): string {
   if (Number.isNaN(date.getTime())) {
     throw new Error(`toDateKey: invalid date value: ${value}`);
   }
-  return date.toISOString().slice(0, 10);
+  return toJstDateKey(date);
+}
+
+function toJstDateKey(date: Date): string {
+  const jst = new Date(date.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
+  return jst.toISOString().slice(0, 10);
+}
+
+function startOfJstDay(date: Date): Date {
+  const jst = new Date(date.getTime() + JST_OFFSET_MINUTES * 60 * 1000);
+  return new Date(Date.UTC(jst.getUTCFullYear(), jst.getUTCMonth(), jst.getUTCDate()));
 }
 
 function buildDateKeys(days: number): string[] {
   const keys: string[] = [];
   const now = new Date();
-  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const end = startOfJstDay(now);
   for (let i = days - 1; i >= 0; i -= 1) {
     const date = new Date(end.getTime() - i * 24 * 60 * 60 * 1000);
-    keys.push(date.toISOString().slice(0, 10));
+    keys.push(toJstDateKey(date));
   }
   return keys.slice(Math.max(0, keys.length - MAX_LABELS));
 }
 
 function formatLabel(dateKey: string): string {
-  const parsed = new Date(`${dateKey}T00:00:00Z`);
+  const parsed = new Date(`${dateKey}T00:00:00+09:00`);
   if (Number.isNaN(parsed.getTime())) return dateKey;
-  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(parsed);
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    timeZone: "Asia/Tokyo",
+  }).format(parsed);
 }
 
 function getInitialSeriesValue<T>({
