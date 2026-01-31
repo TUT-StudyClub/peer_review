@@ -169,9 +169,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
     };
   }, [avatarFile]);
 
-  useEffect(() => {
-    setSelectedCourseId(initialCourseId);
-  }, [initialCourseId]);
 
   useEffect(() => {
     if (!enrolledCourses.length) {
@@ -318,7 +315,6 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                     aria-label="アイコンを変更"
                   >
                     {showAvatarImage ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={avatarSrc}
                         alt={`${user.name} avatar`}
@@ -578,16 +574,9 @@ export default function MyPageClient({ initialCourseId }: MyPageClientProps) {
                           <div className="mt-2 text-xs text-muted-foreground">teacher: {course.teacher_name}</div>
                         ) : null}
                       </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        {course.student_count ? <div>受講生: {course.student_count}人</div> : null}
-                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <Button
-                        onClick={() => selectCourse(course.id)}
-                      >
-                        課題一覧へ
-                      </Button>
+                      <Button onClick={() => selectCourse(course.id)}>課題一覧へ</Button>
                     </div>
                   </div>
                 </li>

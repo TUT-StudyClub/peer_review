@@ -24,7 +24,7 @@ export default function RegisterPage() {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration mismatch対策のための標準パターン
+
     setIsMounted(true);
   }, []);
 

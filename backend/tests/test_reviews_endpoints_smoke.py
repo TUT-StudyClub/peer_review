@@ -60,7 +60,7 @@ def test_submit_and_receive_review_smoke():
     rubric_scores = [RubricScore(criterion_id=c.id, score=4) for c in rubric_criteria]
     payload = ReviewSubmit(comment="Nice job", rubric_scores=rubric_scores)
 
-    # Call submit_review directly with mock BackgroundTasks
+    # BackgroundTasksをモックしてsubmit_reviewを直接呼び出し
     background_tasks = BackgroundTasks()
     review = submit_review(ra.id, payload, background_tasks=background_tasks, db=db, current_user=reviewer)
 
