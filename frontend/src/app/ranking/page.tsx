@@ -231,10 +231,18 @@ export default function RankingPage() {
     const formatCourses = (values?: string[] | null) => {
         if (!values || values.length === 0) return ["未設定"];
         const cleaned = values
-            .map((value) => value.trim())
+            .map((value) => (typeof value === "string" ? value.trim() : ""))
             .filter((value) => value.length > 0);
+
+        if (cleaned.length === 0) {
+            if (process.env.NODE_ENV !== "production") {
+                console.warn("formatCourses: 無効なコースデータを検出しました", { originalValues: values });
+            }
+            return ["未設定"];
+        }
+
         const unique = Array.from(new Set(cleaned));
-        return unique.length ? unique : ["未設定"];
+        return unique;
     };
 
     return (
