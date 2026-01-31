@@ -27,7 +27,7 @@ tasks:
         desc: "Install backend dependencies"
         dir: backend
         cmds:
-            - uv sync --python 3.12
+            - uv sync --frozen --python 3.12
 
     backend:test:
         desc: "Run backend tests"
@@ -65,7 +65,7 @@ tasks:
         desc: "Install frontend dependencies"
         dir: frontend
         cmds:
-            - npm install
+            - npm ci
 
     frontend:check:
         desc: "Run frontend lint"
