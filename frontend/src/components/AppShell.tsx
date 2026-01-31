@@ -17,9 +17,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!user) {
         // 未ログイン時は既存のNavBar（の未ログイン状態）を表示
         return (
-            <div className="min-h-screen bg-background">
+            <div className="flex min-h-screen flex-col bg-background">
                 <NavBar />
-                <main className="mx-auto w-full max-w-5xl px-4 py-8">
+                <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8">
                     {children}
                 </main>
             </div>
@@ -27,14 +27,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="flex min-h-screen flex-col bg-background">
             <Sidebar />
 
             <div className="md:hidden">
                 <NavBar />
             </div>
 
-            <main className="mx-auto w-full px-4 py-8 md:pl-[354px] md:pr-6 md:pt-12 md:max-w-7xl">
+            <main className="mx-auto flex w-full flex-1 flex-col px-4 py-8 md:pl-[354px] md:pr-6 md:pt-12 md:max-w-7xl">
                 {children}
             </main>
             <NotificationBanner />
