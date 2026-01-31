@@ -65,14 +65,6 @@ function toDateKey(value: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-function isWithinRange(dateKey: string, days: number): boolean {
-  const date = new Date(`${dateKey}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return false;
-  const now = new Date();
-  const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-  return date.getTime() >= start.getTime();
-}
-
 function buildDateKeys(days: number): string[] {
   const keys: string[] = [];
   const now = new Date();
@@ -126,7 +118,6 @@ export function RankingCreditTrendChart({
   const filtered = histories.filter((item) => userIds.has(item.user_id));
   const metricSeriesFiltered = (metricSeries ?? []).filter((item) => userIds.has(item.user_id));
 
-  const dateKeys = Array.from(new Set(filtered.map((item) => toDateKey(item.created_at)))).sort();
   const baseKeys =
     period === "weekly"
       ? buildDateKeys(7)
