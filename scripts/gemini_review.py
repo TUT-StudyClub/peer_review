@@ -86,11 +86,32 @@ Changes to review:
             if "429" in process.stderr:
                 print("Rate limit hit inside subprocess. Sleeping extra 60s...")
                 time.sleep(60)
+            return None
         else:
             print(process.stdout)
+            return process.stdout
 
     except Exception as e:
         print(f"Failed to run Gemini for batch: {e}", file=sys.stderr)
+        return None
+
+
+def post_comment(pr_number, comment_body):
+    """Posts a comment to the PR using gh CLI."""
+    if not comment_body:
+        return
+    try:
+        # Check comment length (GitHub limit is ~65536 chars)
+        if len(comment_body) > 65000:
+            comment_body = (
+                comment_body[:65000] + "\n... (Comment truncated due to length)"
+            )
+
+        cmd = ["gh", "pr", "comment", pr_number, "--body", comment_body]
+        subprocess.run(cmd, check=True)
+        print("Posted comment to PR.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to post comment: {e}", file=sys.stderr)
 
 
 def main():
@@ -161,10 +182,16 @@ def main():
 
     for i, batch in enumerate(batches):
         print(f"--- Processing Batch {i + 1}/{len(batches)} ---")
-        run_gemini_review_batch(batch)
+        review_text = run_gemini_review_batch(batch)
+
+        if review_text:
+            # Post comment for each batch
+            # We add a header to identify the batch
+            file_list = ", ".join([f[0] for f in batch])
+            comment = f"## Gemini Review (Batch {i + 1}/{len(batches)})\n\n**Files:** {file_list}\n\n{review_text}"
+            post_comment(pr_number, comment)
 
         # Consistent sleep to avoid hitting RPM limits
-        # With batches, we make fewer requests, but let's safely sleep.
         time.sleep(30)
 
 
