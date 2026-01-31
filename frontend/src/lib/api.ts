@@ -1,4 +1,7 @@
 import type {
+  AdminAssignmentUpdate,
+  AdminUserPublic,
+  AdminUserUpdate,
   AssignmentCreate,
   AssignmentPublic,
   CourseCreate,
@@ -582,4 +585,52 @@ export async function apiListReviewsForSubmission(
   submissionId: string
 ): Promise<TeacherReviewPublic[]> {
   return apiFetch<TeacherReviewPublic[]>(`/submissions/${submissionId}/reviews`, {}, token);
+}
+
+export async function apiAdminListUsers(
+  token: string,
+  params: { query?: string; limit?: number; offset?: number } = {}
+): Promise<AdminUserPublic[]> {
+  const search = new URLSearchParams();
+  if (params.query) search.set("query", params.query);
+  if (typeof params.limit === "number") search.set("limit", String(params.limit));
+  if (typeof params.offset === "number") search.set("offset", String(params.offset));
+  const query = search.toString();
+  return apiFetch<AdminUserPublic[]>(`/admin/users${query ? `?${query}` : ""}`, {}, token);
+}
+
+export async function apiAdminUpdateUser(
+  token: string,
+  userId: string,
+  payload: AdminUserUpdate
+): Promise<AdminUserPublic> {
+  return apiFetch<AdminUserPublic>(
+    `/admin/users/${userId}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    token
+  );
+}
+
+export async function apiAdminListAssignments(
+  token: string,
+  params: { query?: string; limit?: number; offset?: number } = {}
+): Promise<AssignmentPublic[]> {
+  const search = new URLSearchParams();
+  if (params.query) search.set("query", params.query);
+  if (typeof params.limit === "number") search.set("limit", String(params.limit));
+  if (typeof params.offset === "number") search.set("offset", String(params.offset));
+  const query = search.toString();
+  return apiFetch<AssignmentPublic[]>(`/admin/assignments${query ? `?${query}` : ""}`, {}, token);
+}
+
+export async function apiAdminUpdateAssignment(
+  token: string,
+  assignmentId: string,
+  payload: AdminAssignmentUpdate
+): Promise<AssignmentPublic> {
+  return apiFetch<AssignmentPublic>(
+    `/admin/assignments/${assignmentId}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
+    token
+  );
 }

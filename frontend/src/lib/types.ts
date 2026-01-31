@@ -17,7 +17,42 @@ export type UserPublic = {
   rank: string;
   title: string;
   is_ta: boolean;
+  is_admin: boolean;
   created_at: string;
+};
+
+export type ReviewerSkillOverride = {
+  logic: number | null;
+  specificity: number | null;
+  structure: number | null;
+  evidence: number | null;
+  overall: number | null;
+};
+
+export type AdminUserPublic = {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  credits: number;
+  rank: string;
+  title: string;
+  is_ta: boolean;
+  is_admin: boolean;
+  created_at: string;
+  reviewer_skill_override: ReviewerSkillOverride;
+};
+
+export type AdminUserUpdate = {
+  email?: string | null;
+  name?: string | null;
+  role?: UserRole | null;
+  credits?: number | null;
+  reviewer_skill_override_logic?: number | null;
+  reviewer_skill_override_specificity?: number | null;
+  reviewer_skill_override_structure?: number | null;
+  reviewer_skill_override_evidence?: number | null;
+  reviewer_skill_override_overall?: number | null;
 };
 
 export type RankingPeriod = "total" | "monthly" | "weekly";
@@ -74,6 +109,13 @@ export type AssignmentCreate = {
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
+  due_at?: string | null;
+};
+
+export type AdminAssignmentUpdate = {
+  title?: string | null;
+  description?: string | null;
+  target_reviews_per_submission?: number | null;
   due_at?: string | null;
 };
 

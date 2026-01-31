@@ -9,6 +9,7 @@ import {
     Home,
     LogOut,
     Settings,
+    Shield,
     User as UserIcon
 } from "lucide-react";
 import { useAuth } from "@/app/providers";
@@ -75,6 +76,12 @@ export function Sidebar() {
     ];
 
     const otherNavItems: NavItem[] = [
+        {
+            label: "管理",
+            href: "/admin/users",
+            icon: Shield,
+            show: !!user?.is_admin,
+        },
         {
             label: "設定",
             href: "/settings",
