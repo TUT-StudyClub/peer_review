@@ -111,12 +111,9 @@ export function Sidebar() {
     return (
         <aside className="fixed left-0 top-0 hidden h-screen w-[330px] flex-col gap-4 overflow-hidden bg-white p-6 md:flex">
             {/* 1. Logo Card */}
-            <div className="flex h-20 shrink-0 items-center justify-start rounded-3xl border border-slate-200 bg-slate-50 px-5 shadow-sm">
+            <div className="flex h-20 shrink-0 items-center justify-center rounded-3xl border border-slate-200 bg-slate-50 px-5 shadow-sm">
                 <Link href="/" className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
-                        <Book className="h-5 w-5" />
-                    </div>
-                    <span className="text-[17px] font-bold text-slate-900">Peer Review</span>
+                    <span className="font-[family-name:var(--font-encode-sans)] text-[24px] font-bold tracking-[-1px] text-slate-900">Peer Review</span>
                 </Link>
             </div>
 
