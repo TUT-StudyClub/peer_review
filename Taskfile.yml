@@ -69,7 +69,6 @@ tasks:
 
     frontend:check:
         desc: "Run frontend lint"
-        dir: frontend
         cmds:
             - npm --prefix frontend run lint
 
