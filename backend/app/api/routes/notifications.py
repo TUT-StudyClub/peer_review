@@ -135,7 +135,6 @@ def send_test_notification(
 ):
     """テスト通知を送信する"""
     send_push_notification(
-        db=db,
         user_id=current_user.id,
         notification_type=NotificationType.REVIEW_RECEIVED,
         context={

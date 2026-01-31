@@ -85,9 +85,9 @@ def _schedule_review_notification(
         return
     assignment = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if assignment:
+        # BackgroundTasksには新しいセッションを作成する関数を渡すため、dbは渡さない
         background_tasks.add_task(
             send_push_notification,
-            db=db,
             user_id=submission.author_id,
             notification_type=NotificationType.REVIEW_RECEIVED,
             context={
@@ -335,7 +335,7 @@ def submit_review(
     db.commit()
     db.refresh(review)
 
-    # レビュー完了時に提出者へPush通知を送信
+    # レビュー完了時に提出者へPush通知をスケジュール（バックグラウンドタスク内で新しいセッションを作成）
     _schedule_review_notification(background_tasks, db, submission, review_assignment.assignment_id)
 
     review_public = ReviewPublic.model_validate(review)
