@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/app/providers";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,13 @@ type HomeStartButtonProps = {
 
 export function HomeStartButton({ className }: HomeStartButtonProps) {
   const { user, loading } = useAuth();
+  const [hydrated, setHydrated] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  if (!hydrated || loading) {
     return (
       <Button size="lg" className={className} disabled>
         読み込み中...
