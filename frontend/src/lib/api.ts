@@ -350,6 +350,9 @@ export async function apiGetUsersCreditHistory(
   userIds: string[],
   limit = 50
 ): Promise<CreditHistoryPublic[]> {
+  if (userIds.length === 0) {
+    return [];
+  }
   const params = new URLSearchParams();
   for (const userId of userIds) {
     params.append("user_ids", userId);
