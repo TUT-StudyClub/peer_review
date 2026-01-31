@@ -58,6 +58,17 @@ class CreditHistoryPublic(BaseModel):
     created_at: datetime
 
 
+class MetricHistoryPoint(BaseModel):
+    user_id: UUID
+    value: float
+    created_at: datetime
+
+
+class AverageSeriesPoint(BaseModel):
+    created_at: datetime
+    value: float
+
+
 class ReviewerSkill(BaseModel):
     logic: float
     specificity: float

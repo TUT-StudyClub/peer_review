@@ -3,12 +3,14 @@ from collections import defaultdict
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter
 from fastapi import Depends
 from fastapi import File
 from fastapi import HTTPException
+from fastapi import Query
 from fastapi import UploadFile
 from sqlalchemy import desc
 from sqlalchemy import func
@@ -16,12 +18,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.models.course import CourseEnrollment
 from app.models.credit_history import CreditHistory
 from app.models.review import MetaReview
 from app.models.review import Review
 from app.models.review import ReviewAssignment
 from app.models.user import User
+from app.schemas.user import AverageSeriesPoint
 from app.schemas.user import CreditHistoryPublic
+from app.schemas.user import MetricHistoryPoint
 from app.schemas.user import ReviewerSkill
 from app.schemas.user import UserPublic
 from app.schemas.user import UserRankingEntry
@@ -81,6 +86,351 @@ def my_credit_history(
         .limit(safe_limit)
         .all()
     )
+
+
+@router.get("/credit-history", response_model=list[CreditHistoryPublic])
+def users_credit_history(
+    user_ids: Annotated[list[UUID], Query()],
+    limit: int = 50,
+    current_user: User = current_user_dependency,
+    db: Session = db_dependency,
+) -> list[CreditHistory]:
+    safe_limit = max(1, min(limit, 200))
+    safe_user_ids = list(dict.fromkeys(user_ids))[:20]
+    if not safe_user_ids:
+        raise HTTPException(status_code=400, detail="user_ids is required")
+
+    histories: list[CreditHistory] = []
+    for user_id in safe_user_ids:
+        rows = (
+            db.query(CreditHistory)
+            .filter(CreditHistory.user_id == user_id)
+            .order_by(CreditHistory.created_at.desc())
+            .limit(safe_limit)
+            .all()
+        )
+        histories.extend(rows)
+
+    return histories
+
+
+@router.get("/average-score-history", response_model=list[MetricHistoryPoint])
+def users_average_score_history(
+    user_ids: Annotated[list[UUID], Query()],
+    period: RankingPeriod = RankingPeriod.total,
+    db: Session = db_dependency,
+) -> list[MetricHistoryPoint]:
+    safe_user_ids = list(dict.fromkeys(user_ids))[:20]
+    if not safe_user_ids:
+        raise HTTPException(status_code=400, detail="user_ids is required")
+
+    period_start = _period_start(period) if period != RankingPeriod.total else None
+    rows = (
+        db.query(Review, ReviewAssignment, User)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .join(User, User.id == ReviewAssignment.reviewer_id)
+        .filter(User.id.in_(safe_user_ids))
+        .filter(Review.ai_quality_score.isnot(None))
+    )
+    if period_start:
+        rows = rows.filter(Review.created_at >= period_start)
+
+    rows = rows.all()
+
+    grouped: dict[tuple[UUID, datetime], list[float]] = {}
+    for review, _, user in rows:
+        created = review.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        key = (user.id, created)
+        grouped.setdefault(key, []).append(float(review.ai_quality_score or 0))
+
+    points: list[MetricHistoryPoint] = []
+    for (user_id, created_at), values in grouped.items():
+        avg = sum(values) / max(len(values), 1)
+        points.append(MetricHistoryPoint(user_id=user_id, value=avg, created_at=created_at))
+
+    points.sort(key=lambda item: (item.user_id, item.created_at))
+    return points
+
+
+def _calculate_credits_average(period: RankingPeriod, enrolled_ids: list[UUID], db: Session) -> float:
+    """creditsメトリクスの平均値を計算"""
+    period_start = _period_start(period) if period != RankingPeriod.total else None
+
+    if period == RankingPeriod.total:
+        avg = db.query(func.avg(User.credits)).filter(User.id.in_(enrolled_ids)).scalar()
+        return float(avg or 0)
+
+    rows = (
+        db.query(Review, ReviewAssignment, User)
+        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+        .join(User, User.id == ReviewAssignment.reviewer_id)
+        .filter(User.id.in_(enrolled_ids))
+    )
+    if period_start:
+        rows = rows.filter(Review.created_at >= period_start)
+
+    credits_by_user = defaultdict(int)
+    for review, review_assignment, user in rows.all():
+        credit = calculate_review_credit_gain(
+            db,
+            review_assignment=review_assignment,
+            review=review,
+            reviewer=user,
+        )
+        credits_by_user[user.id] += credit.added
+
+    total = sum(credits_by_user.get(user_id, 0) for user_id in enrolled_ids)
+    return float(total / max(len(enrolled_ids), 1))
+
+
+def _calculate_metric_average(
+    metric: RankingMetric, period: RankingPeriod, enrolled_ids: list[UUID], db: Session
+) -> float:
+    """メトリクスの平均値を計算（credits以外）"""
+    period_start = _period_start(period) if period != RankingPeriod.total else None
+
+    if metric == RankingMetric.review_count:
+        rows = (
+            db.query(ReviewAssignment.reviewer_id, func.count(Review.id).label("review_count"))
+            .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+            .filter(ReviewAssignment.reviewer_id.in_(enrolled_ids))
+        )
+        if period_start:
+            rows = rows.filter(Review.created_at >= period_start)
+        rows = rows.group_by(ReviewAssignment.reviewer_id).all()
+        counts = {row[0]: int(row[1]) for row in rows}
+        total = sum(counts.get(user_id, 0) for user_id in enrolled_ids)
+        return float(total / max(len(enrolled_ids), 1))
+
+    if metric == RankingMetric.average_score:
+        rows = (
+            db.query(ReviewAssignment.reviewer_id, func.avg(Review.ai_quality_score).label("avg_score"))
+            .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+            .filter(ReviewAssignment.reviewer_id.in_(enrolled_ids))
+            .filter(Review.ai_quality_score.isnot(None))
+        )
+        if period_start:
+            rows = rows.filter(Review.created_at >= period_start)
+        rows = rows.group_by(ReviewAssignment.reviewer_id).all()
+        averages = [float(row[1]) for row in rows if row[1] is not None]
+        if not averages:
+            return 0.0
+        return float(sum(averages) / max(len(averages), 1))
+
+    # helpful_reviews
+    rows = (
+        db.query(ReviewAssignment.reviewer_id, func.count(MetaReview.id).label("helpful_reviews"))
+        .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+        .join(MetaReview, MetaReview.review_id == Review.id)
+        .filter(ReviewAssignment.reviewer_id.in_(enrolled_ids))
+        .filter(MetaReview.helpfulness >= 4)
+    )
+    if period_start:
+        rows = rows.filter(MetaReview.created_at >= period_start)
+    rows = rows.group_by(ReviewAssignment.reviewer_id).all()
+    counts = {row[0]: int(row[1]) for row in rows}
+    total = sum(counts.get(user_id, 0) for user_id in enrolled_ids)
+    return float(total / max(len(enrolled_ids), 1))
+
+
+@router.get("/metric-average")
+def metric_average(
+    metric: RankingMetric = RankingMetric.credits,
+    period: RankingPeriod = RankingPeriod.total,
+    db: Session = db_dependency,
+) -> dict[str, float]:
+    enrolled_ids = [row[0] for row in db.query(CourseEnrollment.user_id).distinct().all()]
+    if not enrolled_ids:
+        return {"average": 0.0}
+
+    if metric == RankingMetric.credits:
+        avg = _calculate_credits_average(period, enrolled_ids, db)
+        return {"average": avg}
+
+    avg = _calculate_metric_average(metric, period, enrolled_ids, db)
+    return {"average": avg}
+
+
+@router.get("/average-credit-series", response_model=list[AverageSeriesPoint])
+def average_credit_series(
+    period: RankingPeriod = RankingPeriod.total,
+    db: Session = db_dependency,
+) -> list[AverageSeriesPoint]:
+    enrolled_ids = [row[0] for row in db.query(CourseEnrollment.user_id).distinct().all()]
+    if not enrolled_ids:
+        return []
+
+    rows = (
+        db.query(CreditHistory)
+        .filter(CreditHistory.user_id.in_(enrolled_ids))
+        .order_by(CreditHistory.created_at.asc())
+        .all()
+    )
+    if not rows:
+        return []
+
+    date_to_user_total: dict[datetime, dict[UUID, int]] = defaultdict(dict)
+    for row in rows:
+        created = row.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to_user_total[created][row.user_id] = row.total_credits
+
+    all_dates = sorted(date_to_user_total.keys())
+    if not all_dates:
+        return []
+
+    start = (
+        _period_start(period).replace(hour=0, minute=0, second=0, microsecond=0)
+        if period != RankingPeriod.total
+        else min(all_dates)
+    )
+    end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    if start > end:
+        return []
+
+    running: dict[UUID, int] = {user_id: 0 for user_id in enrolled_ids}
+    points: list[AverageSeriesPoint] = []
+    cursor = start
+    while cursor <= end:
+        updates = date_to_user_total.get(cursor, {})
+        for user_id, total in updates.items():
+            running[user_id] = total
+        avg = sum(running.values()) / max(len(enrolled_ids), 1)
+        points.append(AverageSeriesPoint(created_at=cursor, value=float(avg)))
+        cursor += timedelta(days=1)
+
+    return points
+
+
+def _compute_count_series(
+    enrolled_ids: list[UUID],
+    rows: list[tuple],
+    start: datetime | None,
+    end: datetime,
+    use_meta: bool = False,
+) -> list[AverageSeriesPoint]:
+    """カウント系メトリクスの時系列データを計算"""
+    date_to_counts: dict[datetime, dict[UUID, int]] = defaultdict(lambda: defaultdict(int))
+    for row in rows:
+        if use_meta:
+            _review, assignment, meta = row
+            created = meta.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            review, assignment = row
+            created = review.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to_counts[created][assignment.reviewer_id] += 1
+
+    if not date_to_counts:
+        return []
+
+    start = start or min(date_to_counts.keys())
+    if start > end:
+        return []
+
+    running: dict[UUID, int] = {user_id: 0 for user_id in enrolled_ids}
+    points: list[AverageSeriesPoint] = []
+    cursor = start
+    while cursor <= end:
+        updates = date_to_counts.get(cursor, {})
+        for user_id, count in updates.items():
+            running[user_id] += count
+        avg = sum(running.values()) / max(len(enrolled_ids), 1)
+        points.append(AverageSeriesPoint(created_at=cursor, value=float(avg)))
+        cursor += timedelta(days=1)
+    return points
+
+
+def _compute_score_series(
+    enrolled_ids: list[UUID],
+    rows: list[tuple],
+    start: datetime | None,
+    end: datetime,
+) -> list[AverageSeriesPoint]:
+    """スコア系メトリクスの時系列データを計算"""
+    date_to_scores: dict[datetime, dict[UUID, list[float]]] = defaultdict(lambda: defaultdict(list))
+    for review, assignment in rows:
+        created = review.created_at.astimezone(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_to_scores[created][assignment.reviewer_id].append(float(review.ai_quality_score or 0))
+
+    if not date_to_scores:
+        return []
+
+    start = start or min(date_to_scores.keys())
+    if start > end:
+        return []
+
+    running_sum: dict[UUID, float] = {user_id: 0.0 for user_id in enrolled_ids}
+    running_count: dict[UUID, int] = {user_id: 0 for user_id in enrolled_ids}
+    points: list[AverageSeriesPoint] = []
+    cursor = start
+    while cursor <= end:
+        updates = date_to_scores.get(cursor, {})
+        for user_id, scores in updates.items():
+            running_sum[user_id] += sum(scores)
+            running_count[user_id] += len(scores)
+        averages = [
+            (running_sum[user_id] / running_count[user_id]) if running_count[user_id] else 0.0
+            for user_id in enrolled_ids
+        ]
+        avg = sum(averages) / max(len(enrolled_ids), 1)
+        points.append(AverageSeriesPoint(created_at=cursor, value=float(avg)))
+        cursor += timedelta(days=1)
+    return points
+
+
+@router.get("/metric-average-series", response_model=list[AverageSeriesPoint])
+def metric_average_series(
+    metric: RankingMetric = RankingMetric.credits,
+    period: RankingPeriod = RankingPeriod.total,
+    db: Session = db_dependency,
+) -> list[AverageSeriesPoint]:
+    if metric == RankingMetric.credits:
+        return average_credit_series(period=period, db=db)
+
+    enrolled_ids = [row[0] for row in db.query(CourseEnrollment.user_id).distinct().all()]
+    if not enrolled_ids:
+        return []
+
+    start = (
+        _period_start(period).replace(hour=0, minute=0, second=0, microsecond=0)
+        if period != RankingPeriod.total
+        else None
+    )
+    end = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if metric == RankingMetric.review_count:
+        rows = (
+            db.query(Review, ReviewAssignment)
+            .join(ReviewAssignment, Review.review_assignment_id == ReviewAssignment.id)
+            .filter(ReviewAssignment.reviewer_id.in_(enrolled_ids))
+            .order_by(Review.created_at.asc())
+            .all()
+        )
+        return _compute_count_series(enrolled_ids, rows, start, end)
+
+    if metric == RankingMetric.helpful_reviews:
+        rows = (
+            db.query(Review, ReviewAssignment, MetaReview)
+            .join(ReviewAssignment, Review.review_assignment_id == ReviewAssignment.id)
+            .join(MetaReview, MetaReview.review_id == Review.id)
+            .filter(ReviewAssignment.reviewer_id.in_(enrolled_ids))
+            .filter(MetaReview.helpfulness >= 4)
+            .order_by(MetaReview.created_at.asc())
+            .all()
+        )
+        return _compute_count_series(enrolled_ids, rows, start, end, use_meta=True)
+
+    if metric == RankingMetric.average_score:
+        rows = (
+            db.query(Review, ReviewAssignment)
+            .join(ReviewAssignment, Review.review_assignment_id == ReviewAssignment.id)
+            .filter(ReviewAssignment.reviewer_id.in_(enrolled_ids))
+            .filter(Review.ai_quality_score.isnot(None))
+            .order_by(Review.created_at.asc())
+            .all()
+        )
+        return _compute_score_series(enrolled_ids, rows, start, end)
+
+    return []
 
 
 @router.post("/me/avatar", response_model=UserPublic)
