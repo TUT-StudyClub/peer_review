@@ -31,7 +31,7 @@ const features = [
 
 export default function Home() {
   return (
-    <div className="flex flex-col gap-24">
+    <div className="flex flex-1 flex-col gap-24">
       <section className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] -mt-8 w-[100vw] overflow-hidden bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-sky-50 via-white to-emerald-50">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-200/50 blur-3xl motion-safe:animate-[float-slow_12s_ease-in-out_infinite]" />
@@ -82,7 +82,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] -mb-8 w-[100vw] bg-slate-950 text-slate-500">
+      <footer className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] -mb-8 mt-auto w-[100vw] bg-slate-950 text-slate-500">
         <div className="mx-auto max-w-6xl px-6 py-8 text-center text-xs">
           &copy; 2026 Peer Review. All rights reserved.
         </div>

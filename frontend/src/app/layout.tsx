@@ -34,7 +34,7 @@ export default function RootLayout({
         <AuthProvider>
           <Suspense fallback={<div>Loading...</div>}>
             <AppShell>
-              <Suspense fallback={<div className="page-transition">{children}</div>}>
+              <Suspense fallback={<div className="page-transition flex min-h-full flex-1 flex-col">{children}</div>}>
                 <PageTransition>{children}</PageTransition>
               </Suspense>
             </AppShell>
