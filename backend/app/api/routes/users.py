@@ -411,14 +411,24 @@ def average_credit_series(
     if start > end:
         return []
 
-    running: dict[UUID, int] = {user_id: 0 for user_id in enrolled_ids}
+    baseline: dict[UUID, int] = {user_id: 0 for user_id in enrolled_ids}
+    if period != RankingPeriod.total:
+        for row in rows:
+            if row.created_at >= start:
+                break
+            baseline[row.user_id] = row.total_credits
+
+    running: dict[UUID, int] = {user_id: baseline[user_id] for user_id in enrolled_ids}
     points: list[AverageSeriesPoint] = []
     cursor = start
     while cursor <= end:
         updates = date_to_user_total.get(cursor, {})
         for user_id, total in updates.items():
             running[user_id] = total
-        avg = sum(running.values()) / max(len(enrolled_ids), 1)
+        if period == RankingPeriod.total:
+            avg = sum(running.values()) / max(len(enrolled_ids), 1)
+        else:
+            avg = sum(running[user_id] - baseline[user_id] for user_id in enrolled_ids) / max(len(enrolled_ids), 1)
         points.append(AverageSeriesPoint(created_at=cursor, value=float(avg)))
         cursor += timedelta(days=1)
 
