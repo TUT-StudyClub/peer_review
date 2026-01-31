@@ -39,7 +39,7 @@ export default function RegisterPage() {
     }
     try {
       await register({ role, name, email, password });
-      router.push("/faq");
+      router.push("/tutorial");
     } catch (err) {
       setError(formatApiError(err));
     }

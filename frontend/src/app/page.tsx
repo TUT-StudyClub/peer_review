@@ -82,11 +82,6 @@ export default function Home() {
         </div>
       </section>
 
-      <footer className="relative left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] -mb-8 mt-auto w-[100vw] bg-slate-950 text-slate-500">
-        <div className="px-6 py-8 text-center text-xs">
-          &copy; 2026 Peer Review. All rights reserved.
-        </div>
-      </footer>
     </div>
   );
 }
