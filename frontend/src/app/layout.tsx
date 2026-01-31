@@ -25,6 +25,10 @@ const encodeSans = Encode_Sans({
 export const metadata: Metadata = {
   title: "Peer Review",
   description: "匿名ピアレビュー（Peer Review）",
+  icons: {
+    icon: "/icon.png", // src/app/icon.png を参照
+    apple: "/apple-icon.png", // iphoneホーム画面用アイコン
+  },
 };
 
 export default function RootLayout({
