@@ -7,29 +7,23 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
   - repo: local
     hooks:
-      - id: backend-ruff
-        name: ruff (backend)
-        entry: task backend:ruff
-        language: system
-        pass_filenames: false
-        files: ^backend/
-      - id: backend-ruff-format
-        name: ruff format (backend)
-        entry: task backend:ruff-format
-        language: system
-        pass_filenames: false
-        files: ^backend/
       - id: ty-check
         name: ty check (backend)
-        entry: task backend:ty
+        entry: uv run --directory backend ty check .
         language: system
         pass_filenames: false
         files: ^backend/
       - id: eslint-frontend
         name: eslint (frontend)
-        entry: task frontend:eslint
+        entry: npm --prefix frontend run lint
         language: system
         pass_filenames: false
         files: ^frontend/
