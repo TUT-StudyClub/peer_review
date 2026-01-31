@@ -12,12 +12,12 @@ from pydantic import Field
 class NotificationType(str, Enum):
     """通知タイプの定義"""
 
-    REVIEW_RECEIVED = "review_received"  # レビューが届いた
-    REVIEW_APPROVED = "review_approved"  # レビューが承認された
-    CREDIT_AWARDED = "credit_awarded"  # クレジットが付与された
-    SUBMISSION_DUE = "submission_due"  # 締め切り間近
-    NEW_ASSIGNMENT = "new_assignment"  # 新しい課題が割り当てられた
-    SYSTEM_INFO = "system_info"  # システム通知
+    REVIEW_RECEIVED = "review_received"
+    REVIEW_APPROVED = "review_approved"
+    CREDIT_AWARDED = "credit_awarded"
+    SUBMISSION_DUE = "submission_due"
+    NEW_ASSIGNMENT = "new_assignment"
+    SYSTEM_INFO = "system_info"
 
 
 class PushSubscriptionCreate(BaseModel):
