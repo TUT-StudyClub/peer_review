@@ -2,7 +2,6 @@
 
 import json
 import logging
-from typing import Any
 from uuid import UUID
 
 from pywebpush import WebPushException  # type: ignore
@@ -17,6 +16,10 @@ from app.schemas.notification import PushSubscriptionCreate
 from app.services.notification_content import generate_notification_content
 
 logger = logging.getLogger(__name__)
+
+
+type NotificationContext = dict[str, str | int | None]
+type SubscriptionInfo = dict[str, str | bytes | dict[str, str | bytes]]
 
 
 def create_subscription(
@@ -218,7 +221,7 @@ def _build_notification_payload(
     title: str,
     body: str,
     url: str | None,
-    context: dict[str, Any],
+    context: NotificationContext,
 ) -> str:
     """
     通知ペイロードを構築する
@@ -242,7 +245,7 @@ def _build_notification_payload(
     )
 
 
-def _build_subscription_info(subscription: PushSubscription) -> dict[str, Any]:
+def _build_subscription_info(subscription: PushSubscription) -> SubscriptionInfo:
     """
     webpush用のサブスクリプション情報を構築する
 
@@ -267,7 +270,7 @@ def _send_to_subscription(
     title: str,
     body: str,
     url: str | None,
-    context: dict[str, Any],
+    context: NotificationContext,
     vapid_claims: dict[str, str | int],
 ) -> bool:
     """
@@ -318,7 +321,7 @@ def _send_to_subscription(
 def send_push_notification(
     user_id: UUID,
     notification_type: NotificationType,
-    context: dict[str, Any],
+    context: NotificationContext,
 ) -> int:
     """
     指定ユーザーにPush通知を送信する

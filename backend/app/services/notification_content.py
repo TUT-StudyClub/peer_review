@@ -1,13 +1,13 @@
 """通知コンテンツ生成サービス"""
 
-from typing import Any
-
 from app.schemas.notification import NotificationType
+
+type NotificationContext = dict[str, str | int | None]
 
 
 def generate_notification_content(
     notification_type: NotificationType,
-    context: dict[str, Any],
+    context: NotificationContext,
 ) -> tuple[str, str, str]:
     """
     通知タイプとコンテキストデータから (Title, Body, URL) を生成する
@@ -39,10 +39,13 @@ def generate_notification_content(
             )
 
         case NotificationType.SYSTEM_INFO:
+            title = context.get("title")
+            body = context.get("body")
+            url = context.get("url")
             return (
-                context.get("title", "お知らせ"),
-                context.get("body", "重要なお知らせがあります。"),
-                context.get("url", "/"),
+                str(title) if title else "お知らせ",
+                str(body) if body else "重要なお知らせがあります。",
+                str(url) if url else "/",
             )
 
         case _:
