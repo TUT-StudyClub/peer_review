@@ -6,8 +6,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { UserRankingEntry, RankingPeriod, RankingMetric } from "@/lib/types";
 import { Trophy, Medal, Award, TrendingUp } from "lucide-react";
 
-type RankingMetric = "credits" | "review_count" | "average_score" | "helpful_reviews";
-
 export default function RankingPage() {
     const [rankings, setRankings] = useState<UserRankingEntry[]>([]);
     const [period, setPeriod] = useState<RankingPeriod>("total");
