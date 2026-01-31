@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/app/providers";
 import {
     apiGetAverageCreditSeries,
@@ -26,7 +26,6 @@ import { Trophy, Medal, Award, TrendingUp } from "lucide-react";
 export default function RankingPage() {
     const { token, user } = useAuth();
     const [rankings, setRankings] = useState<UserRankingEntry[]>([]);
-    const [topRankers, setTopRankers] = useState<UserRankingEntry[]>([]);
     const [period, setPeriod] = useState<RankingPeriod>("total");
     const [metric, setMetric] = useState<RankingMetric>("credits");
     const [limit, setLimit] = useState(10);
@@ -39,6 +38,7 @@ export default function RankingPage() {
     const [trendLoading, setTrendLoading] = useState(false);
     const [trendError, setTrendError] = useState<string | null>(null);
     const [hoveredUserId, setHoveredUserId] = useState<string | null>(null);
+    const trendRequestId = useRef(0);
 
     useEffect(() => {
         const fetchRankings = async () => {
@@ -57,105 +57,89 @@ export default function RankingPage() {
         fetchRankings();
     }, [period, limit, metric]);
 
+    const trendUsers = useMemo(() => rankings.slice(0, 3), [rankings]);
+
     useEffect(() => {
-        const fetchTopRankers = async () => {
-            try {
-                const data = await apiGetRanking(limit, period, metric);
-                setTopRankers(data);
-            } catch (err) {
-                setTopRankers([]);
-                setTrendError(formatApiError(err));
+        const requestId = ++trendRequestId.current;
+        const applyIfLatest = (fn: () => void) => {
+            if (trendRequestId.current === requestId) {
+                fn();
             }
         };
 
-        fetchTopRankers();
-    }, [period, metric, limit]);
-
-    const trendUsers = useMemo(() => topRankers, [topRankers]);
-
-    useEffect(() => {
-        const fetchTrendHistory = async () => {
-            if (!token || trendUsers.length === 0) {
+        if (!token || trendUsers.length === 0) {
+            applyIfLatest(() => {
                 setTrendHistory([]);
-                setTrendError(null);
-                return;
-            }
-            setTrendLoading(true);
-            setTrendError(null);
-            try {
-                const ids = trendUsers.map((entry) => entry.id);
-                const history = await apiGetUsersCreditHistory(token, ids, 120);
-                setTrendHistory(history);
-            } catch (err) {
-                setTrendError(formatApiError(err));
-            } finally {
-                setTrendLoading(false);
-            }
-        };
-
-        fetchTrendHistory();
-    }, [token, trendUsers]);
-
-    useEffect(() => {
-        const fetchMetricSeries = async () => {
-            if (!token || trendUsers.length === 0 || metric !== "average_score") {
                 setMetricSeries([]);
-                return;
-            }
-            setTrendLoading(true);
-            setTrendError(null);
-            try {
-                const ids = trendUsers.map((entry) => entry.id);
-                const series = await apiGetAverageScoreHistory(token, ids, period);
-                setMetricSeries(series);
-            } catch (err) {
-                setTrendError(formatApiError(err));
-            } finally {
+                setAverageValue(null);
+                setAverageSeries([]);
+                setTrendError(null);
                 setTrendLoading(false);
-            }
-        };
+            });
+            return;
+        }
 
-        fetchMetricSeries();
+        setTrendLoading(true);
+        setTrendError(null);
+
+        const ids = trendUsers.map((entry) => entry.id);
+        const historyPromise = apiGetUsersCreditHistory(token, ids, 120);
+        const metricSeriesPromise =
+            metric === "average_score"
+                ? apiGetAverageScoreHistory(token, ids, period)
+                : Promise.resolve<MetricHistoryPoint[]>([]);
+        const averageValuePromise = apiGetMetricAverage(token, metric, period);
+        const averageSeriesPromise =
+            metric === "credits"
+                ? apiGetAverageCreditSeries(token, period)
+                : apiGetMetricAverageSeries(token, metric, period);
+
+        Promise.allSettled([
+            historyPromise,
+            metricSeriesPromise,
+            averageValuePromise,
+            averageSeriesPromise,
+        ])
+            .then((results) => {
+                const [historyResult, metricSeriesResult, averageValueResult, averageSeriesResult] = results;
+                let firstError: unknown | null = null;
+
+                if (historyResult.status === "fulfilled") {
+                    applyIfLatest(() => setTrendHistory(historyResult.value));
+                } else {
+                    firstError = firstError ?? historyResult.reason;
+                    applyIfLatest(() => setTrendHistory([]));
+                }
+
+                if (metricSeriesResult.status === "fulfilled") {
+                    applyIfLatest(() => setMetricSeries(metricSeriesResult.value));
+                } else {
+                    firstError = firstError ?? metricSeriesResult.reason;
+                    applyIfLatest(() => setMetricSeries([]));
+                }
+
+                if (averageValueResult.status === "fulfilled") {
+                    applyIfLatest(() => setAverageValue(averageValueResult.value));
+                } else {
+                    firstError = firstError ?? averageValueResult.reason;
+                    applyIfLatest(() => setAverageValue(null));
+                }
+
+                if (averageSeriesResult.status === "fulfilled") {
+                    applyIfLatest(() => setAverageSeries(averageSeriesResult.value));
+                } else {
+                    firstError = firstError ?? averageSeriesResult.reason;
+                    applyIfLatest(() => setAverageSeries([]));
+                }
+
+                if (firstError) {
+                    applyIfLatest(() => setTrendError(formatApiError(firstError)));
+                }
+            })
+            .finally(() => {
+                applyIfLatest(() => setTrendLoading(false));
+            });
     }, [token, trendUsers, period, metric]);
-
-    useEffect(() => {
-        const fetchAverageValue = async () => {
-            if (!token) {
-                setAverageValue(null);
-                return;
-            }
-            try {
-                const value = await apiGetMetricAverage(token, metric, period);
-                setAverageValue(value);
-            } catch (err) {
-                setAverageValue(null);
-                setTrendError(formatApiError(err));
-            }
-        };
-
-        fetchAverageValue();
-    }, [token, metric, period]);
-
-    useEffect(() => {
-        const fetchAverageSeries = async () => {
-            if (!token) {
-                setAverageSeries([]);
-                return;
-            }
-            try {
-                const series =
-                    metric === "credits"
-                        ? await apiGetAverageCreditSeries(token, period)
-                        : await apiGetMetricAverageSeries(token, metric, period);
-                setAverageSeries(series);
-            } catch (err) {
-                setAverageSeries([]);
-                setTrendError(formatApiError(err));
-            }
-        };
-
-        fetchAverageSeries();
-    }, [token, metric, period]);
 
     const getRankIcon = (index: number) => {
         if (index === 0) return <Trophy className="h-6 w-6 text-yellow-500" />;
@@ -227,12 +211,11 @@ export default function RankingPage() {
         const valueMap: Record<string, number | null> = {};
         for (const entry of trendUsers) {
             const source =
-                rankings.find((item) => item.id === entry.id) ??
-                topRankers.find((item) => item.id === entry.id);
+                rankings.find((item) => item.id === entry.id);
             valueMap[entry.id] = source ? metricValue(source) : null;
         }
         return valueMap;
-    }, [metric, rankings, topRankers, trendUsers, metricValue]);
+    }, [metric, rankings, trendUsers, metricValue]);
 
     const formatCount = (value?: number | null) => (value == null ? "—" : value.toLocaleString());
     const formatScore = (value?: number | null) => (value == null ? "—" : value.toFixed(1));
