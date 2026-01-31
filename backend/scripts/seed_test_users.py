@@ -43,6 +43,20 @@ class CompletedAssignmentSeed(TypedDict):
     feedback: str
 
 
+class ReviewSeed(TypedDict):
+    course_title: str
+    assignment_title: str
+    student_email: str
+    reviewer_email: str
+    teacher_email: str
+    days_ago: int
+    comment: str
+    comment_alignment: int
+    rubric_score: int
+    helpfulness: int
+    quality_score: int
+
+
 # Ensure project root (backend/) is on sys.path when running as a script
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -80,15 +94,26 @@ def main() -> int:  # noqa: PLR0915
     assert password, "TEST_USER_PASSWORD is required"
     assert settings.allow_teacher_registration, "Teacher registration must be enabled"
 
-    ta_credits = settings.ta_qualification_threshold + 5
+    ta_credits_base = settings.ta_qualification_threshold + 5
+    ta_credits_low = settings.ta_qualification_threshold + 15
+    ta_credits_mid = settings.ta_qualification_threshold + 30
+    ta_credits_high = settings.ta_qualification_threshold + 45
+    ta_credits_top = settings.ta_qualification_threshold + 60
     users: list[UserSeed] = [
         {"email": "teacher1@example.com", "name": "Teacher 1", "role": UserRole.teacher},
         {"email": "teacher2@example.com", "name": "Teacher 2", "role": UserRole.teacher},
         {"email": "teacher3@example.com", "name": "Teacher 3", "role": UserRole.teacher},
-        {"email": "ta1@example.com", "name": "TA 1", "role": UserRole.student, "credits": ta_credits},
-        {"email": "ta2@example.com", "name": "TA 2", "role": UserRole.student, "credits": ta_credits},
-        {"email": "ta3@example.com", "name": "TA 3", "role": UserRole.student, "credits": ta_credits},
+        {"email": "ta1@example.com", "name": "TA 1", "role": UserRole.student, "credits": ta_credits_top},
+        {"email": "ta2@example.com", "name": "TA 2", "role": UserRole.student, "credits": ta_credits_high},
+        {"email": "ta3@example.com", "name": "TA 3", "role": UserRole.student, "credits": ta_credits_mid},
+        {"email": "ta4@example.com", "name": "TA 4", "role": UserRole.student, "credits": ta_credits_low},
+        {"email": "ta5@example.com", "name": "TA 5", "role": UserRole.student, "credits": ta_credits_base},
         {"email": "student_completed@example.com", "name": "Student Completed", "role": UserRole.student},
+        {"email": "grade1_student1@example.com", "name": "Grade 1 Student 1", "role": UserRole.student},
+        {"email": "grade1_student2@example.com", "name": "Grade 1 Student 2", "role": UserRole.student},
+        {"email": "grade2_student1@example.com", "name": "Grade 2 Student 1", "role": UserRole.student},
+        {"email": "grade3_student1@example.com", "name": "Grade 3 Student 1", "role": UserRole.student},
+        {"email": "special_tester@example.com", "name": "Special Tester", "role": UserRole.student},
         *[{"email": f"student{i}@example.com", "name": f"Student {i}", "role": UserRole.student} for i in range(1, 11)],
     ]
 
@@ -125,7 +150,9 @@ def main() -> int:  # noqa: PLR0915
 
         teacher_lookup = {
             user.email: user
-            for user in db.query(User).filter(User.email.in_(["teacher1@example.com", "teacher2@example.com"])).all()
+            for user in db.query(User)
+            .filter(User.email.in_(["teacher1@example.com", "teacher2@example.com", "teacher3@example.com"]))
+            .all()
         }
 
         course_specs: list[CourseSeed] = [
@@ -138,6 +165,21 @@ def main() -> int:  # noqa: PLR0915
                 "title": COURSE_TITLE_CANDIDATES[1],
                 "description": "データ構造の理解を深める演習",
                 "teacher_email": "teacher2@example.com",
+            },
+            {
+                "title": "1年生コース: 基礎",
+                "description": "[学年別] 1年生向けの基礎レビュー",
+                "teacher_email": "teacher1@example.com",
+            },
+            {
+                "title": "2年生コース: 応用",
+                "description": "[学年別] 2年生向けの応用レビュー",
+                "teacher_email": "teacher2@example.com",
+            },
+            {
+                "title": "3年生コース: 発展",
+                "description": "[学年別] 3年生向けの発展レビュー",
+                "teacher_email": "teacher3@example.com",
             },
             {
                 "title": "脱退パターン検証: 提出なし・割当なし",
@@ -208,6 +250,24 @@ def main() -> int:  # noqa: PLR0915
                 "days_from_now": 14,
             },
             {
+                "course_title": "1年生コース: 基礎",
+                "title": "1年生レビュー課題",
+                "description": "[学年別] レビューの基本を学ぶ",
+                "days_from_now": 6,
+            },
+            {
+                "course_title": "2年生コース: 応用",
+                "title": "2年生レビュー課題",
+                "description": "[学年別] 応用的なレビュー課題",
+                "days_from_now": 9,
+            },
+            {
+                "course_title": "3年生コース: 発展",
+                "title": "3年生レビュー課題",
+                "description": "[学年別] 発展的なレビュー課題",
+                "days_from_now": 12,
+            },
+            {
                 "course_title": "脱退パターン検証: 提出なし・割当なし",
                 "title": "テスト課題 1",
                 "description": "脱退テスト用: 提出なし × 割当なし",
@@ -257,9 +317,152 @@ def main() -> int:  # noqa: PLR0915
 
         db.commit()
 
-        # 事前完了課題の作成 (提出・採点済み)
         seed_dir = Path(settings.storage_dir) / "seed-submissions"
         seed_dir.mkdir(parents=True, exist_ok=True)
+
+        seed_emails = [u["email"] for u in users]
+        user_lookup = {user.email: user for user in db.query(User).filter(User.email.in_(seed_emails)).all()}
+
+        def ensure_enrollment(*, course: Course, student: User) -> None:
+            existing_enrollment = (
+                db.query(CourseEnrollment)
+                .filter(CourseEnrollment.course_id == course.id, CourseEnrollment.user_id == student.id)
+                .first()
+            )
+            if existing_enrollment is None:
+                db.add(CourseEnrollment(course_id=course.id, user_id=student.id))
+
+        def ensure_submission(*, assignment: Assignment, student: User, seed_name: str) -> Submission:
+            existing_submission = (
+                db.query(Submission)
+                .filter(Submission.assignment_id == assignment.id, Submission.author_id == student.id)
+                .first()
+            )
+            if existing_submission is not None:
+                return existing_submission
+
+            file_path = seed_dir / f"{assignment.id}-{student.id}-{seed_name}.md"
+            file_path.write_text(
+                "# Seed submission\n\nこの提出はランキング検証用に自動生成されました。",
+                encoding="utf-8",
+            )
+            submission = Submission(
+                assignment_id=assignment.id,
+                author_id=student.id,
+                file_type=SubmissionFileType.markdown,
+                original_filename=f"seed-{seed_name}.md",
+                storage_path=str(file_path),
+                markdown_text=file_path.read_text(encoding="utf-8"),
+                submission_text=file_path.read_text(encoding="utf-8"),
+            )
+            db.add(submission)
+            db.flush()
+            db.refresh(submission)
+            return submission
+
+        def ensure_teacher_scores(*, submission: Submission, base_score: int) -> None:
+            existing_scores = (
+                db.query(SubmissionRubricScore).filter(SubmissionRubricScore.submission_id == submission.id).all()
+            )
+            if existing_scores:
+                return
+
+            criteria = ensure_fixed_rubric(db, submission.assignment_id)
+            for criterion in criteria:
+                score = int(min(base_score, criterion.max_score))
+                db.add(
+                    SubmissionRubricScore(
+                        submission_id=submission.id,
+                        criterion_id=criterion.id,
+                        score=score,
+                    )
+                )
+
+        def ensure_review(
+            *,
+            assignment: Assignment,
+            submission: Submission,
+            reviewer: User,
+            teacher: User,
+            created_at: datetime,
+            comment: str,
+            comment_alignment: int,
+            rubric_score: int,
+            helpfulness: int,
+            quality_score: int,
+        ) -> None:
+            review_assignment = (
+                db.query(ReviewAssignment)
+                .filter(
+                    ReviewAssignment.submission_id == submission.id,
+                    ReviewAssignment.reviewer_id == reviewer.id,
+                )
+                .first()
+            )
+            if review_assignment is None:
+                review_assignment = ReviewAssignment(
+                    assignment_id=assignment.id,
+                    submission_id=submission.id,
+                    reviewer_id=reviewer.id,
+                    status=ReviewAssignmentStatus.submitted,
+                    submitted_at=created_at,
+                )
+                db.add(review_assignment)
+                db.flush()
+            else:
+                review_assignment.status = ReviewAssignmentStatus.submitted
+                review_assignment.submitted_at = created_at
+
+            review = db.query(Review).filter(Review.review_assignment_id == review_assignment.id).first()
+            if review is None:
+                review = Review(
+                    review_assignment_id=review_assignment.id,
+                    comment=comment,
+                    created_at=created_at,
+                    ai_quality_score=quality_score,
+                    ai_logic=5,
+                    ai_specificity=4,
+                    ai_comment_alignment_score=comment_alignment,
+                    ai_toxic=False,
+                )
+                db.add(review)
+                db.flush()
+            else:
+                review.comment = comment
+                review.created_at = created_at
+                review.ai_quality_score = quality_score
+                review.ai_logic = 5
+                review.ai_specificity = 4
+                review.ai_comment_alignment_score = comment_alignment
+                review.ai_toxic = False
+
+            db.query(ReviewRubricScore).filter(ReviewRubricScore.review_id == review.id).delete()
+            criteria = ensure_fixed_rubric(db, assignment.id)
+            for criterion in criteria:
+                score = int(min(rubric_score, criterion.max_score))
+                db.add(
+                    ReviewRubricScore(
+                        review_id=review.id,
+                        criterion_id=criterion.id,
+                        score=score,
+                    )
+                )
+
+            meta = db.query(MetaReview).filter(MetaReview.review_id == review.id).first()
+            if meta is None:
+                db.add(
+                    MetaReview(
+                        review_id=review.id,
+                        rater_id=teacher.id,
+                        helpfulness=helpfulness,
+                        created_at=created_at,
+                    )
+                )
+            else:
+                meta.helpfulness = helpfulness
+                meta.created_at = created_at
+
+        # 事前完了課題の作成 (提出・採点済み)
 
         assignments_by_key = {
             (assignment.course_id, assignment.title): assignment for assignment in db.query(Assignment).all()
@@ -409,6 +612,210 @@ def main() -> int:  # noqa: PLR0915
                 meta = db.query(MetaReview).filter(MetaReview.review_id == review.id).first()
                 if meta is None:
                     db.add(MetaReview(review_id=review.id, rater_id=teacher.id, helpfulness=5))
+
+        ranking_review_specs: list[ReviewSeed] = [
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "student1@example.com",
+                "reviewer_email": "ta5@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 2,
+                "comment": "週間ランキング向けのレビュー。要点が明確で読みやすいです。",
+                "comment_alignment": 5,
+                "rubric_score": 4,
+                "helpfulness": 5,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "student2@example.com",
+                "reviewer_email": "ta5@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 3,
+                "comment": "週間ランキング向けのレビュー。比較観点が整理されています。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 4,
+                "quality_score": 4,
+            },
+            {
+                "course_title": "1年生コース: 基礎",
+                "assignment_title": "1年生レビュー課題",
+                "student_email": "grade1_student1@example.com",
+                "reviewer_email": "ta5@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 1,
+                "comment": "学年別ランキング(1年)用レビュー。基礎事項が丁寧です。",
+                "comment_alignment": 5,
+                "rubric_score": 5,
+                "helpfulness": 5,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student7@example.com",
+                "reviewer_email": "ta5@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 0,
+                "comment": "デイリー向けのレビュー。短時間で要点がまとまっています。",
+                "comment_alignment": 5,
+                "rubric_score": 4,
+                "helpfulness": 4,
+                "quality_score": 5,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student3@example.com",
+                "reviewer_email": "ta4@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 5,
+                "comment": "週間ランキング比較用のレビュー。根拠の提示が良いです。",
+                "comment_alignment": 4,
+                "rubric_score": 3,
+                "helpfulness": 4,
+                "quality_score": 4,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 2",
+                "student_email": "student4@example.com",
+                "reviewer_email": "ta2@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 12,
+                "comment": "月間ランキング向けのレビュー。構成の改善点が明確です。",
+                "comment_alignment": 3,
+                "rubric_score": 3,
+                "helpfulness": 3,
+                "quality_score": 3,
+            },
+            {
+                "course_title": "2年生コース: 応用",
+                "assignment_title": "2年生レビュー課題",
+                "student_email": "grade2_student1@example.com",
+                "reviewer_email": "ta2@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 20,
+                "comment": "学年別ランキング(2年)用レビュー。応用面の指摘が適切です。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 4,
+                "quality_score": 4,
+            },
+            {
+                "course_title": "3年生コース: 発展",
+                "assignment_title": "3年生レビュー課題",
+                "student_email": "grade3_student1@example.com",
+                "reviewer_email": "ta3@example.com",
+                "teacher_email": "teacher3@example.com",
+                "days_ago": 25,
+                "comment": "学年別ランキング(3年)用レビュー。発展課題の視点が良いです。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 4,
+                "quality_score": 4,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 1",
+                "student_email": "student5@example.com",
+                "reviewer_email": "ta1@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 40,
+                "comment": "総合ランキング用の旧レビュー。改善点が簡潔に示されています。",
+                "comment_alignment": 3,
+                "rubric_score": 3,
+                "helpfulness": 2,
+                "quality_score": 3,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[1],
+                "assignment_title": "データ構造レポート 1",
+                "student_email": "student6@example.com",
+                "reviewer_email": "ta1@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 45,
+                "comment": "総合ランキング用の旧レビュー。視点は良いが具体例が不足です。",
+                "comment_alignment": 3,
+                "rubric_score": 3,
+                "helpfulness": 2,
+                "quality_score": 3,
+            },
+            {
+                "course_title": "1年生コース: 基礎",
+                "assignment_title": "1年生レビュー課題",
+                "student_email": "grade1_student2@example.com",
+                "reviewer_email": "ta4@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 8,
+                "comment": "レビュー数比較用。基礎理解は良いが改善点も多いです。",
+                "comment_alignment": 2,
+                "rubric_score": 2,
+                "helpfulness": 2,
+                "quality_score": 2,
+            },
+            {
+                "course_title": "2年生コース: 応用",
+                "assignment_title": "2年生レビュー課題",
+                "student_email": "grade2_student1@example.com",
+                "reviewer_email": "ta4@example.com",
+                "teacher_email": "teacher2@example.com",
+                "days_ago": 18,
+                "comment": "レビュー数比較用。指摘が具体的で良いです。",
+                "comment_alignment": 4,
+                "rubric_score": 4,
+                "helpfulness": 4,
+                "quality_score": 4,
+            },
+            {
+                "course_title": COURSE_TITLE_CANDIDATES[0],
+                "assignment_title": "レビュー演習 2",
+                "student_email": "student8@example.com",
+                "reviewer_email": "ta2@example.com",
+                "teacher_email": "teacher1@example.com",
+                "days_ago": 6,
+                "comment": "レビュー数比較用。全体は良いが具体性がやや不足。",
+                "comment_alignment": 3,
+                "rubric_score": 3,
+                "helpfulness": 3,
+                "quality_score": 3,
+            },
+        ]
+
+        utc_now = datetime.now(jst)
+        for spec in ranking_review_specs:
+            course = courses_by_title[spec["course_title"]]
+            assignment = assignments_by_key[(course.id, spec["assignment_title"])]
+            student = user_lookup[spec["student_email"]]
+            reviewer = user_lookup[spec["reviewer_email"]]
+            teacher = user_lookup[spec["teacher_email"]]
+
+            ensure_enrollment(course=course, student=student)
+            submission = ensure_submission(
+                assignment=assignment,
+                student=student,
+                seed_name=f"ranking-{reviewer.email}",
+            )
+            ensure_teacher_scores(submission=submission, base_score=3)
+
+            created_at = utc_now - timedelta(days=spec["days_ago"])
+            ensure_review(
+                assignment=assignment,
+                submission=submission,
+                reviewer=reviewer,
+                teacher=teacher,
+                created_at=created_at,
+                comment=spec["comment"],
+                comment_alignment=spec["comment_alignment"],
+                rubric_score=spec["rubric_score"],
+                helpfulness=spec["helpfulness"],
+                quality_score=spec["quality_score"],
+            )
+
+        db.commit()
 
         # 脱退テスト用: レビュー割り当てのみ (提出なし・割当あり)
         test_course_1 = courses_by_title.get("脱退パターン検証: 提出なし・割当あり")
