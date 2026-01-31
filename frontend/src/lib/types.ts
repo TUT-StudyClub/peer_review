@@ -34,6 +34,8 @@ export type UserRankingEntry = {
   review_count?: number;
   average_score?: number;
   helpful_reviews?: number;
+  target_course_title?: string | null;
+  target_course_titles?: string[] | null;
 };
 
 export type CreditHistoryPublic = {
