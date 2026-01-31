@@ -18,6 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.models.assignment import Assignment
+from app.models.course import Course
 from app.models.course import CourseEnrollment
 from app.models.credit_history import CreditHistory
 from app.models.review import MetaReview
@@ -62,6 +64,128 @@ def _period_start(period: RankingPeriod) -> datetime:
     if period == RankingPeriod.weekly:
         return now - timedelta(days=7)
     return now - timedelta(days=30)
+
+
+def _fetch_review_counts(
+    user_ids: list[UUID],
+    period_start: datetime | None,
+    db: Session,
+) -> dict[UUID, int]:
+    if not user_ids:
+        return {}
+
+    rows = (
+        db.query(ReviewAssignment.reviewer_id, func.count(Review.id).label("review_count"))
+        .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+        .filter(ReviewAssignment.reviewer_id.in_(user_ids))
+    )
+    if period_start:
+        rows = rows.filter(Review.created_at >= period_start)
+
+    rows = rows.group_by(ReviewAssignment.reviewer_id).all()
+    return {row[0]: int(row[1]) for row in rows}
+
+
+def _fetch_average_scores(
+    user_ids: list[UUID],
+    period_start: datetime | None,
+    db: Session,
+) -> dict[UUID, float | None]:
+    if not user_ids:
+        return {}
+
+    rows = (
+        db.query(ReviewAssignment.reviewer_id, func.avg(Review.ai_quality_score).label("average_score"))
+        .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+        .filter(ReviewAssignment.reviewer_id.in_(user_ids))
+        .filter(Review.ai_quality_score.isnot(None))
+    )
+    if period_start:
+        rows = rows.filter(Review.created_at >= period_start)
+
+    rows = rows.group_by(ReviewAssignment.reviewer_id).all()
+    return {row[0]: float(row[1]) if row[1] is not None else None for row in rows}
+
+
+def _fetch_latest_course_titles(
+    user_ids: list[UUID],
+    period_start: datetime | None,
+    db: Session,
+) -> dict[UUID, str | None]:
+    if not user_ids:
+        return {}
+
+    rows = (
+        db.query(ReviewAssignment.reviewer_id, Review.created_at, Course.title)
+        .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+        .join(Assignment, Assignment.id == ReviewAssignment.assignment_id)
+        .outerjoin(Course, Course.id == Assignment.course_id)
+        .filter(ReviewAssignment.reviewer_id.in_(user_ids))
+    )
+    if period_start:
+        rows = rows.filter(Review.created_at >= period_start)
+
+    rows = rows.order_by(Review.created_at.desc()).all()
+    latest: dict[UUID, str | None] = {}
+    for reviewer_id, _created_at, title in rows:
+        if reviewer_id in latest:
+            continue
+        latest[reviewer_id] = title
+    return latest
+
+
+def _fetch_course_titles(
+    user_ids: list[UUID],
+    period_start: datetime | None,
+    db: Session,
+) -> dict[UUID, list[str]]:
+    if not user_ids:
+        return {}
+
+    rows = (
+        db.query(ReviewAssignment.reviewer_id, Course.title)
+        .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+        .join(Assignment, Assignment.id == ReviewAssignment.assignment_id)
+        .outerjoin(Course, Course.id == Assignment.course_id)
+        .filter(ReviewAssignment.reviewer_id.in_(user_ids))
+    )
+    if period_start:
+        rows = rows.filter(Review.created_at >= period_start)
+
+    rows = rows.order_by(Review.created_at.desc()).all()
+    grouped: dict[UUID, list[str]] = defaultdict(list)
+    for reviewer_id, title in rows:
+        if not title:
+            continue
+        if title in grouped[reviewer_id]:
+            continue
+        grouped[reviewer_id].append(title)
+    return grouped
+
+
+def _attach_ranking_extras(
+    entries: list[UserRankingEntry],
+    period: RankingPeriod,
+    db: Session,
+) -> None:
+    if not entries:
+        return
+
+    user_ids = [entry.id for entry in entries]
+    period_start = _period_start(period) if period != RankingPeriod.total else None
+
+    review_counts = _fetch_review_counts(user_ids, period_start, db)
+    average_scores = _fetch_average_scores(user_ids, period_start, db)
+    latest_courses = _fetch_latest_course_titles(user_ids, period_start, db)
+    course_titles = _fetch_course_titles(user_ids, period_start, db)
+
+    for entry in entries:
+        if entry.review_count is None:
+            entry.review_count = review_counts.get(entry.id, 0)
+        if entry.average_score is None:
+            entry.average_score = average_scores.get(entry.id)
+        entry.target_course_title = latest_courses.get(entry.id)
+        entry.target_course_titles = course_titles.get(entry.id, [])
 
 
 @router.get("/me", response_model=UserPublic)
@@ -523,6 +647,7 @@ def user_ranking(
                     is_ta=u.is_ta,
                 )
             )
+        _attach_ranking_extras(results, period, db)
         return results
 
     period_start = _period_start(period) if period != RankingPeriod.total else None
@@ -569,7 +694,9 @@ def user_ranking(
                 )
             )
         ranked.sort(key=lambda item: (-item[0], item[1]))
-        return [entry for _, _, entry in ranked[:safe_limit]]
+        results = [entry for _, _, entry in ranked[:safe_limit]]
+        _attach_ranking_extras(results, period, db)
+        return results
 
     if metric == RankingMetric.review_count:
         rows = (
@@ -602,6 +729,7 @@ def user_ranking(
                     }
                 )
             )
+        _attach_ranking_extras(results, period, db)
         return results
 
     if metric == RankingMetric.average_score:
@@ -636,6 +764,7 @@ def user_ranking(
                     }
                 )
             )
+        _attach_ranking_extras(results, period, db)
         return results
 
     rows = (
@@ -670,6 +799,7 @@ def user_ranking(
                 }
             )
         )
+    _attach_ranking_extras(results, period, db)
     return results
 
 
