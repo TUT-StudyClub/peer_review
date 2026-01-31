@@ -56,9 +56,9 @@ class Settings(BaseSettings):
     cors_allow_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$"
 
     # Web Push通知設定
-    vapid_private_key: str = ""  # VAPID private key for web push
-    vapid_public_key: str = ""  # VAPID public key for web push
-    vapid_subject: str = "mailto:admin@example.com"  # VAPID subject (email)
+    vapid_private_key: str = ""
+    vapid_public_key: str = ""
+    vapid_subject: str = "mailto:admin@example.com"
 
 
 settings = Settings()
