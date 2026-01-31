@@ -91,7 +91,7 @@ export function Sidebar() {
         },
         {
             label: "FAQ",
-            href: "/tutorial",
+            href: "/faq",
             icon: HelpCircle,
             show: true,
         },
