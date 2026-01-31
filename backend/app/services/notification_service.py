@@ -5,8 +5,8 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from pywebpush import WebPushException
-from pywebpush import webpush
+from pywebpush import WebPushException  # type: ignore
+from pywebpush import webpush  # type: ignore
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -214,6 +214,107 @@ def mark_all_as_read(db: Session, user_id: UUID) -> int:
 # ==================== Push通知送信 ====================
 
 
+def _build_notification_payload(
+    title: str,
+    body: str,
+    url: str | None,
+    context: dict[str, Any],
+) -> str:
+    """
+    通知ペイロードを構築する
+
+    Args:
+        title: 通知タイトル
+        body: 通知本文
+        url: 遷移先URL
+        context: 追加コンテキスト
+
+    Returns:
+        JSON文字列化されたペイロード
+    """
+    return json.dumps(
+        {
+            "title": title,
+            "body": body,
+            "url": url,
+            "timestamp": context.get("timestamp"),
+        }
+    )
+
+
+def _build_subscription_info(subscription: PushSubscription) -> dict[str, Any]:
+    """
+    webpush用のサブスクリプション情報を構築する
+
+    Args:
+        subscription: PushSubscriptionオブジェクト
+
+    Returns:
+        webpush用のサブスクリプション情報辞書
+    """
+    return {
+        "endpoint": subscription.endpoint,
+        "keys": {
+            "p256dh": subscription.p256dh_key,
+            "auth": subscription.auth_key,
+        },
+    }
+
+
+def _send_to_subscription(
+    db: Session,
+    subscription: PushSubscription,
+    title: str,
+    body: str,
+    url: str | None,
+    context: dict[str, Any],
+    vapid_claims: dict[str, str | int],
+) -> bool:
+    """
+    個別のサブスクリプションにPush通知を送信する
+
+    Args:
+        db: データベースセッション
+        subscription: 送信先サブスクリプション
+        title: 通知タイトル
+        body: 通知本文
+        url: 遷移先URL
+        context: コンテキスト情報
+        vapid_claims: VAPID claims
+
+    Returns:
+        送信成功した場合True
+    """
+    try:
+        payload = _build_notification_payload(title, body, url, context)
+        subscription_info = _build_subscription_info(subscription)
+
+        webpush(
+            subscription_info=subscription_info,
+            data=payload,
+            vapid_private_key=settings.vapid_private_key,
+            vapid_claims=vapid_claims,
+        )
+
+        logger.info(f"Push notification sent to {subscription.endpoint[:50]}...")
+        return True
+
+    except WebPushException as e:
+        logger.error(f"Failed to send push notification: {e}")
+
+        # 410 Gone や 404 Not Found の場合は無効なサブスクリプションとして削除
+        if e.response and e.response.status_code in [404, 410]:
+            logger.info(f"Removing invalid subscription: {subscription.id}")
+            db.delete(subscription)
+            db.commit()
+
+        return False
+
+    except Exception as e:
+        logger.error(f"Unexpected error sending push notification: {e}")
+        return False
+
+
 def send_push_notification(
     user_id: UUID,
     notification_type: NotificationType,
@@ -269,43 +370,8 @@ def send_push_notification(
         # 5. 各サブスクリプションに送信
         success_count = 0
         for subscription in subscriptions:
-            try:
-                payload = json.dumps(
-                    {
-                        "title": title,
-                        "body": body,
-                        "url": url,
-                        "timestamp": context.get("timestamp"),
-                    }
-                )
-
-                webpush(
-                    subscription_info={
-                        "endpoint": subscription.endpoint,
-                        "keys": {
-                            "p256dh": subscription.p256dh_key,
-                            "auth": subscription.auth_key,
-                        },
-                    },
-                    data=payload,
-                    vapid_private_key=settings.vapid_private_key,
-                    vapid_claims=vapid_claims,
-                )
-
+            if _send_to_subscription(db, subscription, title, body, url, context, vapid_claims):
                 success_count += 1
-                logger.info(f"Push notification sent to {subscription.endpoint[:50]}...")
-
-            except WebPushException as e:
-                logger.error(f"Failed to send push notification: {e}")
-
-                # 410 Gone や 404 Not Found の場合は無効なサブスクリプションとして削除
-                if e.response and e.response.status_code in [404, 410]:
-                    logger.info(f"Removing invalid subscription: {subscription.id}")
-                    db.delete(subscription)
-                    db.commit()
-
-            except Exception as e:
-                logger.error(f"Unexpected error sending push notification: {e}")
 
         logger.info(f"Sent {success_count}/{len(subscriptions)} push notifications to user {user_id}")
         return success_count
