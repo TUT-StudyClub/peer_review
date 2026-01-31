@@ -39,6 +39,9 @@ class UserRankingEntry(BaseModel):
     title: str
     is_ta: bool
     period_credits: int | None = None
+    review_count: int | None = None
+    average_score: float | None = None
+    helpful_reviews: int | None = None
 
 
 class CreditHistoryPublic(BaseModel):
