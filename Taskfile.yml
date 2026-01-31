@@ -12,6 +12,12 @@ tasks:
             - backend:install
             - frontend:install
 
+    node:check:
+        desc: "Ensure Node.js 24.x is installed"
+        cmds:
+            - |
+              node -e "const major = process.versions.node.split('.')[0]; if (major !== '24') { console.error('Expected Node.js 24.x but found ' + process.versions.node); process.exit(1); }"
+
     test:
         desc: "Run tests"
         deps:
@@ -81,22 +87,29 @@ tasks:
     frontend:install:
         desc: "Install frontend dependencies"
         dir: frontend
+        deps:
+            - node:check
         cmds:
             - npm ci
 
     frontend:check:
         desc: "Run frontend lint"
         deps:
+            - node:check
             - frontend:eslint
 
     frontend:eslint:
         desc: "Run frontend eslint"
         dir: frontend
+        deps:
+            - node:check
         cmds:
             - npm run lint
 
     frontend:dev:
         desc: "Run frontend dev server"
         dir: frontend
+        deps:
+            - node:check
         cmds:
             - npm run dev
