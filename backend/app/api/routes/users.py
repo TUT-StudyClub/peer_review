@@ -224,18 +224,25 @@ def users_credit_history(
     if not safe_user_ids:
         raise HTTPException(status_code=400, detail="user_ids is required")
 
-    histories: list[CreditHistory] = []
-    for user_id in safe_user_ids:
-        rows = (
-            db.query(CreditHistory)
-            .filter(CreditHistory.user_id == user_id)
-            .order_by(CreditHistory.created_at.desc())
-            .limit(safe_limit)
-            .all()
+    row_number = (
+        func.row_number()
+        .over(
+            partition_by=CreditHistory.user_id,
+            order_by=CreditHistory.created_at.desc(),
         )
-        histories.extend(rows)
+        .label("rn")
+    )
+    limited_ids = (
+        db.query(CreditHistory.id.label("id"), row_number).filter(CreditHistory.user_id.in_(safe_user_ids)).subquery()
+    )
 
-    return histories
+    return (
+        db.query(CreditHistory)
+        .join(limited_ids, CreditHistory.id == limited_ids.c.id)
+        .filter(limited_ids.c.rn <= safe_limit)
+        .order_by(CreditHistory.user_id.asc(), CreditHistory.created_at.desc())
+        .all()
+    )
 
 
 @router.get("/average-score-history", response_model=list[MetricHistoryPoint])
