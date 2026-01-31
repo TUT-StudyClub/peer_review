@@ -130,7 +130,8 @@ export async function unsubscribeUser(): Promise<boolean> {
             }
         );
 
-        if (!response.ok) {
+        // 404はサブスクリプションが既に削除されている場合なので成功とみなす
+        if (!response.ok && response.status !== 404) {
             throw new Error(`Failed to delete subscription: ${response.statusText}`);
         }
 
