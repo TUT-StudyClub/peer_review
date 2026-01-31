@@ -156,7 +156,16 @@ export default function RankingPage() {
             platinum: "bg-cyan-100 text-cyan-800 border-cyan-300",
             diamond: "bg-blue-100 text-blue-800 border-blue-300",
         };
-        return colorMap[rank] || "bg-gray-100 text-gray-800 border-gray-300";
+        const color = colorMap[rank];
+
+        if (!color) {
+            if (process.env.NODE_ENV !== "production") {
+                console.warn(`[RankingPage] getRankBadgeColor に未知の rank が渡されました: "${rank}"`);
+            }
+            return "bg-gray-100 text-gray-800 border-gray-300";
+        }
+
+        return color;
     };
 
     const metricLabels: Record<RankingMetric, string> = {
