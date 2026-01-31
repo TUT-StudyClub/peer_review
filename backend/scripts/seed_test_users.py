@@ -1025,6 +1025,56 @@ def main() -> int:  # noqa: PLR0915
                 quality_score=spec["quality_score"],
             )
 
+        fallback_course = courses_by_title.get(COURSE_TITLE_CANDIDATES[0])
+        fallback_assignment = (
+            assignments_by_key.get((fallback_course.id, "レビュー演習 1")) if fallback_course else None
+        )
+        fallback_teacher = user_lookup.get("teacher1@example.com") or next(
+            (user for user in user_lookup.values() if user.role == UserRole.teacher),
+            None,
+        )
+        student_candidates = [user for user in user_lookup.values() if user.role == UserRole.student]
+
+        def has_recent_review(reviewer: User, since: datetime) -> bool:
+            return (
+                db.query(Review)
+                .join(ReviewAssignment, Review.review_assignment_id == ReviewAssignment.id)
+                .filter(ReviewAssignment.reviewer_id == reviewer.id)
+                .filter(Review.created_at >= since)
+                .first()
+                is not None
+            )
+
+        if fallback_course and fallback_assignment and fallback_teacher and student_candidates:
+            for reviewer in student_candidates:
+                if has_recent_review(reviewer, utc_now - timedelta(days=30)):
+                    continue
+
+                author = user_lookup.get("student@example.com") or student_candidates[0]
+                if author.id == reviewer.id:
+                    author = next((student for student in student_candidates if student.id != reviewer.id), author)
+
+                ensure_enrollment(course=fallback_course, student=author)
+                ensure_enrollment(course=fallback_course, student=reviewer)
+                submission = ensure_submission(
+                    assignment=fallback_assignment,
+                    student=author,
+                    seed_name=f"fallback-{reviewer.email}",
+                )
+                ensure_teacher_scores(submission=submission, base_score=3)
+                ensure_review(
+                    assignment=fallback_assignment,
+                    submission=submission,
+                    reviewer=reviewer,
+                    teacher=fallback_teacher,
+                    created_at=utc_now - timedelta(days=2),
+                    comment="未設定回避用のレビュー。",
+                    comment_alignment=4,
+                    rubric_score=3,
+                    helpfulness=3,
+                    quality_score=4,
+                )
+
         special_submission_specs: list[SpecialSubmissionSpec] = [
             {
                 "course_title": COURSE_TITLE_CANDIDATES[0],
