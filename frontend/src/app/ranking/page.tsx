@@ -38,6 +38,7 @@ export default function RankingPage() {
     const [averageSeries, setAverageSeries] = useState<AverageSeriesPoint[]>([]);
     const [trendLoading, setTrendLoading] = useState(false);
     const [trendError, setTrendError] = useState<string | null>(null);
+    const [hoveredUserId, setHoveredUserId] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchRankings = async () => {
@@ -233,6 +234,17 @@ export default function RankingPage() {
         return valueMap;
     }, [metric, rankings, topRankers, trendUsers, metricValue]);
 
+    const formatCount = (value?: number | null) => (value == null ? "—" : value.toLocaleString());
+    const formatScore = (value?: number | null) => (value == null ? "—" : value.toFixed(1));
+    const formatCourses = (values?: string[] | null) => {
+        if (!values || values.length === 0) return ["未設定"];
+        const cleaned = values
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+        const unique = Array.from(new Set(cleaned));
+        return unique.length ? unique : ["未設定"];
+    };
+
     return (
         <div className="min-h-screen bg-background">
             <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -308,10 +320,53 @@ export default function RankingPage() {
                         {rankings.map((entry, index) => (
                             <div
                                 key={entry.id}
-                                className={`bg-white border rounded-lg p-4 transition-all hover:shadow-md ${
+                                tabIndex={0}
+                                onMouseEnter={() => setHoveredUserId(entry.id)}
+                                onMouseLeave={() => setHoveredUserId((prev) => (prev === entry.id ? null : prev))}
+                                className={`relative bg-white border rounded-lg p-4 transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
                                     index < 3 ? "border-primary/30 shadow-sm" : "border-gray-200"
                                 }`}
                             >
+                                {hoveredUserId === entry.id && (
+                                    <div
+                                        className="pointer-events-none absolute left-0 top-1/2 z-20 w-72 -translate-x-full -translate-y-1/2 pr-3"
+                                    >
+                                        <div className="rounded-xl border border-black/15 bg-white p-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                                    ユーザー情報
+                                                </div>
+                                                <div className="text-[11px] font-medium text-gray-400">
+                                                    #{index + 1}
+                                                </div>
+                                            </div>
+                                            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                                                <div className="text-xs text-gray-500">Credit数</div>
+                                                <div className="text-right font-semibold text-gray-900">
+                                                    {formatCount(entry.credits)}
+                                                </div>
+                                                <div className="text-xs text-gray-500">レビュー件数</div>
+                                                <div className="text-right font-semibold text-gray-900">
+                                                    {formatCount(entry.review_count)}
+                                                </div>
+                                                <div className="text-xs text-gray-500">平均スコア</div>
+                                                <div className="text-right font-semibold text-gray-900">
+                                                    {formatScore(entry.average_score)}
+                                                </div>
+                                            </div>
+                                            <div className="my-3 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent"></div>
+                                            <div className="text-xs text-gray-500">評価対象コース</div>
+                                            <div className="mt-1 space-y-1">
+                                                {formatCourses(entry.target_course_titles ?? []).map((course) => (
+                                                    <div key={course} className="text-sm font-medium text-gray-900 truncate">
+                                                        {course}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        <div className="absolute right-0 top-1/2 h-3 w-3 -translate-y-1/2 translate-x-1/2 rotate-45 border border-black/15 bg-white shadow-sm"></div>
+                                    </div>
+                                )}
                                 <div className="flex items-center gap-4">
                                     {/* 順位アイコン */}
                                     <div className="flex-shrink-0 w-10 flex justify-center">
