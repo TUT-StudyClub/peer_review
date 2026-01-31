@@ -59,7 +59,9 @@ const averageColor = "#8B5CF6";
 
 function toDateKey(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`toDateKey: invalid date value: ${value}`);
+  }
   return date.toISOString().slice(0, 10);
 }
 
