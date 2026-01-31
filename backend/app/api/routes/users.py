@@ -11,6 +11,7 @@ from fastapi import Depends
 from fastapi import File
 from fastapi import HTTPException
 from fastapi import Query
+from fastapi import Response
 from fastapi import UploadFile
 from sqlalchemy import desc
 from sqlalchemy import func
@@ -215,14 +216,18 @@ def my_credit_history(
 @router.get("/credit-history", response_model=list[CreditHistoryPublic])
 def users_credit_history(
     user_ids: Annotated[list[UUID], Query()],
+    response: Response,
     limit: int = 50,
     current_user: User = current_user_dependency,
     db: Session = db_dependency,
 ) -> list[CreditHistory]:
     safe_limit = max(1, min(limit, 200))
-    safe_user_ids = list(dict.fromkeys(user_ids))[:20]
+    unique_user_ids = list(dict.fromkeys(user_ids))
+    safe_user_ids = unique_user_ids[:20]
     if not safe_user_ids:
         raise HTTPException(status_code=400, detail="user_ids is required")
+    if len(unique_user_ids) > 20:
+        response.headers["X-Notice"] = "user_ids is limited to 20 unique values; extra ids were ignored."
 
     row_number = (
         func.row_number()
