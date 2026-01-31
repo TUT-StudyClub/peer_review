@@ -28,6 +28,7 @@ class UserPublic(BaseModel):
     rank: str
     title: str
     is_ta: bool
+    is_admin: bool
     created_at: datetime
 
 

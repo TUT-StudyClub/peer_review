@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-change-me"
     access_token_expire_minutes: int = 60 * 24 * 7
     allow_teacher_registration: bool = True
+    admin_emails: str = ""
 
     storage_dir: str = "storage"
     storage_backend: str = "local"
