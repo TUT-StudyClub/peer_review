@@ -17,9 +17,30 @@ logger = logging.getLogger(__name__)
 
 
 def run_migrations() -> None:
-    """起動時にAlembicマイグレーションを自動実行"""
+    """起動時にAlembicマイグレーションを自動実行
+
+    注意事項:
+    - 本番環境でDDL権限がない場合は RUN_MIGRATIONS_ON_STARTUP=false を設定
+    - 複数ワーカーで起動する場合は手動マイグレーション推奨
+    - alembic.iniは __file__ からの相対パスで解決
+    """
+    if not settings.run_migrations_on_startup:
+        logger.info("Automatic migrations disabled (RUN_MIGRATIONS_ON_STARTUP=false)")
+        return
+
     try:
-        alembic_cfg = Config("alembic.ini")
+        # alembic.iniのパスを絶対パスで解決
+        # backend/app/main.py -> backend/alembic.ini
+        from pathlib import Path
+
+        backend_dir = Path(__file__).parent.parent
+        alembic_ini_path = backend_dir / "alembic.ini"
+
+        if not alembic_ini_path.exists():
+            logger.warning(f"alembic.ini not found at {alembic_ini_path}, skipping migrations")
+            return
+
+        alembic_cfg = Config(str(alembic_ini_path))
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations completed successfully")
     except Exception as e:

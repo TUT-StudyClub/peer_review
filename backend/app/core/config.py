@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     database_url: str = "sqlite:///./dev.db"
 
+    # 起動時の自動マイグレーション実行を制御
+    # 本番環境でDDL権限がない場合や手動管理が必要な場合はFalseに設定
+    run_migrations_on_startup: bool = True
+
     secret_key: str = "dev-secret-change-me"
     access_token_expire_minutes: int = 60 * 24 * 7
     allow_teacher_registration: bool = True
