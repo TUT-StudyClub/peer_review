@@ -2,12 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { apiGetRanking } from "@/lib/api";
-import type { UserRankingEntry, RankingPeriod } from "@/lib/types";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { UserRankingEntry, RankingPeriod, RankingMetric } from "@/lib/types";
 import { Trophy, Medal, Award, TrendingUp } from "lucide-react";
+
+type RankingMetric = "credits" | "review_count" | "average_score" | "helpful_reviews";
 
 export default function RankingPage() {
     const [rankings, setRankings] = useState<UserRankingEntry[]>([]);
     const [period, setPeriod] = useState<RankingPeriod>("total");
+    const [metric, setMetric] = useState<RankingMetric>("credits");
     const [limit, setLimit] = useState(10);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -17,7 +21,7 @@ export default function RankingPage() {
             setLoading(true);
             setError(null);
             try {
-                const data = await apiGetRanking(limit, period);
+                const data = await apiGetRanking(limit, period, metric);
                 setRankings(data);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "ランキングの取得に失敗しました");
@@ -27,7 +31,7 @@ export default function RankingPage() {
         };
 
         fetchRankings();
-    }, [period, limit]);
+    }, [period, limit, metric]);
 
     const getRankIcon = (index: number) => {
         if (index === 0) return <Trophy className="h-6 w-6 text-yellow-500" />;
@@ -47,6 +51,48 @@ export default function RankingPage() {
         return colorMap[rank] || "bg-gray-100 text-gray-800 border-gray-300";
     };
 
+    const metricLabels: Record<RankingMetric, string> = {
+        credits: "credit",
+        review_count: "レビューの提出数",
+        average_score: "平均評価スコア",
+        helpful_reviews: "役立つレビュー数",
+    };
+
+    const periodOptions: { value: RankingPeriod; label: string }[] = [
+        { value: "total", label: "全期間" },
+        { value: "monthly", label: "一か月" },
+        { value: "weekly", label: "一週間" },
+    ];
+
+    const metricOptions: { value: RankingMetric; label: string }[] = [
+        { value: "credits", label: metricLabels.credits },
+        { value: "review_count", label: metricLabels.review_count },
+        { value: "average_score", label: metricLabels.average_score },
+        { value: "helpful_reviews", label: metricLabels.helpful_reviews },
+    ];
+
+    const isCreditsMetric = metric === "credits";
+
+    const metricValue = (entry: UserRankingEntry) => {
+        if (metric === "credits") {
+            return period === "total" ? entry.credits : entry.period_credits ?? 0;
+        }
+        if (metric === "review_count") {
+            return entry.review_count ?? 0;
+        }
+        if (metric === "average_score") {
+            return entry.average_score ?? 0;
+        }
+        return entry.helpful_reviews ?? 0;
+    };
+
+    const metricValueLabel = () => {
+        if (metric === "credits") {
+            return period === "total" ? "総合クレジット" : "期間内クレジット";
+        }
+        return period === "total" ? metricLabels[metric] : `${metricLabels[metric]}（期間内）`;
+    };
+
     return (
         <div className="min-h-screen bg-background">
             <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -60,38 +106,31 @@ export default function RankingPage() {
                 </div>
 
                 {/* フィルターコントロール */}
-                <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap gap-2">
-                        <button
-                            onClick={() => setPeriod("total")}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                period === "total"
-                                    ? "bg-primary text-white"
-                                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                            }`}
-                        >
-                            総合
-                        </button>
-                        <button
-                            onClick={() => setPeriod("monthly")}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                period === "monthly"
-                                    ? "bg-primary text-white"
-                                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                            }`}
-                        >
-                            月間
-                        </button>
-                        <button
-                            onClick={() => setPeriod("weekly")}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                period === "weekly"
-                                    ? "bg-primary text-white"
-                                    : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50"
-                            }`}
-                        >
-                            週間
-                        </button>
+                <div className="mb-6 flex flex-col gap-6">
+                    <div className="flex flex-col gap-3">
+                        <div className="text-sm font-semibold text-gray-700">時間軸</div>
+                        <Tabs value={period} onValueChange={(value) => setPeriod(value as RankingPeriod)}>
+                            <TabsList className="grid w-full grid-cols-3">
+                                {periodOptions.map((option) => (
+                                    <TabsTrigger key={option.value} value={option.value}>
+                                        {option.label}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
+                    </div>
+
+                    <div className="flex flex-col gap-3">
+                        <div className="text-sm font-semibold text-gray-700">ランキング指標</div>
+                        <Tabs value={metric} onValueChange={(value) => setMetric(value as RankingMetric)}>
+                            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+                                {metricOptions.map((option) => (
+                                    <TabsTrigger key={option.value} value={option.value}>
+                                        {option.label}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+                        </Tabs>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -163,18 +202,21 @@ export default function RankingPage() {
                                         </div>
                                     </div>
 
-                                    {/* クレジット情報 */}
+                                    {/* 指標情報 */}
                                     <div className="flex-shrink-0 text-right">
                                         <div className="text-2xl font-bold text-primary">
-                                            {period === "total" ? entry.credits : entry.period_credits ?? 0}
+                                            {metric === "average_score"
+                                                ? metricValue(entry).toFixed(1)
+                                                : metricValue(entry)}
                                         </div>
-                                        <div className="text-xs text-gray-500">
-                                            {period === "total" ? "総合クレジット" : "期間内クレジット"}
-                                        </div>
-                                        {period !== "total" && (
+                                        <div className="text-xs text-gray-500">{metricValueLabel()}</div>
+                                        {period !== "total" && metric !== "credits" && (
                                             <div className="text-xs text-gray-400 mt-1">
-                                                (総合: {entry.credits})
+                                                (総合クレジット: {entry.credits})
                                             </div>
+                                        )}
+                                        {period !== "total" && metric === "credits" && (
+                                            <div className="text-xs text-gray-400 mt-1">(総合: {entry.credits})</div>
                                         )}
                                     </div>
                                 </div>
@@ -187,8 +229,9 @@ export default function RankingPage() {
                 <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-blue-900 mb-2">ランキングについて</h3>
                     <p className="text-sm text-blue-800">
-                        ランキングは、レビュー活動によって獲得したクレジットに基づいて算出されます。
-                        質の高いレビューを提供することで、より多くのクレジットを獲得できます。
+                        {isCreditsMetric
+                            ? "ランキングは、レビュー活動によって獲得したクレジットに基づいて算出されます。質の高いレビューを提供することで、より多くのクレジットを獲得できます。"
+                            : "ランキングは選択中の指標に基づいて算出されます。"}
                     </p>
                 </div>
             </div>

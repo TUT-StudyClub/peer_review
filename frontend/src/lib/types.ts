@@ -21,6 +21,7 @@ export type UserPublic = {
 };
 
 export type RankingPeriod = "total" | "monthly" | "weekly";
+export type RankingMetric = "credits" | "review_count" | "average_score" | "helpful_reviews";
 
 export type UserRankingEntry = {
   id: string;
@@ -30,6 +31,9 @@ export type UserRankingEntry = {
   title: string;
   is_ta: boolean;
   period_credits?: number;
+  review_count?: number;
+  average_score?: number;
+  helpful_reviews?: number;
 };
 
 export type CreditHistoryPublic = {
