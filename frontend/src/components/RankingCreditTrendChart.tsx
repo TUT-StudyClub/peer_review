@@ -38,7 +38,10 @@ type TrendChartProps = {
   averageSeries?: AverageSeriesPoint[];
 };
 
+// X軸に表示するラベル数の上限（最大30件）。
+// 週次/全期間でもデータ側で間引き・集約されることを前提に、表示負荷を抑える目的で固定値としている。
 const MAX_LABELS = 30;
+// 「全期間」モードで扱う最大日数レンジ（直近90日を想定）。
 const TOTAL_RANGE_DAYS = 90;
 
 const palette = [
