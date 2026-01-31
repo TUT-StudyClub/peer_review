@@ -10,11 +10,14 @@ from fastapi import Depends
 from fastapi import File
 from fastapi import HTTPException
 from fastapi import UploadFile
+from sqlalchemy import desc
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.session import get_db
 from app.models.credit_history import CreditHistory
+from app.models.review import MetaReview
 from app.models.review import Review
 from app.models.review import ReviewAssignment
 from app.models.user import User
@@ -40,6 +43,13 @@ class RankingPeriod(str, enum.Enum):
     total = "total"
     weekly = "weekly"
     monthly = "monthly"
+
+
+class RankingMetric(str, enum.Enum):
+    credits = "credits"
+    review_count = "review_count"
+    average_score = "average_score"
+    helpful_reviews = "helpful_reviews"
 
 
 def _period_start(period: RankingPeriod) -> datetime:
@@ -137,10 +147,11 @@ def get_avatar(
 def user_ranking(
     limit: int = 5,
     period: RankingPeriod = RankingPeriod.total,
+    metric: RankingMetric = RankingMetric.credits,
     db: Session = db_dependency,
 ) -> list[UserRankingEntry]:
     safe_limit = max(1, min(limit, 50))
-    if period == RankingPeriod.total:
+    if metric == RankingMetric.credits and period == RankingPeriod.total:
         users = (
             db.query(User)
             .filter(User.credits >= settings.ta_qualification_threshold)
@@ -164,49 +175,152 @@ def user_ranking(
             )
         return results
 
-    period_start = _period_start(period)
-    rows = (
-        db.query(Review, ReviewAssignment, User)
-        .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
-        .join(User, User.id == ReviewAssignment.reviewer_id)
-        .filter(Review.created_at >= period_start)
-        .filter(User.credits >= settings.ta_qualification_threshold)
-        .all()
-    )
+    period_start = _period_start(period) if period != RankingPeriod.total else None
 
-    credits_by_user = defaultdict(int)
-    user_by_id = {}
-    for review, review_assignment, user in rows:
-        credit = calculate_review_credit_gain(
-            db,
-            review_assignment=review_assignment,
-            review=review,
-            reviewer=user,
+    if metric == RankingMetric.credits:
+        rows = (
+            db.query(Review, ReviewAssignment, User)
+            .join(ReviewAssignment, ReviewAssignment.id == Review.review_assignment_id)
+            .join(User, User.id == ReviewAssignment.reviewer_id)
+            .filter(User.credits >= settings.ta_qualification_threshold)
         )
-        credits_by_user[user.id] += credit.added
-        user_by_id[user.id] = user
+        if period_start:
+            rows = rows.filter(Review.created_at >= period_start)
 
-    ranked: list[tuple[int, datetime, UserRankingEntry]] = []
-    for user_id, period_credits in credits_by_user.items():
-        user = user_by_id[user_id]
+        credits_by_user = defaultdict(int)
+        user_by_id = {}
+        for review, review_assignment, user in rows.all():
+            credit = calculate_review_credit_gain(
+                db,
+                review_assignment=review_assignment,
+                review=review,
+                reviewer=user,
+            )
+            credits_by_user[user.id] += credit.added
+            user_by_id[user.id] = user
+
+        ranked: list[tuple[int, datetime, UserRankingEntry]] = []
+        for user_id, period_credits in credits_by_user.items():
+            user = user_by_id[user_id]
+            rank = get_user_rank(user.credits)
+            ranked.append(
+                (
+                    period_credits,
+                    user.created_at,
+                    UserRankingEntry(
+                        id=user.id,
+                        name=user.name,
+                        credits=user.credits,
+                        rank=rank.key,
+                        title=rank.title,
+                        is_ta=user.is_ta,
+                        period_credits=period_credits,
+                    ),
+                )
+            )
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return [entry for _, _, entry in ranked[:safe_limit]]
+
+    if metric == RankingMetric.review_count:
+        rows = (
+            db.query(
+                User,
+                func.count(Review.id).label("review_count"),
+            )
+            .join(ReviewAssignment, ReviewAssignment.reviewer_id == User.id)
+            .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+            .filter(User.credits >= settings.ta_qualification_threshold)
+        )
+        if period_start:
+            rows = rows.filter(Review.created_at >= period_start)
+
+        rows = rows.group_by(User.id).order_by(desc("review_count"), User.created_at.asc()).limit(safe_limit).all()
+
+        results: list[UserRankingEntry] = []
+        for user, review_count in rows:
+            rank = get_user_rank(user.credits)
+            results.append(
+                UserRankingEntry.model_validate(
+                    {
+                        "id": user.id,
+                        "name": user.name,
+                        "credits": user.credits,
+                        "rank": rank.key,
+                        "title": rank.title,
+                        "is_ta": user.is_ta,
+                        "review_count": int(review_count),
+                    }
+                )
+            )
+        return results
+
+    if metric == RankingMetric.average_score:
+        rows = (
+            db.query(
+                User,
+                func.avg(Review.ai_quality_score).label("average_score"),
+            )
+            .join(ReviewAssignment, ReviewAssignment.reviewer_id == User.id)
+            .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+            .filter(User.credits >= settings.ta_qualification_threshold)
+            .filter(Review.ai_quality_score.isnot(None))
+        )
+        if period_start:
+            rows = rows.filter(Review.created_at >= period_start)
+
+        rows = rows.group_by(User.id).order_by(desc("average_score"), User.created_at.asc()).limit(safe_limit).all()
+
+        results: list[UserRankingEntry] = []
+        for user, average_score in rows:
+            rank = get_user_rank(user.credits)
+            results.append(
+                UserRankingEntry.model_validate(
+                    {
+                        "id": user.id,
+                        "name": user.name,
+                        "credits": user.credits,
+                        "rank": rank.key,
+                        "title": rank.title,
+                        "is_ta": user.is_ta,
+                        "average_score": float(average_score) if average_score is not None else None,
+                    }
+                )
+            )
+        return results
+
+    rows = (
+        db.query(
+            User,
+            func.count(MetaReview.id).label("helpful_reviews"),
+        )
+        .join(ReviewAssignment, ReviewAssignment.reviewer_id == User.id)
+        .join(Review, Review.review_assignment_id == ReviewAssignment.id)
+        .join(MetaReview, MetaReview.review_id == Review.id)
+        .filter(User.credits >= settings.ta_qualification_threshold)
+        .filter(MetaReview.helpfulness >= 4)
+    )
+    if period_start:
+        rows = rows.filter(MetaReview.created_at >= period_start)
+
+    rows = rows.group_by(User.id).order_by(desc("helpful_reviews"), User.created_at.asc()).limit(safe_limit).all()
+
+    results: list[UserRankingEntry] = []
+    for user, helpful_reviews in rows:
         rank = get_user_rank(user.credits)
-        ranked.append(
-            (
-                period_credits,
-                user.created_at,
-                UserRankingEntry(
-                    id=user.id,
-                    name=user.name,
-                    credits=user.credits,
-                    rank=rank.key,
-                    title=rank.title,
-                    is_ta=user.is_ta,
-                    period_credits=period_credits,
-                ),
+        results.append(
+            UserRankingEntry.model_validate(
+                {
+                    "id": user.id,
+                    "name": user.name,
+                    "credits": user.credits,
+                    "rank": rank.key,
+                    "title": rank.title,
+                    "is_ta": user.is_ta,
+                    "helpful_reviews": int(helpful_reviews),
+                }
             )
         )
-    ranked.sort(key=lambda item: (-item[0], item[1]))
-    return [entry for _, _, entry in ranked[:safe_limit]]
+    return results
 
 
 @router.get("/me/reviewer-skill", response_model=ReviewerSkill)
