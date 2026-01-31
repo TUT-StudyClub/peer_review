@@ -1,9 +1,9 @@
 """通知関連のデータベースモデル"""
 
-from datetime import UTC
 from datetime import datetime
 from uuid import UUID
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Boolean
 from sqlalchemy import DateTime
@@ -31,7 +31,7 @@ class PushSubscription(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        default=lambda: datetime.now(UTC),
+        default=lambda: datetime.now(ZoneInfo("Asia/Tokyo")),
     )
 
     def __repr__(self) -> str:
@@ -53,7 +53,7 @@ class NotificationHistory(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
-        default=lambda: datetime.now(UTC),
+        default=lambda: datetime.now(ZoneInfo("Asia/Tokyo")),
     )
 
     def __repr__(self) -> str:
