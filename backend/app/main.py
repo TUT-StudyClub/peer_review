@@ -55,8 +55,8 @@ def run_migrations() -> None:
     # マイグレーション状態の確認と実行
     try:
         from alembic.script import ScriptDirectory
-        from sqlalchemy import create_engine
-        from sqlalchemy import text
+        from sqlmodel import create_engine
+        from sqlmodel import text
 
         # 最新のマイグレーションリビジョンを取得
         script = ScriptDirectory.from_config(alembic_cfg)

@@ -143,7 +143,7 @@ def get_notification_history(
     return (
         db.query(NotificationHistory)
         .filter(NotificationHistory.user_id == user_id)
-        .order_by(NotificationHistory.created_at.desc())
+        .order_by(NotificationHistory.created_at.desc())  # type: ignore
         .offset(offset)
         .limit(limit)
         .all()
