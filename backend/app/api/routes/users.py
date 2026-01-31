@@ -285,6 +285,9 @@ def users_average_score_history(
 
 def _calculate_credits_average(period: RankingPeriod, enrolled_ids: list[UUID], db: Session) -> float:
     """creditsメトリクスの平均値を計算"""
+    if not enrolled_ids:
+        raise ValueError("enrolled_ids is empty")
+
     period_start = _period_start(period) if period != RankingPeriod.total else None
 
     if period == RankingPeriod.total:
