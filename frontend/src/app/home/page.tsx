@@ -73,7 +73,7 @@ export default function HomePage() {
     }
 
     return (
-        <div className="space-y-8 max-w-5xl mx-auto">
+        <div className="space-y-8">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">ホーム</h1>
                 <p className="text-muted-foreground mt-1">

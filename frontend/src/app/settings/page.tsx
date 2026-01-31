@@ -52,7 +52,7 @@ export default function SettingsPage() {
     const status = getNotificationStatus();
 
     return (
-        <div className="max-w-2xl mx-auto p-6 space-y-8">
+        <div className="space-y-8">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">設定</h1>
                 <p className="text-muted-foreground mt-1">アプリの設定を管理します</p>
