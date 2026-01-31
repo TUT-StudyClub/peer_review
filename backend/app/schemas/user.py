@@ -42,6 +42,8 @@ class UserRankingEntry(BaseModel):
     review_count: int | None = None
     average_score: float | None = None
     helpful_reviews: int | None = None
+    target_course_title: str | None = None
+    target_course_titles: list[str] | None = None
 
 
 class CreditHistoryPublic(BaseModel):
