@@ -9,7 +9,6 @@ import {
     Home,
     LogOut,
     Settings,
-    Star,
     User as UserIcon
 } from "lucide-react";
 import { useAuth } from "@/app/providers";
@@ -38,7 +37,7 @@ export function Sidebar() {
     const { user, logout } = useAuth();
 
     // ナビゲーション項目定義
-    // 順序: ホーム→授業一覧→通知→TAリクエスト→マイページ / 設定→FAQ
+    // 順序: ホーム→授業一覧→通知→マイページ / 設定→FAQ
     const mainNavItems: NavItem[] = [
         {
             label: "ホーム",
@@ -66,13 +65,6 @@ export function Sidebar() {
             icon: Bell,
             show: true,
             // badge: 2, // 固定値（要件により）
-        },
-        {
-            label: "TAリクエスト",
-            href: "/ta/requests",
-            icon: Star,
-            show: user?.is_ta === true,
-            className: "text-amber-600", // アイコン色強調
         },
         {
             label: "マイページ",
