@@ -26,6 +26,7 @@ tasks:
 
     python:check:
         desc: "Ensure Python 3.12.x is installed"
+        silent: true
         cmds:
             - |
               uv run --python {{.PYTHON_VERSION}} python - <<'PY'
