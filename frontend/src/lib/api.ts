@@ -5,6 +5,8 @@ import type {
   CourseEnrollmentPublic,
   CoursePublic,
   CreditHistoryPublic,
+  MetricHistoryPoint,
+  AverageSeriesPoint,
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
@@ -341,6 +343,64 @@ export async function apiGetMyCreditHistory(token: string, limit = 50): Promise<
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   return apiFetch<CreditHistoryPublic[]>(`/users/me/credit-history?${params.toString()}`, {}, token);
+}
+
+export async function apiGetUsersCreditHistory(
+  token: string,
+  userIds: string[],
+  limit = 50
+): Promise<CreditHistoryPublic[]> {
+  const params = new URLSearchParams();
+  for (const userId of userIds) {
+    params.append("user_ids", userId);
+  }
+  params.set("limit", String(limit));
+  return apiFetch<CreditHistoryPublic[]>(`/users/credit-history?${params.toString()}`, {}, token);
+}
+
+export async function apiGetAverageScoreHistory(
+  token: string,
+  userIds: string[],
+  period: RankingPeriod
+): Promise<MetricHistoryPoint[]> {
+  const params = new URLSearchParams();
+  for (const userId of userIds) {
+    params.append("user_ids", userId);
+  }
+  params.set("period", period);
+  return apiFetch<MetricHistoryPoint[]>(`/users/average-score-history?${params.toString()}`, {}, token);
+}
+
+export async function apiGetMetricAverage(
+  token: string,
+  metric: RankingMetric,
+  period: RankingPeriod
+): Promise<number> {
+  const params = new URLSearchParams();
+  params.set("metric", metric);
+  params.set("period", period);
+  const res = await apiFetch<{ average: number }>(`/users/metric-average?${params.toString()}`, {}, token);
+  return res.average;
+}
+
+export async function apiGetAverageCreditSeries(
+  token: string,
+  period: RankingPeriod
+): Promise<AverageSeriesPoint[]> {
+  const params = new URLSearchParams();
+  params.set("period", period);
+  return apiFetch<AverageSeriesPoint[]>(`/users/average-credit-series?${params.toString()}`, {}, token);
+}
+
+export async function apiGetMetricAverageSeries(
+  token: string,
+  metric: RankingMetric,
+  period: RankingPeriod
+): Promise<AverageSeriesPoint[]> {
+  const params = new URLSearchParams();
+  params.set("metric", metric);
+  params.set("period", period);
+  return apiFetch<AverageSeriesPoint[]>(`/users/metric-average-series?${params.toString()}`, {}, token);
 }
 
 export async function apiUploadAvatar(token: string, file: File): Promise<UserPublic> {
