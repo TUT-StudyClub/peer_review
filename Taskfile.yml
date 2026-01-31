@@ -96,8 +96,6 @@ tasks:
     backend:dev:
         desc: "Run backend dev server"
         dir: backend
-        deps:
-            - python:check
         cmds:
             - uv run uvicorn app.main:app --reload
 
