@@ -9,7 +9,7 @@ export function PageTransition({ children }: { children: React.ReactNode }) {
   const key = query ? `${pathname}?${query}` : pathname;
 
   return (
-    <div key={key} className="page-transition">
+    <div key={key} className="page-transition flex min-h-full flex-1 flex-col">
       {children}
     </div>
   );
