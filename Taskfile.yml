@@ -1,5 +1,11 @@
 version: "3"
 
+vars:
+    PYTHON_VERSION: "3.12"
+
+env:
+    UV_PYTHON: "{{.PYTHON_VERSION}}"
+
 tasks:
     default:
         desc: "Default task"
@@ -20,9 +26,10 @@ tasks:
 
     python:check:
         desc: "Ensure Python 3.12.x is installed"
+        silent: true
         cmds:
             - |
-              python3 - <<'PY'
+              uv run --python {{.PYTHON_VERSION}} python - <<'PY'
               import sys
               major, minor = sys.version_info[:2]
               if (major, minor) != (3, 12):
