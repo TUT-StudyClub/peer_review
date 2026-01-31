@@ -114,6 +114,12 @@ export async function unsubscribeUser(): Promise<boolean> {
 
         // 2. サーバー側のサブスクリプションを削除
         const token = localStorage.getItem('pure-review-token') ?? sessionStorage.getItem('pure-review-token');
+
+        if (!token) {
+            console.warn('No auth token found - skipping server-side unsubscribe');
+            return true;
+        }
+
         const response = await fetch(
             `${API_BASE_URL}/notifications/unsubscribe?endpoint=${encodeURIComponent(subscription.endpoint)}`,
             {
