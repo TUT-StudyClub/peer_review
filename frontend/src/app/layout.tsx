@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Encode_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "./providers";
 import { AppShell } from "@/components/AppShell";
@@ -16,6 +16,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const encodeSans = Encode_Sans({
+  variable: "--font-encode-sans",
+  subsets: ["latin"],
+  weight: ["400", "700"],
+});
+
 export const metadata: Metadata = {
   title: "Peer Review",
   description: "匿名ピアレビュー（Peer Review）",
@@ -29,12 +35,12 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${encodeSans.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
       >
         <AuthProvider>
           <Suspense fallback={<div>Loading...</div>}>
             <AppShell>
-              <Suspense fallback={<div className="page-transition flex min-h-full flex-1 flex-col">{children}</div>}>
+              <Suspense fallback={<div className="page-transition">{children}</div>}>
                 <PageTransition>{children}</PageTransition>
               </Suspense>
             </AppShell>
