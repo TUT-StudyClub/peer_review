@@ -71,7 +71,7 @@ tasks:
         desc: "Run frontend lint"
         dir: frontend
         cmds:
-            - npm run lint
+            - npm --prefix frontend run lint
 
     frontend:dev:
         desc: "Run frontend dev server"
