@@ -37,8 +37,8 @@ export default function Home() {
           <div className="absolute -top-24 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-emerald-200/50 blur-3xl motion-safe:animate-[float-slow_12s_ease-in-out_infinite]" />
           <div className="absolute bottom-0 right-0 h-64 w-64 translate-x-1/3 rounded-full bg-sky-200/50 blur-3xl motion-safe:animate-[float-slow_10s_ease-in-out_infinite] motion-safe:[animation-delay:-3s]" />
         </div>
-        <div className="relative mx-auto max-w-6xl px-6 py-20 sm:py-24">
-          <div className="mx-auto max-w-3xl text-center">
+        <div className="relative px-6 py-20 sm:py-24">
+          <div className="mx-auto text-center">
             <h1 className="mt-6 text-5xl font-semibold tracking-tight text-slate-900 sm:text-6xl motion-safe:animate-[fade-up_0.6s_ease-out_both] motion-safe:[animation-delay:120ms]">
               Peer Review
             </h1>
@@ -59,7 +59,7 @@ export default function Home() {
           <h2 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
             なぜ Peer Review を選ぶのか
           </h2>
-          <p className="mx-auto max-w-2xl text-base text-slate-600 sm:text-lg">
+          <p className="text-base text-slate-600 sm:text-lg">
             安全で効果的な学習環境で、お互いに成長できるサイクルをつくります
           </p>
         </div>

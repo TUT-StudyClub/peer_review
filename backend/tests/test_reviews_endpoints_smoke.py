@@ -1,3 +1,4 @@
+from fastapi import BackgroundTasks
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -66,8 +67,9 @@ def test_submit_and_receive_review_smoke():
     rubric_scores = [RubricScore(criterion_id=c.id, score=4) for c in criteria]
     payload = ReviewSubmit(comment="Nice job", rubric_scores=rubric_scores)
 
-    # Call submit_review directly
-    review = submit_review(ra.id, payload, db=db, current_user=reviewer)
+    # BackgroundTasksをモックしてsubmit_reviewを直接呼び出し
+    background_tasks = BackgroundTasks()
+    review = submit_review(ra.id, payload, background_tasks=background_tasks, db=db, current_user=reviewer)
 
     assert review.comment == "Nice job"
 

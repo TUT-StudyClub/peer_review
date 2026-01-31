@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, ChevronDown, Eye, EyeOff, Lock, Mail, User, Users } from "lucide-react";
 
 import { useAuth } from "@/app/providers";
@@ -20,6 +20,13 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+
+    setIsMounted(true);
+  }, []);
 
   const canSubmit = Boolean(name.trim()) && Boolean(email.trim()) && password.length >= 8 && !loading;
 
@@ -129,7 +136,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={!canSubmit}
+              disabled={!isMounted || !canSubmit}
               className="group flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500 px-6 py-4 text-base font-semibold text-white shadow-[0_18px_40px_-20px_rgba(37,99,235,0.75)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
             >
               登録してログイン
