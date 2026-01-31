@@ -100,6 +100,11 @@ def main() -> int:  # noqa: PLR0915
     ta_credits_high = settings.ta_qualification_threshold + 45
     ta_credits_top = settings.ta_qualification_threshold + 60
     users: list[UserSeed] = [
+        {"email": "teacher@example.com", "name": "Teacher", "role": UserRole.teacher},
+        {"email": "student@example.com", "name": "Student", "role": UserRole.student},
+        {"email": "other@example.com", "name": "Other Student", "role": UserRole.student},
+        {"email": "author@example.com", "name": "Author", "role": UserRole.student},
+        {"email": "rev@example.com", "name": "Reviewer", "role": UserRole.student},
         {"email": "teacher1@example.com", "name": "Teacher 1", "role": UserRole.teacher},
         {"email": "teacher2@example.com", "name": "Teacher 2", "role": UserRole.teacher},
         {"email": "teacher3@example.com", "name": "Teacher 3", "role": UserRole.teacher},
