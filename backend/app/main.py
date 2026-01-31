@@ -28,24 +28,39 @@ def run_migrations() -> None:
         logger.info("Automatic migrations disabled (RUN_MIGRATIONS_ON_STARTUP=false)")
         return
 
+    # パス解決
     try:
-        # alembic.iniのパスを絶対パスで解決
-        # backend/app/main.py -> backend/alembic.ini
         from pathlib import Path
 
         backend_dir = Path(__file__).parent.parent
         alembic_ini_path = backend_dir / "alembic.ini"
+        logger.info(f"Resolved alembic.ini path: {alembic_ini_path}")
+    except Exception as e:
+        logger.error(f"Failed to resolve alembic.ini path: {e}", exc_info=True)
+        raise RuntimeError(f"Path resolution failed: {e}") from e
 
-        if not alembic_ini_path.exists():
-            logger.warning(f"alembic.ini not found at {alembic_ini_path}, skipping migrations")
-            return
+    # ファイル存在確認
+    if not alembic_ini_path.exists():
+        logger.warning(f"alembic.ini not found at {alembic_ini_path}, skipping migrations")
+        return
 
+    # Alembic設定の読み込み
+    try:
         alembic_cfg = Config(str(alembic_ini_path))
+        logger.info("Alembic configuration loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load alembic.ini from {alembic_ini_path}: {e}", exc_info=True)
+        raise RuntimeError(f"Alembic config loading failed: {e}") from e
+
+    # マイグレーション実行
+    try:
+        logger.info("Starting database migration to head...")
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations completed successfully")
     except Exception as e:
-        logger.error(f"Failed to run migrations: {e}")
-        raise
+        logger.error(f"Migration execution failed: {e}", exc_info=True)
+        logger.error("Please check database connectivity and migration files")
+        raise RuntimeError(f"Migration execution failed: {e}") from e
 
 
 @asynccontextmanager
