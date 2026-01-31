@@ -177,8 +177,8 @@ export default function RankingPage() {
 
     const periodOptions: { value: RankingPeriod; label: string }[] = [
         { value: "total", label: "全期間" },
-        { value: "monthly", label: "一か月" },
-        { value: "weekly", label: "一週間" },
+        { value: "monthly", label: "月間" },
+        { value: "weekly", label: "週間" },
     ];
 
     const metricOptions: { value: RankingMetric; label: string }[] = [
