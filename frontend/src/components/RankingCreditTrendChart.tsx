@@ -85,6 +85,27 @@ function formatLabel(dateKey: string): string {
   return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(parsed);
 }
 
+function getInitialSeriesValue<T>({
+  items,
+  firstKey,
+  getDateKey,
+  getValue,
+}: {
+  items: T[];
+  firstKey: string;
+  getDateKey: (item: T) => string;
+  getValue: (item: T) => number | null | undefined;
+}): number | null {
+  let initial: number | null = null;
+  for (const item of items) {
+    const dateKey = getDateKey(item);
+    if (dateKey > firstKey) break;
+    const value = getValue(item);
+    if (typeof value === "number") initial = value;
+  }
+  return initial;
+}
+
 export function RankingCreditTrendChart({
   users,
   histories,
@@ -108,6 +129,7 @@ export function RankingCreditTrendChart({
         ? buildDateKeys(30)
         : buildDateKeys(TOTAL_RANGE_DAYS);
   const trimmedKeys = metric === "credits" ? baseKeys : baseKeys;
+  const firstKey = trimmedKeys[0] ?? "";
   const labels = trimmedKeys.map((key) => formatLabel(key));
 
   const userSeries = users.map((user, index) => {
@@ -118,7 +140,12 @@ export function RankingCreditTrendChart({
       for (const item of history) {
         byDate.set(toDateKey(item.created_at), item.total_credits);
       }
-      let lastValue: number | null = null;
+      let lastValue: number | null = getInitialSeriesValue({
+        items: history,
+        firstKey,
+        getDateKey: (item) => toDateKey(item.created_at),
+        getValue: (item) => item.total_credits,
+      });
       const series =
         metric === "credits"
           ? trimmedKeys.map((key) => {
@@ -131,12 +158,19 @@ export function RankingCreditTrendChart({
             })
           : metric === "average_score"
             ? (() => {
+                const scoreHistory = metricSeriesFiltered
+                  .filter((point) => point.user_id === user.id)
+                  .sort((a, b) => a.created_at.localeCompare(b.created_at));
                 const scoreByDate = new Map<string, number>();
-                for (const point of metricSeriesFiltered) {
-                  if (point.user_id !== user.id) continue;
+                for (const point of scoreHistory) {
                   scoreByDate.set(toDateKey(point.created_at), point.value);
                 }
-                let lastScore: number | null = null;
+                let lastScore: number | null = getInitialSeriesValue({
+                  items: scoreHistory,
+                  firstKey,
+                  getDateKey: (item) => toDateKey(item.created_at),
+                  getValue: (item) => item.value,
+                });
                 return trimmedKeys.map((key) => {
                   const value = scoreByDate.get(key);
                   if (typeof value === "number") {
@@ -188,7 +222,15 @@ export function RankingCreditTrendChart({
     for (const point of averageSeries) {
       seriesByDate.set(toDateKey(point.created_at), point.value);
     }
-    let lastValue: number | null = null;
+    const sortedAverageSeries = [...averageSeries].sort((a, b) =>
+      a.created_at.localeCompare(b.created_at),
+    );
+    let lastValue: number | null = getInitialSeriesValue({
+      items: sortedAverageSeries,
+      firstKey: firstDataKey ?? firstKey,
+      getDateKey: (item) => toDateKey(item.created_at),
+      getValue: (item) => item.value,
+    });
     averageLine = trimmedKeys.map((key) => {
       if (firstDataKey && key < firstDataKey) return null;
       const value = seriesByDate.get(key);
