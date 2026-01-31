@@ -52,8 +52,35 @@ def run_migrations() -> None:
         logger.error(f"Failed to load alembic.ini from {alembic_ini_path}: {e}", exc_info=True)
         raise RuntimeError(f"Alembic config loading failed: {e}") from e
 
-    # マイグレーション実行
+    # マイグレーション状態の確認と実行
     try:
+        from sqlalchemy import create_engine
+        from sqlalchemy import text
+
+        from alembic.script import ScriptDirectory
+
+        # 最新のマイグレーションリビジョンを取得
+        script = ScriptDirectory.from_config(alembic_cfg)
+        head_revision = script.get_current_head()
+
+        # 現在のデータベースリビジョンを取得
+        engine = create_engine(settings.database_url)
+        with engine.connect() as connection:
+            # alembic_versionテーブルから現在のリビジョンを取得
+            try:
+                result = connection.execute(text("SELECT version_num FROM alembic_version"))
+                current_revision = result.scalar()
+            except Exception:
+                # alembic_versionテーブルが存在しない場合は初回マイグレーション
+                current_revision = None
+
+        if current_revision == head_revision:
+            logger.info(f"Database is already up to date (revision: {current_revision})")
+            logger.info("No migrations needed")
+            return
+
+        # マイグレーション実行
+        logger.info(f"Database migration needed: {current_revision or 'None'} -> {head_revision}")
         logger.info("Starting database migration to head...")
         command.upgrade(alembic_cfg, "head")
         logger.info("Database migrations completed successfully")
