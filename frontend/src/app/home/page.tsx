@@ -90,7 +90,7 @@ export default function HomePage() {
                 </Alert>
             )}
 
-            <div className="grid gap-6 md:grid-cols-[1fr_320px]">
+            <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
                 {/* メインカラム: タイムライン */}
                 <div className="space-y-6">
                     <Card className="flex h-[480px] flex-col">
