@@ -93,14 +93,14 @@ export default function HomePage() {
             <div className="grid gap-6 md:grid-cols-[1fr_320px]">
                 {/* メインカラム: タイムライン */}
                 <div className="space-y-6">
-                    <Card>
+                    <Card className="flex h-[480px] flex-col">
                         <CardHeader className="flex flex-row items-center justify-between">
                             <CardTitle className="text-lg">提出期限タイムライン</CardTitle>
                             <Button variant="ghost" size="sm" onClick={() => fetchData()} disabled={isLoading}>
                                 {isLoading ? "更新中..." : "更新"}
                             </Button>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="flex-1 overflow-y-auto">
                             <DeadlineTimeline
                                 assignments={assignments}
                                 courses={courses}
@@ -112,27 +112,12 @@ export default function HomePage() {
 
                 {/* サイドカラム: 通知など */}
                 <div className="space-y-6">
-                    <Card>
+                    <Card className="flex h-[480px] flex-col">
                         <CardHeader>
                             <CardTitle className="text-lg">通知</CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="flex-1 overflow-y-auto">
                             <RecentNotifications />
-                        </CardContent>
-                    </Card>
-
-                    {/* クイックリンク */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-sm font-medium">クイックリンク</CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid gap-2">
-                            <Button variant="outline" asChild className="justify-start text-xs h-9">
-                                <Link href="/assignments">課題一覧</Link>
-                            </Button>
-                            <Button variant="outline" asChild className="justify-start text-xs h-9">
-                                <Link href="/mypage">マイページ</Link>
-                            </Button>
                         </CardContent>
                     </Card>
                 </div>
