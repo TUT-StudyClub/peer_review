@@ -17,45 +17,11 @@ export type UserPublic = {
   rank: string;
   title: string;
   is_ta: boolean;
-  is_admin: boolean;
   created_at: string;
-};
-
-export type ReviewerSkillOverride = {
-  logic: number | null;
-  specificity: number | null;
-  structure: number | null;
-  evidence: number | null;
-  overall: number | null;
-};
-
-export type AdminUserPublic = {
-  id: string;
-  email: string;
-  name: string;
-  role: UserRole;
-  credits: number;
-  rank: string;
-  title: string;
-  is_ta: boolean;
-  is_admin: boolean;
-  created_at: string;
-  reviewer_skill_override: ReviewerSkillOverride;
-};
-
-export type AdminUserUpdate = {
-  email?: string | null;
-  name?: string | null;
-  role?: UserRole | null;
-  credits?: number | null;
-  reviewer_skill_override_logic?: number | null;
-  reviewer_skill_override_specificity?: number | null;
-  reviewer_skill_override_structure?: number | null;
-  reviewer_skill_override_evidence?: number | null;
-  reviewer_skill_override_overall?: number | null;
 };
 
 export type RankingPeriod = "total" | "monthly" | "weekly";
+export type RankingMetric = "credits" | "review_count" | "average_score" | "helpful_reviews";
 
 export type UserRankingEntry = {
   id: string;
@@ -65,6 +31,11 @@ export type UserRankingEntry = {
   title: string;
   is_ta: boolean;
   period_credits?: number;
+  review_count?: number;
+  average_score?: number;
+  helpful_reviews?: number;
+  target_course_title?: string | null;
+  target_course_titles?: string[] | null;
 };
 
 export type CreditHistoryPublic = {
@@ -77,6 +48,17 @@ export type CreditHistoryPublic = {
   assignment_id?: string | null;
   submission_id?: string | null;
   created_at: string;
+};
+
+export type MetricHistoryPoint = {
+  user_id: string;
+  value: number;
+  created_at: string;
+};
+
+export type AverageSeriesPoint = {
+  created_at: string;
+  value: number;
 };
 
 export type TAReviewRequestStatus = "offered" | "accepted" | "declined";
@@ -109,13 +91,6 @@ export type AssignmentCreate = {
   title: string;
   description?: string | null;
   target_reviews_per_submission: number;
-  due_at?: string | null;
-};
-
-export type AdminAssignmentUpdate = {
-  title?: string | null;
-  description?: string | null;
-  target_reviews_per_submission?: number | null;
   due_at?: string | null;
 };
 

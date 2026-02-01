@@ -1,13 +1,12 @@
 import type {
-  AdminAssignmentUpdate,
-  AdminUserPublic,
-  AdminUserUpdate,
   AssignmentCreate,
   AssignmentPublic,
   CourseCreate,
   CourseEnrollmentPublic,
   CoursePublic,
   CreditHistoryPublic,
+  MetricHistoryPoint,
+  AverageSeriesPoint,
   GradeMe,
   MetaReviewCreate,
   MetaReviewPublic,
@@ -29,6 +28,7 @@ import type {
   UserPublic,
   UserRankingEntry,
   RankingPeriod,
+  RankingMetric,
 } from "@/lib/types";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
@@ -345,6 +345,67 @@ export async function apiGetMyCreditHistory(token: string, limit = 50): Promise<
   return apiFetch<CreditHistoryPublic[]>(`/users/me/credit-history?${params.toString()}`, {}, token);
 }
 
+export async function apiGetUsersCreditHistory(
+  token: string,
+  userIds: string[],
+  limit = 50
+): Promise<CreditHistoryPublic[]> {
+  if (userIds.length === 0) {
+    return [];
+  }
+  const params = new URLSearchParams();
+  for (const userId of userIds) {
+    params.append("user_ids", userId);
+  }
+  params.set("limit", String(limit));
+  return apiFetch<CreditHistoryPublic[]>(`/users/credit-history?${params.toString()}`, {}, token);
+}
+
+export async function apiGetAverageScoreHistory(
+  token: string,
+  userIds: string[],
+  period: RankingPeriod
+): Promise<MetricHistoryPoint[]> {
+  const params = new URLSearchParams();
+  for (const userId of userIds) {
+    params.append("user_ids", userId);
+  }
+  params.set("period", period);
+  return apiFetch<MetricHistoryPoint[]>(`/users/average-score-history?${params.toString()}`, {}, token);
+}
+
+export async function apiGetMetricAverage(
+  token: string,
+  metric: RankingMetric,
+  period: RankingPeriod
+): Promise<number> {
+  const params = new URLSearchParams();
+  params.set("metric", metric);
+  params.set("period", period);
+  const res = await apiFetch<{ average: number }>(`/users/metric-average?${params.toString()}`, {}, token);
+  return res.average;
+}
+
+export async function apiGetAverageCreditSeries(
+  token: string,
+  period: RankingPeriod
+): Promise<AverageSeriesPoint[]> {
+  const params = new URLSearchParams();
+  params.set("period", period);
+  return apiFetch<AverageSeriesPoint[]>(`/users/average-credit-series?${params.toString()}`, {}, token);
+}
+
+export async function apiGetMetricAverageSeries(
+  token: string,
+  metric: RankingMetric,
+  period: RankingPeriod
+): Promise<AverageSeriesPoint[]> {
+  const params = new URLSearchParams();
+  params.set("metric", metric);
+  params.set("period", period);
+  return apiFetch<AverageSeriesPoint[]>(`/users/metric-average-series?${params.toString()}`, {}, token);
+}
+
 export async function apiUploadAvatar(token: string, file: File): Promise<UserPublic> {
   const body = new FormData();
   body.append("file", file);
@@ -357,11 +418,13 @@ export async function apiDeleteAvatar(token: string): Promise<UserPublic> {
 
 export async function apiGetRanking(
   limit = 5,
-  period: RankingPeriod = "total"
+  period: RankingPeriod = "total",
+  metric: RankingMetric = "credits"
 ): Promise<UserRankingEntry[]> {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("period", period);
+  params.set("metric", metric);
   const query = params.toString();
   return apiFetch<UserRankingEntry[]>(`/users/ranking?${query}`);
 }
@@ -585,52 +648,4 @@ export async function apiListReviewsForSubmission(
   submissionId: string
 ): Promise<TeacherReviewPublic[]> {
   return apiFetch<TeacherReviewPublic[]>(`/submissions/${submissionId}/reviews`, {}, token);
-}
-
-export async function apiAdminListUsers(
-  token: string,
-  params: { query?: string; limit?: number; offset?: number } = {}
-): Promise<AdminUserPublic[]> {
-  const search = new URLSearchParams();
-  if (params.query) search.set("query", params.query);
-  if (typeof params.limit === "number") search.set("limit", String(params.limit));
-  if (typeof params.offset === "number") search.set("offset", String(params.offset));
-  const query = search.toString();
-  return apiFetch<AdminUserPublic[]>(`/admin/users${query ? `?${query}` : ""}`, {}, token);
-}
-
-export async function apiAdminUpdateUser(
-  token: string,
-  userId: string,
-  payload: AdminUserUpdate
-): Promise<AdminUserPublic> {
-  return apiFetch<AdminUserPublic>(
-    `/admin/users/${userId}`,
-    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
-    token
-  );
-}
-
-export async function apiAdminListAssignments(
-  token: string,
-  params: { query?: string; limit?: number; offset?: number } = {}
-): Promise<AssignmentPublic[]> {
-  const search = new URLSearchParams();
-  if (params.query) search.set("query", params.query);
-  if (typeof params.limit === "number") search.set("limit", String(params.limit));
-  if (typeof params.offset === "number") search.set("offset", String(params.offset));
-  const query = search.toString();
-  return apiFetch<AssignmentPublic[]>(`/admin/assignments${query ? `?${query}` : ""}`, {}, token);
-}
-
-export async function apiAdminUpdateAssignment(
-  token: string,
-  assignmentId: string,
-  payload: AdminAssignmentUpdate
-): Promise<AssignmentPublic> {
-  return apiFetch<AssignmentPublic>(
-    `/admin/assignments/${assignmentId}`,
-    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) },
-    token
-  );
 }

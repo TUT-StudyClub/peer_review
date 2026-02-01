@@ -14,14 +14,9 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     database_url: str = "sqlite:///./dev.db"
 
-    # 起動時の自動マイグレーション実行を制御
-    # 本番環境でDDL権限がない場合や手動管理が必要な場合はFalseに設定
-    run_migrations_on_startup: bool = True
-
     secret_key: str = "dev-secret-change-me"
     access_token_expire_minutes: int = 60 * 24 * 7
     allow_teacher_registration: bool = True
-    admin_emails: str = ""
 
     storage_dir: str = "storage"
     storage_backend: str = "local"
@@ -55,11 +50,6 @@ class Settings(BaseSettings):
     # Optional regex-based origins (useful when Next.js dev port changes, e.g. 3001/3002).
     # Example: ^https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$
     cors_allow_origin_regex: str | None = r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$"
-
-    # Web Push通知設定
-    vapid_private_key: str = ""
-    vapid_public_key: str = ""
-    vapid_subject: str = "mailto:admin@example.com"
 
 
 settings = Settings()

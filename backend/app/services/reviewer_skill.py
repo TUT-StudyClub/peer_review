@@ -11,7 +11,6 @@ from app.models.review import Review
 from app.models.review import ReviewAssignment
 from app.models.review import ReviewRubricScore
 from app.models.submission import SubmissionRubricScore
-from app.models.user import User
 from app.schemas.user import ReviewerSkill
 from app.services.rubric import normalize_rubric_name
 
@@ -35,56 +34,12 @@ def _norm_to_1_5(norm: float | None) -> float:
     return max(1.0, min(5.0, 1.0 + (4.0 * norm)))
 
 
-def _apply_override(skill: ReviewerSkill, user: User | None) -> ReviewerSkill:
-    if user is None:
-        return skill
-
-    overrides = {
-        "logic": user.reviewer_skill_override_logic,
-        "specificity": user.reviewer_skill_override_specificity,
-        "structure": user.reviewer_skill_override_structure,
-        "evidence": user.reviewer_skill_override_evidence,
-    }
-    override_overall = user.reviewer_skill_override_overall
-
-    if all(value is None for value in overrides.values()) and override_overall is None:
-        return skill
-
-    logic = overrides["logic"] if overrides["logic"] is not None else skill.logic
-    specificity = overrides["specificity"] if overrides["specificity"] is not None else skill.specificity
-    structure = overrides["structure"] if overrides["structure"] is not None else skill.structure
-    evidence = overrides["evidence"] if overrides["evidence"] is not None else skill.evidence
-
-    if override_overall is not None:
-        overall = override_overall
-    else:
-        overall_values: list[float] = []
-        for key, value in {
-            "logic": logic,
-            "specificity": specificity,
-            "structure": structure,
-            "evidence": evidence,
-        }.items():
-            if overrides[key] is not None or value > 0:
-                overall_values.append(value)
-        overall = _avg(overall_values) or 0.0
-
-    return ReviewerSkill(
-        logic=logic,
-        specificity=specificity,
-        structure=structure,
-        evidence=evidence,
-        overall=overall,
-    )
-
-
 def calculate_reviewer_skill(
     db: Session,
     *,
     reviewer_id: UUID,
     assignment_id: UUID | None = None,
 ) -> ReviewerSkill:
-    user = db.query(User).filter(User.id == reviewer_id).first()
     axes = REVIEWER_SKILL_TEMPLATE
     axis_keys = [axis["key"] for axis in axes]
     axis_norms: dict[str, list[float]] = {key: [] for key in axis_keys}
@@ -99,14 +54,13 @@ def calculate_reviewer_skill(
 
     rows = query.all()
     if not rows:
-        base_skill = ReviewerSkill(
+        return ReviewerSkill(
             logic=0.0,
             specificity=0.0,
             structure=0.0,
             evidence=0.0,
             overall=0.0,
         )
-        return _apply_override(base_skill, user)
 
     review_ids = [review.id for _, review in rows]
     submission_ids = [ra.submission_id for ra, _ in rows]
@@ -162,11 +116,10 @@ def calculate_reviewer_skill(
     overall_values = [score for score in axis_scores.values() if score > 0]
     overall = _avg(overall_values) or 0.0
 
-    base_skill = ReviewerSkill(
+    return ReviewerSkill(
         logic=axis_scores.get("logic", 0.0),
         specificity=axis_scores.get("specificity", 0.0),
         structure=axis_scores.get("structure", 0.0),
         evidence=axis_scores.get("evidence", 0.0),
         overall=overall,
     )
-    return _apply_override(base_skill, user)

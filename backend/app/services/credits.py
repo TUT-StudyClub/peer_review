@@ -18,7 +18,6 @@ if TYPE_CHECKING:
 
 CREDIT_REASON_REVIEW_SUBMITTED = "review_submitted"
 CREDIT_REASON_REVIEW_RECALCULATED = "review_recalculated"
-CREDIT_REASON_ADMIN_ADJUSTMENT = "admin_adjustment"
 
 
 @dataclass(frozen=True)

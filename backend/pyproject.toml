@@ -20,11 +20,9 @@ dependencies = [
   "python-dotenv>=1.0.1",
   "python-jose[cryptography]>=3.3.0",
   "python-multipart>=0.0.17",
-  "pywebpush>=2.2.0",
   "reportlab>=4.4.6",
   "ruff>=0.9.0",
   "sqlalchemy>=2.0.36",
-  "sqlmodel>=0.0.22",
   "ty>=0.0.9",
   "uvicorn[standard]>=0.32.1",
 ]
@@ -69,7 +67,6 @@ ignore = [
     "PLR0912", # Too many branches
     "PLR0913", # Too many arguments in function definition
     "PLR2004", # Magic value used in comparison
-
 ]
 
 [tool.ruff.lint.isort]
@@ -90,9 +87,4 @@ layers = [
     "peer_review.adapters",
     "peer_review.use_cases",
     "peer_review.entities",
-]
-
-[tool.ty.src]
-exclude = [
-    "alembic/versions/*",
 ]

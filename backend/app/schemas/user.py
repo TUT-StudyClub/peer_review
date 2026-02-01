@@ -28,7 +28,6 @@ class UserPublic(BaseModel):
     rank: str
     title: str
     is_ta: bool
-    is_admin: bool
     created_at: datetime
 
 
@@ -40,6 +39,11 @@ class UserRankingEntry(BaseModel):
     title: str
     is_ta: bool
     period_credits: int | None = None
+    review_count: int | None = None
+    average_score: float | None = None
+    helpful_reviews: int | None = None
+    target_course_title: str | None = None
+    target_course_titles: list[str] | None = None
 
 
 class CreditHistoryPublic(BaseModel):
@@ -54,6 +58,17 @@ class CreditHistoryPublic(BaseModel):
     assignment_id: UUID | None = None
     submission_id: UUID | None = None
     created_at: datetime
+
+
+class MetricHistoryPoint(BaseModel):
+    user_id: UUID
+    value: float
+    created_at: datetime
+
+
+class AverageSeriesPoint(BaseModel):
+    created_at: datetime
+    value: float
 
 
 class ReviewerSkill(BaseModel):

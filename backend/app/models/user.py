@@ -6,7 +6,6 @@ from uuid import uuid4
 
 from sqlalchemy import DateTime
 from sqlalchemy import Enum
-from sqlalchemy import Float
 from sqlalchemy import Integer
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped
@@ -35,11 +34,6 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.student)
     password_hash: Mapped[str] = mapped_column(String(255))
     credits: Mapped[int] = mapped_column(Integer, default=0)
-    reviewer_skill_override_logic: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
-    reviewer_skill_override_specificity: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
-    reviewer_skill_override_structure: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
-    reviewer_skill_override_evidence: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
-    reviewer_skill_override_overall: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
     submissions = relationship("Submission", back_populates="author")
@@ -51,13 +45,6 @@ class User(Base):
     @property
     def is_ta(self) -> bool:
         return self.credits >= settings.ta_qualification_threshold
-
-    @property
-    def is_admin(self) -> bool:
-        admin_emails = {email.strip().lower() for email in settings.admin_emails.split(",") if email.strip()}
-        if not admin_emails:
-            return False
-        return self.email.lower() in admin_emails
 
     @property
     def rank(self) -> str:

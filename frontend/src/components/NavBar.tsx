@@ -64,7 +64,6 @@ export function NavBar() {
                 ) : null}
               </>
             ) : null}
-            {user?.is_admin ? <NavLink href="/admin/users" label="管理" /> : null}
             {user ? <NavLink href="/notifications" label="通知" /> : null}
             {user?.role === "student" ? <NavLink href="/mypage" label="マイページ" /> : null}
           </nav>
